@@ -1,0 +1,267 @@
+/**
+ * Host half of dsh-turn-outline: one incremental, read-only route that serves
+ * session events for the trail panel, behind a browser-trust fence.
+ *
+ *   POST /turntrail/api/events  { sessionId, afterSeq }
+ *     → 200 { events, hasMore }   (one PAGE_SIZE page, ascending seq)
+ *     → 400 bad request / missing sessionId
+ *     → 403 fence rejection
+ *     → 404 session-not-found
+ *     → 405 non-POST
+ *     → 413 oversized request body
+ *
+ * Two read paths, hottest first:
+ *
+ *   LIVE sessions (the trail's hot case — the session is generating):
+ *     borrow the live store's frozen `events` snapshot. The probe is O(1)
+ *     (`events.at(-1).seq`), the tail slice is O(delta), and the whole path
+ *     is synchronous — no await between borrowing the snapshot and writing
+ *     the response, so no interleaved mutation. Zero deep clones: the store
+ *     already deep-freezes its events, and `JSON.stringify` reads frozen
+ *     objects fine. (The sessionQuery equivalents each `structuredClone`
+ *     EVERY event — 3× per request through listEvents + readSession — which
+ *     hammered the very process running the agent.)
+ *
+ *   COLD / persisted sessions (idle, pulled only on activation):
+ *     sessionQuery with a per-session lastSeq cache, exactly as before.
+ *
+ * inject = ['webServer', 'sessionQuery', 'sessions'] — all host services;
+ * `sessions` is core DSH (sessionQuery itself depends on it), and the code
+ * feature-detects it so foreign contexts degrade to the persisted path.
+ */
+import type {
+  HostCtx,
+  HttpHeadersLike,
+  HttpRequestLike,
+  HttpResponseLike,
+  LiveSessionLike,
+  SessionEventLike,
+  TrailEventsRequest,
+} from './context-types'
+import { MAX_BODY_BYTES, PAGE_SIZE, projectEvent } from './wire'
+
+export const inject = ['webServer', 'sessionQuery', 'sessions']
+
+/** Per-session cache: { lastSeq, events } refreshed only on growth (LRU). */
+interface CacheEntry {
+  lastSeq: number
+  events: SessionEventLike[]
+  bytes: number
+}
+const trailCache = new Map<string, CacheEntry>()
+const CACHE_MAX_ENTRIES = 64
+const CACHE_MAX_BYTES = 32 * 1024 * 1024
+let cacheBytes = 0
+
+// ── Browser-trust fence (DNS-rebinding / cross-site defense, not auth) ────
+
+function header(headers: HttpHeadersLike, name: string): string | undefined {
+  const value = (headers as Record<string, unknown>)[name]
+  return typeof value === 'string' ? value : undefined
+}
+
+function parseAuthority(authority: string): URL | undefined {
+  try {
+    return new URL(`http://${authority}`)
+  } catch {
+    return undefined
+  }
+}
+
+export function isLoopbackHostname(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '[::1]') return true
+  const parts = hostname.split('.')
+  return parts.length === 4
+    && parts[0] === '127'
+    && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)
+}
+
+/**
+ * Decide whether one request may reach the trail routes. Behaviorally
+ * identical to DSH's /api gateway fence (api-request-trust + loopback-hostname):
+ * Host must resolve to loopback; cross-site browser markers refuse; an Origin
+ * (when present) must name the same hostname.
+ */
+export function isTrustedApiRequest(request: { headers: HttpHeadersLike }): boolean {
+  const host = header(request.headers, 'host')
+  if (host === undefined) return false
+  const hostUrl = parseAuthority(host)
+  if (hostUrl === undefined || !isLoopbackHostname(hostUrl.hostname)) return false
+  if (header(request.headers, 'sec-fetch-site') === 'cross-site') return false
+  const origin = header(request.headers, 'origin')
+  if (origin === undefined) return true
+  try {
+    return new URL(origin).hostname === hostUrl.hostname
+  } catch {
+    return false
+  }
+}
+
+// ── Route helpers ─────────────────────────────────────────────────────────
+
+function sendJson(res: HttpResponseLike, status: number, body: unknown): void {
+  const text = JSON.stringify(body)
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': String(Buffer.byteLength(text)),
+  })
+  res.end(text)
+}
+
+/** Sentinel for an oversized request body (mapped to 413). */
+const BODY_TOO_LARGE = Symbol('trail-body-too-large')
+
+async function readJsonBody(req: HttpRequestLike): Promise<TrailEventsRequest | typeof BODY_TOO_LARGE> {
+  const declared = header(req.headers, 'content-length')
+  if (declared !== undefined) {
+    const declaredBytes = Number(declared)
+    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_BODY_BYTES) return BODY_TOO_LARGE
+  }
+  const chunks: Buffer[] = []
+  let total = 0
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), 'utf8')
+    total += buf.length
+    if (total > MAX_BODY_BYTES) return BODY_TOO_LARGE
+    chunks.push(buf)
+  }
+  const text = Buffer.concat(chunks).toString('utf8')
+  try {
+    const parsed = JSON.parse(text.length > 0 ? text : '{}')
+    return parsed !== null && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function afterSeqOf(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
+
+/** First index whose event seq is strictly greater than afterSeq (ascending seqs). */
+function upperBound(events: ReadonlyArray<{ seq?: number }>, afterSeq: number): number {
+  let lo = 0
+  let hi = events.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    const seq = events[mid].seq
+    if (typeof seq === 'number' && seq <= afterSeq) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+/** Borrow the live store's frozen snapshot — O(1) amortized, zero copies. */
+function liveSessionOf(ctx: HostCtx, sessionId: string): LiveSessionLike | undefined {
+  const sessions = ctx.sessions
+  if (sessions === undefined || typeof sessions.get !== 'function') return undefined
+  try {
+    const session = sessions.get(sessionId)
+    if (session === null || session === undefined || typeof session !== 'object') return undefined
+    return Array.isArray((session as { events?: unknown }).events)
+      ? (session as LiveSessionLike)
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Slice one ascending page after afterSeq; `project` trims the wire fields. */
+function respondPage(
+  res: HttpResponseLike,
+  events: ReadonlyArray<SessionEventLike>,
+  afterSeq: number,
+  project: boolean,
+): void {
+  const lo = upperBound(events, afterSeq)
+  const end = Math.min(events.length, lo + PAGE_SIZE)
+  const tail: SessionEventLike[] = []
+  for (let i = lo; i < end; i += 1) tail.push(project ? projectEvent(events[i]) : events[i])
+  sendJson(res, 200, { events: tail, hasMore: end < events.length })
+}
+
+/** Insert/refresh one cache entry, then evict past the entry/byte budgets. */
+function cacheStore(sessionId: string, lastSeq: number, events: SessionEventLike[]): void {
+  const bytes = Buffer.byteLength(JSON.stringify(events))
+  const existing = trailCache.get(sessionId)
+  if (existing !== undefined) {
+    trailCache.delete(sessionId)
+    cacheBytes -= existing.bytes
+  }
+  trailCache.set(sessionId, { lastSeq, events, bytes })
+  cacheBytes += bytes
+  while (trailCache.size > CACHE_MAX_ENTRIES || (cacheBytes > CACHE_MAX_BYTES && trailCache.size > 1)) {
+    const oldest = trailCache.keys().next().value
+    if (oldest === undefined) break
+    const entry = trailCache.get(oldest)
+    trailCache.delete(oldest)
+    cacheBytes -= entry?.bytes ?? 0
+  }
+}
+
+export function apply(ctx: HostCtx): void {
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/turntrail/api/events',
+    handler: async (rawReq, rawRes) => {
+      const req = rawReq as HttpRequestLike
+      const res = rawRes as HttpResponseLike
+
+      if (!isTrustedApiRequest({ headers: req.headers })) {
+        sendJson(res, 403, { error: 'forbidden' })
+        return
+      }
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'method not allowed' })
+        return
+      }
+      const body = await readJsonBody(req)
+      if (body === BODY_TOO_LARGE) {
+        sendJson(res, 413, { error: 'payload too large' })
+        return
+      }
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId : ''
+      if (sessionId.length === 0) {
+        sendJson(res, 400, { error: 'sessionId is required' })
+        return
+      }
+      const afterSeq = afterSeqOf(body.afterSeq)
+
+      try {
+        // Live fast path: synchronous, O(1) probe, O(delta) projection.
+        const live = liveSessionOf(ctx, sessionId)
+        if (live !== undefined) {
+          respondPage(res, live.events, afterSeq, true)
+          return
+        }
+
+        // Persisted path: lastSeq probe first; re-read the log only when it grew.
+        let lastSeq = -1
+        try {
+          const records = await ctx.sessionQuery.listEvents(sessionId)
+          const last = records[records.length - 1]
+          lastSeq = last !== undefined && typeof last.seq === 'number' ? last.seq : -1
+        } catch {
+          lastSeq = -1
+        }
+        const cached = trailCache.get(sessionId)
+        let base: SessionEventLike[]
+        if (cached !== undefined && lastSeq >= 0 && cached.lastSeq === lastSeq) {
+          base = cached.events
+          // LRU touch: re-insert at the fresh end.
+          trailCache.delete(sessionId)
+          trailCache.set(sessionId, cached)
+        } else {
+          const snapshot = await ctx.sessionQuery.readSession(sessionId)
+          base = (Array.isArray(snapshot.events) ? snapshot.events : []).map(projectEvent)
+          cacheStore(sessionId, lastSeq, base)
+        }
+        // base is already projected (idempotently); serve without re-projecting.
+        respondPage(res, base, afterSeq, false)
+      } catch {
+        sendJson(res, 404, { error: 'session-not-found' })
+      }
+    },
+  }))
+}

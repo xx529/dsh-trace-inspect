@@ -1,0 +1,538 @@
+/**
+ * styles.ts — DSH-native, token-driven CSS for the trail panel, injected once
+ * by the client entry. The design language mirrors the upstream DSH trajectory
+ * surface: a monochrome "ink" chrome (label tiers + hairline separators +
+ * interactive hover washes), flat turn rows instead of cards, a 2px turn rail
+ * for the located turn, semantic accent dots (success/warn/neutral) instead of
+ * a per-tool rainbow, and monospace tool names/args. Every expanded-body row
+ * shares one anatomy — a 6px semantic dot + a narrow name column + content —
+ * so input, output and tool rows read as one grid; the dot carries the whole
+ * color channel (category for tools, red for failures).
+ * All colors/fonts consume
+ * DSW alias tokens (auto light/dark/skin); fallbacks mirror the native dark
+ * values so a missing token never falls back to a foreign look.
+ *
+ * Radius scale (native): 2px micro tag · 4px chip/step hover · 6px buttons ·
+ * 8px floating surfaces. No 999px pills. Class names are prefixed `ttl-` and
+ * are OUR contract (never matched against DSH internals).
+ */
+export const trailCss = `
+.ttl-root {
+  box-sizing: border-box;
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-1, #232324);
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  font-family: var(--dsw-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif);
+  font-size: 12px;
+  line-height: 18px;
+  container: trail-tab / inline-size;
+}
+
+/* ── Header (36px, hairline) ────────────────────────────── */
+.ttl-header {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.06));
+}
+.ttl-title {
+  flex: none;
+  min-width: 0;
+  max-width: 55%;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ttl-count {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.ttl-headerSpacer { flex: 1; min-width: 0; }
+/* Follow-latest: native ghost button + status dot (no checkbox pill). */
+.ttl-toggle {
+  box-sizing: border-box;
+  flex: none;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ttl-toggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+.ttl-toggleDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-label-tertiary, #adb2b8);
+}
+.ttl-toggle[aria-pressed="true"] { color: var(--dsw-alias-label-primary, #f9fafb); }
+.ttl-toggle[aria-pressed="true"] .ttl-toggleDot {
+  background: var(--dsw-alias-state-success-primary, #22c55e);
+  box-shadow: none;
+}
+
+/* ── Filter row (flat text chips + semantic dots) ────────── */
+.ttl-filterRow {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 2px;
+  flex: none;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.06));
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2, #545557) transparent;
+}
+.ttl-filterRow::-webkit-scrollbar { height: 4px; }
+.ttl-filterRow::-webkit-scrollbar-thumb {
+  background: var(--dsw-alias-scrollbar-bg-l2, #545557);
+  border-radius: 2px;
+}
+.ttl-chip {
+  box-sizing: border-box;
+  flex: none;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ttl-chip:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+/* Active chip = business-blue TEXT on the hover wash (native detailTab). */
+.ttl-chip[aria-pressed="true"] {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-state-business-primary, #4176e6);
+}
+.ttl-chipNum {
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+.ttl-chip[aria-pressed="true"] .ttl-chipNum { color: inherit; opacity: 0.72; }
+.ttl-chipDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.ttl-dot-success { background: var(--dsw-alias-state-success-primary, #22c55e); }
+.ttl-dot-warn { background: var(--dsw-alias-state-warn-primary, #f59e0b); }
+.ttl-dot-neutral { background: var(--dsw-alias-label-tertiary, #adb2b8); }
+.ttl-moreChip { color: var(--dsw-alias-label-tertiary, #adb2b8); }
+.ttl-moreArrow {
+  flex: none;
+  display: inline-flex;
+  transition: transform 120ms var(--ds-ease-in-out, ease);
+}
+.ttl-moreArrowOpen { transform: rotate(180deg); }
+/* "More" dropdown: native elevated menu (layer-2 + hairline + 8px + shadow). */
+.ttl-toolDropdown {
+  box-sizing: border-box;
+  position: absolute;
+  z-index: 9;
+  top: 64px;
+  left: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2, #2c2c2e);
+  box-shadow: 0 4px 16px var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.24));
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2, #545557) transparent;
+}
+
+/* ── Turn list (flat rows, hairline separators) ──────────── */
+.ttl-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2, #545557) transparent;
+}
+.ttl-list::-webkit-scrollbar { width: 6px; }
+.ttl-list::-webkit-scrollbar-thumb {
+  background: var(--dsw-alias-scrollbar-bg-l2, #545557);
+  border-radius: 3px;
+}
+.ttl-status {
+  margin: 14px;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 12px;
+  line-height: 18px;
+}
+.ttl-error {
+  margin: 14px;
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* ── Turn row (no card; 2px rail marks the located turn) ─── */
+.ttl-turnRow {
+  position: relative;
+  border-top: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.06));
+  background: transparent;
+}
+.ttl-turnRow:first-child { border-top: none; }
+.ttl-turnRow[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--dsw-static-blue-500, #3b82f6) 22%, var(--dsw-alias-bg-layer-1, #232324));
+}
+.ttl-turnRow[data-active="true"][data-error="true"]::before {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #f25a5a) 22%, var(--dsw-alias-bg-layer-1, #232324));
+}
+.ttl-turnHead {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 32px;
+  padding: 0 6px 0 10px;
+}
+.ttl-turnHead:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+}
+.ttl-turnToggle {
+  box-sizing: border-box;
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ttl-chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  transition: transform 120ms var(--ds-ease-in-out, ease);
+}
+.ttl-chevronOpen { transform: rotate(90deg); }
+/* "轮次 N": native turnLabel-style micro tag (mono, module bg, 2px radius). */
+.ttl-turnTag {
+  box-sizing: border-box;
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-module-platform, #353638);
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, Courier, "PingFang SC", "Microsoft YaHei", monospace);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+}
+.ttl-turnRow[data-active="true"] .ttl-turnTag {
+  color: color-mix(in srgb, var(--dsw-static-blue-500, #3b82f6) 55%, var(--dsw-alias-label-tertiary, #adb2b8));
+  background: color-mix(in srgb, var(--dsw-static-blue-500, #3b82f6) 14%, var(--dsw-alias-bg-layer-1, #232324));
+}
+.ttl-turnPreview {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ttl-turnMeta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+/* Step count: a bare tabular number (never a colored badge). */
+.ttl-stepsNum {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.ttl-errorDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-error-primary, #f25a5a);
+}
+.ttl-locateBtn {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  cursor: pointer;
+  padding: 0;
+}
+.ttl-locateBtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+
+/* ── Expanded body (transparent, indented under the rail) ── */
+.ttl-turnBody {
+  box-sizing: border-box;
+  padding: 2px 6px 6px 34px;
+  background: transparent;
+}
+/* ── Unified row anatomy: [semantic dot] + [name] + [content] ──
+ * One skeleton for every row. The 6px dot carries the whole color channel
+ * (blue = user input, violet = assistant output, green/amber/neutral = tool
+ * category matching the filter chips' dots, red = failure — replacing ✗/✓),
+ * the name names the row (monospace for tools), content follows. The name
+ * column has a narrow 30px min-width: common short names (bash/edit/read,
+ * 输入/输出) align without dead space; long names just push content. */
+.ttl-row {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+.ttl-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+}
+.ttl-rowDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 6px;
+}
+.ttl-dot-blue {
+  background: var(--dsw-alias-state-business-primary, #4176e6);
+}
+.ttl-dot-violet {
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #5686fe) 60%, var(--dsw-alias-state-error-secondary, #f25a5a));
+}
+.ttl-dot-red {
+  background: var(--dsw-alias-state-error-primary, #f25a5a);
+}
+.ttl-rowName {
+  flex: none;
+  min-width: 30px;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+}
+.ttl-rowNameMono {
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, Courier, "PingFang SC", "Microsoft YaHei", monospace);
+}
+.ttl-rowText {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.ttl-rowText2 {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.ttl-rowTextMuted { color: var(--dsw-alias-label-tertiary, #adb2b8); }
+.ttl-rowArgs {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, Courier, "PingFang SC", "Microsoft YaHei", monospace);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Error rows read red across dot and payload. */
+.ttl-row[data-step-kind="error"] .ttl-rowArgs {
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+}
+.ttl-emptyInline {
+  padding: 6px 8px;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 11px;
+  line-height: 16px;
+}
+.ttl-showEarlier {
+  box-sizing: border-box;
+  width: 100%;
+  height: 26px;
+  margin: 2px 0 4px;
+  padding: 0 8px;
+  border: none;
+  border-bottom: 1px dashed var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+.ttl-showEarlier:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+}
+/* ── Status bar / jump feedback ──────────────────────────── */
+.ttl-statusBar {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 14px;
+  border-top: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.06));
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 12px;
+  line-height: 18px;
+}
+.ttl-spin {
+  display: inline-flex;
+  color: var(--dsw-alias-state-business-primary, #4176e6);
+  animation: ttl-spin 1s linear infinite;
+}
+@keyframes ttl-spin { to { transform: rotate(360deg); } }
+.ttl-jumpBanner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 90%;
+  padding: 5px 10px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  background: var(--dsw-alias-button-floating-fill, #2c2c2e);
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.24));
+}
+.ttl-toBottom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  background: var(--dsw-alias-button-floating-fill, #2c2c2e);
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.ttl-toBottom:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid, #353638);
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+
+/* ── Jump highlight flash (on the main conversation) ─────── */
+.ttl-flash { animation: ttl-flash 1.6s ease-out; }
+@keyframes ttl-flash {
+  0% { box-shadow: 0 0 0 3px var(--dsw-alias-state-business-primary, #4176e6); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ttl-spin { animation: none; }
+}
+`
