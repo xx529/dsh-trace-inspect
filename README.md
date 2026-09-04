@@ -37,16 +37,16 @@
 
 ### 方式一：npm 一行命令（推荐）
 
-先装 better-sidebar（stable 线钉 0.17.x），再装本插件：
+先装 better-sidebar，再装本插件：
 
 ```sh
-npx @deepseek-ai/dsh plugin --profile desktop add dsh-better-sidebar@0.17.1
+npx @deepseek-ai/dsh plugin --profile desktop add dsh-better-sidebar
 npx @deepseek-ai/dsh plugin --profile desktop add dsh-turn-outline
 ```
 
 > 使用 Web profile 时把 `--profile desktop` 换成 `--profile web`。
 >
-> ⚠️ **版本线说明**：本插件当前验证于 **better-sidebar 0.17.x + DSH 0.1.1-rc.x（stable）**。npm `latest` 的 better-sidebar 0.18.0 仅支持 DSH 0.1.2-rc.1+，尚未与本插件联调——在 0.18 适配版发布前，升级宿主请先固定 `dsh-better-sidebar@0.17.1`。
+> ℹ️ **版本线说明**：本插件 peer 声明 `dsh-better-sidebar@^0.17.0 || ^0.18.0`，双线均已联调——**better-sidebar 0.18.0 + DSH 0.1.2-rc.1**（0.2.7 起验证）与 **better-sidebar 0.17.1 + DSH 0.1.1-rc.x（stable）**。注意 better-sidebar 0.18.0 仅支持 DSH 0.1.2-rc.1+：旧 stable 宿主（0.1.0-rc.8 ~ 0.1.1-rc.2）请固定安装 `dsh-better-sidebar@0.17.1`。
 
 ### 方式二：源码本地安装（开发 / 离线）
 
@@ -78,7 +78,7 @@ npx @deepseek-ai/dsh plugin --profile desktop remove dsh-turn-outline
 
 ```
 host（Node）  inject: ['webServer','sessionQuery','sessions']
-  POST /turntrail/api/events { sessionId, afterSeq }
+  POST /turn-outline/api/events { sessionId, afterSeq }
   → 活跃会话：直接借用 live store 冻结快照（O(1) 探测 + O(delta) 投影，零深拷贝）
   → 冷会话：sessionQuery 持久化日志 + lastSeq 缓存（LRU + 字节上限）
   → 响应逐页（每页 PAGE_SIZE 事件，hasMore 语义）+ 字段裁剪（不发 tool 结果全文）
@@ -99,7 +99,7 @@ client（浏览器）  inject: ['sessions','betterSidebar']（betterSidebar 可�
 
 ## 权限与数据
 
-- **会话日志**：host 只读路由 `POST /turntrail/api/events`，浏览器同源 + Host 头信任围栏；只读不回写、不改动会话。
+- **会话日志**：host 只读路由 `POST /turn-outline/api/events`，浏览器同源 + Host 头信任围栏；只读不回写、不改动会话。
 - **零 LLM 调用**：不向任何模型发送内容，无 token 消耗。
 - **不读取凭据**：除会话事件外无其他网络 / 文件访问；无用户配置、无持久化存储（tab 状态随 better-sidebar 布局持久化）。
 

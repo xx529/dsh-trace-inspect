@@ -2,7 +2,7 @@
  * Host half of dsh-turn-outline: one incremental, read-only route that serves
  * session events for the trail panel, behind a browser-trust fence.
  *
- *   POST /turntrail/api/events  { sessionId, afterSeq }
+ *   POST /turn-outline/api/events  { sessionId, afterSeq }
  *     → 200 { events, hasMore }   (one PAGE_SIZE page, ascending seq)
  *     → 400 bad request / missing sessionId
  *     → 403 fence rejection
@@ -221,7 +221,7 @@ function cacheStore(
 export function apply(ctx: HostCtx): void {
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
-    path: '/turntrail/api/events',
+    path: '/turn-outline/api/events',
     handler: async (rawReq, rawRes) => {
       const req = rawReq as HttpRequestLike
       const res = rawRes as HttpResponseLike

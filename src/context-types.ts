@@ -73,13 +73,13 @@ export interface HttpResponseLike {
   end(body?: string | Buffer): void
 }
 
-/** The wire body of POST /turntrail/api/events. */
+/** The wire body of POST /turn-outline/api/events. */
 export interface TrailEventsRequest {
   sessionId?: unknown
   afterSeq?: unknown
 }
 
-/** The wire response of POST /turntrail/api/events. */
+/** The wire response of POST /turn-outline/api/events. */
 export interface TrailEventsResponse {
   events: SessionEventLike[]
   /** More pages remain; the client re-pulls with the last delivered seq. */

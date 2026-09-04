@@ -46,7 +46,7 @@ function fakeReq(overrides: ReqOverrides = {}): HttpRequestLike {
   return {
     method: overrides.method ?? 'POST',
     headers: overrides.headers ?? { host: '127.0.0.1:43120' },
-    url: '/turntrail/api/events',
+    url: '/turn-outline/api/events',
     async *[Symbol.asyncIterator]() {
       yield Buffer.from(body, 'utf8')
     },
@@ -305,7 +305,7 @@ describe('request guards', () => {
     const req = {
       method: 'POST',
       headers: { host: '127.0.0.1:43120', 'content-length': String(1024 * 1024) },
-      url: '/turntrail/api/events',
+      url: '/turn-outline/api/events',
       async *[Symbol.asyncIterator]() {
         yield Buffer.from('x'.repeat(1024 * 1024), 'utf8')
       },
@@ -322,7 +322,7 @@ describe('request guards', () => {
     const req = {
       method: 'POST',
       headers: { host: '127.0.0.1:43120' },
-      url: '/turntrail/api/events',
+      url: '/turn-outline/api/events',
       async *[Symbol.asyncIterator]() {
         for (let i = 0; i < 10; i += 1) yield Buffer.from(big.slice(i * 7 * 1024, (i + 1) * 7 * 1024), 'utf8')
       },

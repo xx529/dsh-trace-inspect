@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7] - 2026-09-04
+
+### Changed
+
+- 适配 better-sidebar 0.18.0（DSH 0.1.2-rc.1 正式线）：peer 声明放宽为 `dsh-better-sidebar@^0.17.0 || ^0.18.0`（0.x 语义化版本下 `^0.17.0` 不覆盖 0.18.x）。0.18.0 对插件面 API 为零变化（上游 #537 纯版本升级；`registerTab(descriptor): () => void` 与 `TabDescriptor` 各字段原样保留），已在新组合（DSH 0.1.2-rc.1 + better-sidebar 0.18.0）真机联调；0.17.1 + DSH 0.1.1-rc.x stable 线继续支持（`package.json` / `README.md` / `README.en.md`）。
+- host 路由 `/turntrail/api/events` 改名 `/turn-outline/api/events`，与包名对齐（client 请求方 `src/client/useTrail.ts`、README 权限说明、host 测试同步更新；该路由为插件内部契约，client+host 同包原子发布，无外部消费者）。测试 80 通过（`tests/host.spec.ts`）。
+
 ## [0.2.6] - 2026-09-04
 
 ### Changed

@@ -1,5 +1,5 @@
 /**
- * wire.ts — host-side response shaping for POST /turntrail/api/events.
+ * wire.ts — host-side response shaping for POST /turn-outline/api/events.
  *
  * The client fold needs only a small, typed subset of each event. Every
  * response event is projected to that subset BEFORE serialization, so the

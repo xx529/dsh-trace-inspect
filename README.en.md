@@ -37,16 +37,16 @@
 
 ### Option 1: one-liner from npm (recommended)
 
-Install better-sidebar first (stable line pinned to 0.17.x), then this plugin:
+Install better-sidebar first, then this plugin:
 
 ```sh
-npx @deepseek-ai/dsh plugin --profile desktop add dsh-better-sidebar@0.17.1
+npx @deepseek-ai/dsh plugin --profile desktop add dsh-better-sidebar
 npx @deepseek-ai/dsh plugin --profile desktop add dsh-turn-outline
 ```
 
 > Using the Web profile? Swap `--profile desktop` for `--profile web`.
 >
-> ⚠️ **Version-line note**: this plugin is currently validated on **better-sidebar 0.17.x + DSH 0.1.1-rc.x (stable)**. The npm `latest` better-sidebar 0.18.0 supports only DSH 0.1.2-rc.1+ and has not been co-tested with this plugin — until a 0.18-adapted release, pin `dsh-better-sidebar@0.17.1` before upgrading your host.
+> ℹ️ **Version-line note**: this plugin declares the peer range `dsh-better-sidebar@^0.17.0 || ^0.18.0`, and both lines are co-tested — **better-sidebar 0.18.0 + DSH 0.1.2-rc.1** (validated since 0.2.7) and **better-sidebar 0.17.1 + DSH 0.1.1-rc.x (stable)**. Note that better-sidebar 0.18.0 supports only DSH 0.1.2-rc.1+: on an older stable host (0.1.0-rc.8 ~ 0.1.1-rc.2), pin `dsh-better-sidebar@0.17.1`.
 
 ### Option 2: install from source (development / offline)
 
@@ -78,7 +78,7 @@ npx @deepseek-ai/dsh plugin --profile desktop remove dsh-turn-outline
 
 ```
 host (Node)      inject: ['webServer','sessionQuery','sessions']
-  POST /turntrail/api/events { sessionId, afterSeq }
+  POST /turn-outline/api/events { sessionId, afterSeq }
   → live sessions: borrow the frozen snapshot of the live store (O(1) probe + O(delta) projection, zero deep clones)
   → cold sessions: sessionQuery persisted log + lastSeq cache (LRU + byte cap)
   → paged responses (PAGE_SIZE events per page, hasMore semantics) + field trimming (no full tool-result payloads)
@@ -99,7 +99,7 @@ client (browser) inject: ['sessions','betterSidebar'] (betterSidebar is an optio
 
 ## Permissions & data
 
-- **Session logs**: one read-only host route `POST /turntrail/api/events`, browser same-origin + Host-header trust fence; read-only, never writes or mutates the session.
+- **Session logs**: one read-only host route `POST /turn-outline/api/events`, browser same-origin + Host-header trust fence; read-only, never writes or mutates the session.
 - **Zero LLM calls**: nothing is sent to any model; no token consumption.
 - **No credential access**: no other network/file access besides session events; no user config, no persistent storage (tab state follows better-sidebar's layout persistence).
 
