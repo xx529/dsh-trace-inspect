@@ -12,6 +12,12 @@
  * memoized row components skip re-rendering; each throttled pull costs
  * O(delta) folding + O(page) appends instead of a full O(n) re-fold.
  * Duplicate / re-sent pages are dropped by the folder's seq watermark.
+ *
+ * One pull drains at most MAX_PULL_PAGES pages; if pages remain pending
+ * (first open of a huge cold session), the throttled path schedules a
+ * continuation pull so the trail is never silently truncated. The chain is
+ * guarded: it stops when the tab hides, the session/generation changes, or a
+ * pull makes zero seq progress (stalled / looping transport).
  */
 import * as React from 'react'
 import type { SessionEventLike } from '../trail-model'
@@ -47,7 +53,7 @@ export interface TrailState {
 }
 
 /** Cap on drained pages per pull (each page ≤ PAGE_SIZE events). */
-const MAX_PULL_PAGES = 64
+export const MAX_PULL_PAGES = 64
 
 /** Default transport: POST the /turntrail/api/events route. */
 export function fetchTrailEvents(sessionId: string, afterSeq: number, base?: string): Promise<FetchEventsResult> {
@@ -90,17 +96,26 @@ export function useTrail(
   // hammers the (shared) main thread. Coalesce a burst into one update.
   const lastPullAt = React.useRef(0)
   const throttleTimer = React.useRef<number | null>(null)
+  // Mirrors for async callbacks: pull() must know the current visibility and
+  // reach the throttled scheduler (defined below it) without re-creating.
+  const visibleRef = React.useRef(visible)
+  const schedulePullRef = React.useRef<(() => void) | null>(null)
 
   React.useEffect(() => { fetchRef.current = fetchEvents }, [fetchEvents])
+  React.useEffect(() => { visibleRef.current = visible }, [visible])
 
   // Cancel any pending throttled pull on teardown.
   React.useEffect(() => () => {
     if (throttleTimer.current !== null) window.clearTimeout(throttleTimer.current)
+    schedulePullRef.current = null
   }, [])
 
   const pull = React.useCallback(async (): Promise<void> => {
     const generation = ++requestGen.current
     const sid = sessionIdRef.current
+    const seqBefore = seqRef.current
+    // True when the drain loop hit MAX_PULL_PAGES with pages still pending.
+    let drainCapped = false
     try {
       // Drain possibly-paginated pages until the server log is current.
       for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
@@ -122,10 +137,29 @@ export function useTrail(
             setStats(folder.stats())
           }
         }
-        if (hasMore !== true || events.length === 0) break
+        if (hasMore !== true || events.length === 0) {
+          drainCapped = false
+          break
+        }
+        drainCapped = page === MAX_PULL_PAGES - 1
       }
       setError(null)
       setStatus('ready')
+      // A capped drain with pages pending (first open of a huge cold session)
+      // must not truncate silently: keep draining through the throttled path.
+      // Guards stop a misbehaving transport from looping forever: the tab is
+      // still visible, the pull is still current, and THIS pull made real seq
+      // progress (a stalled transport yields none, so scheduling stops).
+      if (
+        drainCapped
+        && seqRef.current !== seqBefore
+        && generation === requestGen.current
+        && sid === sessionIdRef.current
+        && visibleRef.current
+        && schedulePullRef.current !== null
+      ) {
+        schedulePullRef.current()
+      }
     } catch (reason) {
       if (generation !== requestGen.current) return
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -155,6 +189,10 @@ export function useTrail(
       void pull()
     }, MIN_GAP - since)
   }, [pull])
+  // Expose the scheduler to pull()'s cap-continuation (declared above it).
+  React.useEffect(() => {
+    schedulePullRef.current = schedulePull
+  }, [schedulePull])
 
   // Session switch: reset the accumulator.
   React.useEffect(() => {

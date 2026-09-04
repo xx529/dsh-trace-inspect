@@ -23,7 +23,10 @@
  *     hammered the very process running the agent.)
  *
  *   COLD / persisted sessions (idle, pulled only on activation):
- *     sessionQuery with a per-session lastSeq cache, exactly as before.
+ *     sessionQuery with a per-session lastSeq cache, exactly as before. The
+ *     `listEvents` probe is itself a whole-log read + per-event structuredClone
+ *     inside sessionQuery, so the probe result is cached behind a short TTL
+ *     (PROBE_TTL_MS): one probe per multi-page drain instead of one per page.
  *
  * inject = ['webServer', 'sessionQuery', 'sessions'] — all host services;
  * `sessions` is core DSH (sessionQuery itself depends on it), and the code
@@ -45,6 +48,8 @@ export const inject = ['webServer', 'sessionQuery', 'sessions']
 /** Per-session cache: { lastSeq, events } refreshed only on growth (LRU). */
 interface CacheEntry {
   lastSeq: number
+  /** Time of the last authoritative listEvents probe for this entry. */
+  probedAt: number
   events: SessionEventLike[]
   bytes: number
 }
@@ -52,6 +57,14 @@ const trailCache = new Map<string, CacheEntry>()
 const CACHE_MAX_ENTRIES = 64
 const CACHE_MAX_BYTES = 32 * 1024 * 1024
 let cacheBytes = 0
+
+/**
+ * Freshness window for the cached lastSeq probe. A persisted (non-live) log
+ * cannot grow in this process — a session that starts generating turns live
+ * and is served by the zero-copy fast path above — so reusing a recent probe
+ * across a multi-page drain is safe; the TTL only bounds the staleness window.
+ */
+export const PROBE_TTL_MS = 2000
 
 // ── Browser-trust fence (DNS-rebinding / cross-site defense, not auth) ────
 
@@ -182,14 +195,19 @@ function respondPage(
 }
 
 /** Insert/refresh one cache entry, then evict past the entry/byte budgets. */
-function cacheStore(sessionId: string, lastSeq: number, events: SessionEventLike[]): void {
-  const bytes = Buffer.byteLength(JSON.stringify(events))
+function cacheStore(
+  sessionId: string,
+  lastSeq: number,
+  events: SessionEventLike[],
+  bytes: number,
+  probedAt: number,
+): void {
   const existing = trailCache.get(sessionId)
   if (existing !== undefined) {
     trailCache.delete(sessionId)
     cacheBytes -= existing.bytes
   }
-  trailCache.set(sessionId, { lastSeq, events, bytes })
+  trailCache.set(sessionId, { lastSeq, probedAt, events, bytes })
   cacheBytes += bytes
   while (trailCache.size > CACHE_MAX_ENTRIES || (cacheBytes > CACHE_MAX_BYTES && trailCache.size > 1)) {
     const oldest = trailCache.keys().next().value
@@ -236,26 +254,47 @@ export function apply(ctx: HostCtx): void {
           return
         }
 
-        // Persisted path: lastSeq probe first; re-read the log only when it grew.
-        let lastSeq = -1
-        try {
-          const records = await ctx.sessionQuery.listEvents(sessionId)
-          const last = records[records.length - 1]
-          lastSeq = last !== undefined && typeof last.seq === 'number' ? last.seq : -1
-        } catch {
-          lastSeq = -1
-        }
+        // Persisted path. The listEvents probe costs a whole-log read +
+        // per-event structuredClone inside sessionQuery, so its result is
+        // cached behind PROBE_TTL_MS: a multi-page drain (each page = one
+        // request) probes once instead of once per page.
         const cached = trailCache.get(sessionId)
+        let lastSeq = -1
+        let probedAt = 0
+        if (cached !== undefined && Date.now() - cached.probedAt < PROBE_TTL_MS) {
+          // Fresh probe reuse: trust the cached lastSeq, skip the round-trip.
+          lastSeq = cached.lastSeq
+          probedAt = cached.probedAt
+        } else {
+          try {
+            const records = await ctx.sessionQuery.listEvents(sessionId)
+            const last = records[records.length - 1]
+            lastSeq = last !== undefined && typeof last.seq === 'number' ? last.seq : -1
+            probedAt = Date.now()
+          } catch {
+            lastSeq = -1
+            probedAt = Date.now()
+          }
+        }
         let base: SessionEventLike[]
         if (cached !== undefined && lastSeq >= 0 && cached.lastSeq === lastSeq) {
           base = cached.events
+          if (probedAt > cached.probedAt) cached.probedAt = probedAt
           // LRU touch: re-insert at the fresh end.
           trailCache.delete(sessionId)
           trailCache.set(sessionId, cached)
         } else {
           const snapshot = await ctx.sessionQuery.readSession(sessionId)
-          base = (Array.isArray(snapshot.events) ? snapshot.events : []).map(projectEvent)
-          cacheStore(sessionId, lastSeq, base)
+          const raw = Array.isArray(snapshot.events) ? snapshot.events : []
+          // Project once, accumulating wire bytes per event in the same pass —
+          // no separate whole-log JSON.stringify just for the byte budget.
+          let bytes = 0
+          base = raw.map((event) => {
+            const projected = projectEvent(event)
+            bytes += Buffer.byteLength(JSON.stringify(projected))
+            return projected
+          })
+          cacheStore(sessionId, lastSeq, base, bytes, probedAt)
         }
         // base is already projected (idempotently); serve without re-projecting.
         respondPage(res, base, afterSeq, false)

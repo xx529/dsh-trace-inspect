@@ -9,6 +9,14 @@
 
 [中文](README.md)
 
+## Preview
+
+<p align="center">
+  <img src="docs/assets/turn-outline-panel.png" alt="Turn Outline tab: the session folded into per-user turns of input, tool steps and output" width="420" />
+</p>
+
+> Real-session screenshot: the whole session folds into turns 1-5, each = user input + tool steps + final output; the tool filter chips at the top (All / bash / read / edit / More) aggregate by semantic dot, and clicking any row jumps back to its place in the conversation.
+
 ## Overview
 
 **Who it is for**: users of DeepSeek Harness (Web / Desktop profile) with long sessions who want to quickly revisit "what happened at step N" — at zero cost, without adding an LLM or touching the DSH core.
@@ -45,8 +53,8 @@ npx @deepseek-ai/dsh plugin --profile desktop add dsh-turn-outline
 ```sh
 git clone https://github.com/Andor-Z/dsh-turn-outline
 cd dsh-turn-outline
-pnpm install && pnpm build && pnpm pack     # produces dsh-turn-outline-0.2.5.tgz
-npx @deepseek-ai/dsh plugin --profile desktop add "file:$(pwd)/dsh-turn-outline-0.2.5.tgz"
+pnpm install && pnpm build && pnpm pack     # produces dsh-turn-outline-0.2.6.tgz
+npx @deepseek-ai/dsh plugin --profile desktop add "file:$(pwd)/dsh-turn-outline-0.2.6.tgz"
 ```
 
 ### Restart & enable
@@ -102,14 +110,14 @@ client (browser) inject: ['sessions','betterSidebar'] (betterSidebar is an optio
 | Platform | DSH 0.1.1-rc.x (stable line; web/desktop profile) |
 | Dependencies | dsh-better-sidebar (optional peer; inert when absent), react (injected by the DSH client seed) |
 | Build | TypeScript + esbuild, no runtime npm dependencies |
-| Tests | vitest, 77 cases (fold / folder / jump / tab / host) |
+| Tests | vitest, 80 cases (fold / folder / jump / tab / host) |
 
 ## Development
 
 ```sh
 pnpm install          # if pnpm 10+ blocks build scripts, allow esbuild as prompted (see pnpm-workspace.yaml)
 pnpm typecheck        # tsc --noEmit
-pnpm test             # vitest run (77 cases)
+pnpm test             # vitest run (80 cases)
 pnpm build            # esbuild → lib/index.js + lib/client.js (includes bundle-contract self check)
 pnpm pack             # produces dsh-turn-outline-<version>.tgz (prepack rebuilds automatically)
 ```

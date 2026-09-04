@@ -5,46 +5,43 @@
  *
  * Bundle purity: `dsh-better-sidebar` is never value-imported — the tab is
  * registered through `ctx.betterSidebar` at runtime; `react` resolves from
- * the client module system seed; `@deepseek-ai/dsh-client-ui-primitives` is
- * required lazily with a glyph fallback so the panel works without it.
+ * the client module system seed; the tab glyph is an inline SVG (no
+ * ui-primitives dependency), so the panel works without it.
  */
 import * as React from 'react'
 import { trailCss } from './styles'
 import { TrailTab } from './TrailTab'
 
-/** Icon primitives with an exact list glyph fallback (not a dropdown arrow). */
-const primitives = (() => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require('@deepseek-ai/dsh-client-ui-primitives')
-  } catch {
-    return null
-  }
-})()
-
-function listIcon(): React.ReactNode {
-  const path = React.createElement('path', {
-    d: 'M3 3.5h10M3 8h10M3 12.5h6',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: '1.5',
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-  })
-  return React.createElement('svg', { viewBox: '0 0 16 16', width: '14', height: '14', 'aria-hidden': true }, path)
-}
-
 /**
- * Tab glyph. Prefer a ui-primitives BRANCH icon (IconBranchOutline16 — a
- * flow/path) so the「轮次轨迹」tab reads as a trail of turns, not a dropdown
- * arrow; fall back to our own three-line list glyph.
+ * Tab glyph — Lucide `route` (ISC license): two round endpoints joined by an
+ * S-shaped detour, reading as the trail between turns. Drawn inline at 24
+ * grid with stroke 2 so it scales cleanly to the 14px tab size; keeps the tab
+ * visually distinct from the source-control branch icon it previously shared
+ * (ui-primitives IconBranchOutline16). Chosen over a 4-node waypoints glyph
+ * after a 14px density review: 3 elements render far less crowded in the
+ * selected-tab state.
  */
-function tabIcon(size: number): React.ReactNode {
-  const IconList = primitives !== null && typeof primitives.IconBranchOutline16 === 'function'
-    ? primitives.IconBranchOutline16
-    : null
-  if (IconList !== null) return React.createElement(IconList, { size })
-  return listIcon()
+function routeIcon(size: number): React.ReactNode {
+  const children = [
+    React.createElement('circle', { key: 'a', cx: 6, cy: 19, r: 3 }),
+    React.createElement('path', { key: 'p', d: 'M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15' }),
+    React.createElement('circle', { key: 'b', cx: 18, cy: 5, r: 3 }),
+  ]
+  return React.createElement(
+    'svg',
+    {
+      viewBox: '0 0 24 24',
+      width: size,
+      height: size,
+      fill: 'none',
+      stroke: 'currentColor',
+      strokeWidth: 2,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      'aria-hidden': true,
+    },
+    children,
+  )
 }
 
 export const inject = ['sessions', 'betterSidebar']
@@ -78,7 +75,7 @@ export function apply(ctx: {
     title: () => (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh')
       ? '轮次轨迹'
       : 'Turn Outline'),
-    icon: (size: number) => tabIcon(size),
+    icon: (size: number) => routeIcon(size),
     order: 46,
     single: true,
     component: (props: {

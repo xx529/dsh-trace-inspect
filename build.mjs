@@ -6,8 +6,8 @@
  * The client bundle:
  *  - compiles TSX with the CLASSIC JSX runtime (React.createElement) so the
  *    emitted code only needs `require('react')` — a guaranteed platform seed;
- *  - keeps `react` / `@deepseek-ai/dsh-client-ui-primitives` external — the
- *    factory's `require` resolves them from the client module system;
+ *  - keeps `react` / `react-dom` external — the factory's `require` resolves
+ *    them from the client module system;
  *  - registers itself under the package name (the graph row id).
  */
 import { build } from 'esbuild'
@@ -61,7 +61,7 @@ await build({
   jsx: 'transform',
   jsxFactory: 'React.createElement',
   jsxFragment: 'React.Fragment',
-  external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'],
+  external: ['react', 'react-dom'],
   banner: { js: banner },
   footer: { js: footer },
 })

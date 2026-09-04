@@ -9,6 +9,14 @@
 
 [English](README.en.md)
 
+## 样式预览
+
+<p align="center">
+  <img src="docs/assets/turn-outline-panel.png" alt="轮次轨迹 tab：会话按用户轮次折叠成「输入 → 工具步骤 → 输出」的结构化轨迹" width="420" />
+</p>
+
+> 真实会话截图：整条会话折叠为「轮次 1-5」，每轮 = 用户输入 + 工具步骤 + 最终输出；顶部工具筛选 chips（全部 / bash / read / edit / 更多）按语义色点聚合，点击任意行可定位回对话原位。
+
 ## 概览
 
 **适合谁**：使用 DeepSeek Harness（Web / Desktop profile）、会话很长、想快速回看某一步「当时做了什么」的用户——希望零成本、不引入 LLM 也不改动核心。
@@ -45,8 +53,8 @@ npx @deepseek-ai/dsh plugin --profile desktop add dsh-turn-outline
 ```sh
 git clone https://github.com/Andor-Z/dsh-turn-outline
 cd dsh-turn-outline
-pnpm install && pnpm build && pnpm pack     # 产出 dsh-turn-outline-0.2.5.tgz
-npx @deepseek-ai/dsh plugin --profile desktop add "file:$(pwd)/dsh-turn-outline-0.2.5.tgz"
+pnpm install && pnpm build && pnpm pack     # 产出 dsh-turn-outline-0.2.6.tgz
+npx @deepseek-ai/dsh plugin --profile desktop add "file:$(pwd)/dsh-turn-outline-0.2.6.tgz"
 ```
 
 ### 重启与启用
@@ -102,14 +110,14 @@ client（浏览器）  inject: ['sessions','betterSidebar']（betterSidebar 可�
 | 平台 | DSH 0.1.1-rc.x（stable 线；web/desktop profile） |
 | 依赖 | dsh-better-sidebar（可选 peer；未装则 inert）、react（DSH client 种子注入） |
 | 构建 | TypeScript + esbuild，无运行时 npm 依赖 |
-| 测试 | vitest 77 用例（fold / folder / jump / tab / host） |
+| 测试 | vitest 80 用例（fold / folder / jump / tab / host） |
 
 ## 开发
 
 ```sh
 pnpm install          # pnpm 10+ 拦截构建脚本时按提示允许 esbuild（见 pnpm-workspace.yaml）
 pnpm typecheck        # tsc --noEmit
-pnpm test             # vitest run（77 用例）
+pnpm test             # vitest run（80 用例）
 pnpm build            # esbuild → lib/index.js + lib/client.js（含 bundle 契约自检）
 pnpm pack             # 产出 dsh-turn-outline-<version>.tgz（prepack 自动重新构建）
 ```

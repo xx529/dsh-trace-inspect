@@ -1,9 +1,9 @@
 /**
  * host.spec.ts — host route coverage: trust fence decisions, status codes,
- * afterSeq filtering and the lastSeq cache short-circuit.
+ * afterSeq filtering, the lastSeq cache short-circuit and its probe TTL.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { apply, isTrustedApiRequest } from '../src/index'
+import { apply, isTrustedApiRequest, PROBE_TTL_MS } from '../src/index'
 import { PAGE_SIZE } from '../src/wire'
 import type { HostCtx, HttpHeadersLike, HttpRequestLike, HttpResponseLike, SessionEventLike } from '../src/context-types'
 
@@ -127,10 +127,35 @@ describe('route behavior', () => {
     const readSession = ctx.sessionQuery.readSession as ReturnType<typeof vi.fn>
     const listEvents = ctx.sessionQuery.listEvents as ReturnType<typeof vi.fn>
     expect(readSession).toHaveBeenCalledTimes(1)
-    // Second request with the same lastSeq must not re-read the log.
+    // Second request within the probe TTL reuses the cached lastSeq: neither
+    // the probe (a whole-log read + clone inside sessionQuery) nor the log
+    // is touched again.
     await run(ctx, fakeReq({ body }))
-    expect(listEvents).toHaveBeenCalledTimes(2)
+    expect(listEvents).toHaveBeenCalledTimes(1)
     expect(readSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-probes lastSeq once the probe TTL lapses', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(0)
+      const ctx = fakeCtx()
+      apply(ctx)
+      const body = JSON.stringify({ sessionId: 'ttl-s1', afterSeq: 0 })
+      await run(ctx, fakeReq({ body }))
+      await run(ctx, fakeReq({ body }))
+      const listEvents = ctx.sessionQuery.listEvents as ReturnType<typeof vi.fn>
+      expect(listEvents).toHaveBeenCalledTimes(1)
+      expect((ctx.sessionQuery.readSession as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+      // Past the TTL the next request pays one fresh probe — and still hits
+      // the events cache (no readSession) because lastSeq did not move.
+      vi.setSystemTime(PROBE_TTL_MS + 1)
+      await run(ctx, fakeReq({ body }))
+      expect(listEvents).toHaveBeenCalledTimes(2)
+      expect((ctx.sessionQuery.readSession as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('404 for an unknown session', async () => {

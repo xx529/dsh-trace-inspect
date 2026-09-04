@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as React from 'react'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { TrailTab } from '../src/client/TrailTab'
+import { MAX_PULL_PAGES } from '../src/client/useTrail'
 import type { SessionEventLike } from '../src/trail-model'
 
 afterEach(cleanup)
@@ -225,5 +226,59 @@ describe('TrailTab', () => {
     expect(await screen.findByText('2 turns')).toBeTruthy()
     expect(await screen.findByText('Turn 2')).toBeTruthy()
     expect(calls).toBe(2)
+  })
+
+  it('keeps draining past MAX_PULL_PAGES so a huge cold load is not truncated', async () => {
+    // MAX_PULL_PAGES + 2 single-event pages: the first pull stops at the cap
+    // with pages pending, the scheduled continuation must drain the rest.
+    const total = MAX_PULL_PAGES + 2
+    let calls = 0
+    const fetchEventsOverride = async (_sid: string, afterSeq: number) => {
+      calls += 1
+      const seq = afterSeq + 1
+      const hasMore = seq < total
+      return { events: [user(seq, `msg ${seq}`)], hasMore }
+    }
+    render(
+      <TrailTab
+        ctx={{ get: () => undefined }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'turn-outline' }}
+        fetchEventsOverride={fetchEventsOverride}
+      />,
+    )
+    expect(await screen.findByText(`${total} turns`)).toBeTruthy()
+    // The final page (beyond the cap) really arrived: it shows in the latest
+    // turn's preview AND its expanded input row.
+    const lastTexts = await screen.findAllByText(`msg ${total}`)
+    expect(lastTexts.length).toBeGreaterThanOrEqual(1)
+    expect(calls).toBe(total)
+  })
+
+  it('stops the cap-continuation chain when a pull makes no progress', async () => {
+    // A misbehaving transport: always hasMore, always the same stale page.
+    // The first pull advances seq once (page 1), schedules one continuation;
+    // the stalled continuation must make zero progress and stop the chain.
+    let calls = 0
+    const fetchEventsOverride = async (): Promise<{ events: SessionEventLike[]; hasMore: boolean }> => {
+      calls += 1
+      return { events: [user(1, 'only')], hasMore: true }
+    }
+    render(
+      <TrailTab
+        ctx={{ get: () => undefined }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'turn-outline' }}
+        fetchEventsOverride={fetchEventsOverride}
+      />,
+    )
+    expect(await screen.findByText('1 turns')).toBeTruthy()
+    // Wait past the throttle window: no third pull may fire.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(calls).toBe(MAX_PULL_PAGES * 2)
+    // Duplicates were dropped by the watermark and the panel stays healthy.
+    expect(screen.queryByTestId('ttl-error')).toBeNull()
   })
 })

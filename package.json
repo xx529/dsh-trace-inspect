@@ -1,6 +1,6 @@
 {
   "name": "dsh-turn-outline",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Turn-outline sidebar tab for dsh-better-sidebar: fold a session into user turns (input + tool steps + output) with structured jump-back into the conversation | DSH 轮次轨迹侧边栏：按用户轮次折叠会话（输入+工具步骤+输出），一键定位回对话原位",
   "type": "module",
   "main": "lib/index.js",
@@ -29,8 +29,7 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-primitives"
+        "@deepseek-ai/dsh-client-runtime"
       ]
     }
   },
