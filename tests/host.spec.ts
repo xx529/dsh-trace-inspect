@@ -172,18 +172,32 @@ describe('route behavior', () => {
 })
 
 describe('live fast path', () => {
-  const liveCtx = (events: SessionEventLike[]): HostCtx & { captured: Handler[] } => {
+  const liveCtx = (session: unknown): HostCtx & { captured: Handler[] } => {
     const ctx = fakeCtx()
-    ;(ctx as HostCtx & { sessions?: unknown }).sessions = { get: (id: string) => (id === 'live1' ? { events } : undefined) }
+    ;(ctx as HostCtx & { sessions?: unknown }).sessions = { get: (id: string) => (id === 'live1' ? session : undefined) }
     return ctx
   }
 
-  it('serves from the live store without touching sessionQuery', async () => {
+  it('serves from the live store without touching sessionQuery (0.2.0 snapshotEvents)', async () => {
     const events: SessionEventLike[] = [
       { type: 'user/message', seq: 1, data: { content: 'a' } },
       { type: 'assistant/message', seq: 2, data: { message: { content: 'A' } } },
     ]
-    const ctx = liveCtx(events)
+    const ctx = liveCtx({ snapshotEvents: () => events })
+    apply(ctx)
+    const { status, body } = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'live1', afterSeq: 0 }) }))
+    expect(status).toBe(200)
+    expect((body as { events: SessionEventLike[] }).events.map((event) => event.seq)).toEqual([1, 2])
+    expect(ctx.sessionQuery.readSession).not.toHaveBeenCalled()
+    expect(ctx.sessionQuery.listEvents).not.toHaveBeenCalled()
+  })
+
+  it('serves from the live store without touching sessionQuery (0.1.x events property)', async () => {
+    const events: SessionEventLike[] = [
+      { type: 'user/message', seq: 1, data: { content: 'a' } },
+      { type: 'assistant/message', seq: 2, data: { message: { content: 'A' } } },
+    ]
+    const ctx = liveCtx({ events })
     apply(ctx)
     const { status, body } = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'live1', afterSeq: 0 }) }))
     expect(status).toBe(200)
@@ -198,18 +212,26 @@ describe('live fast path', () => {
       seq: (i + 1) * 3, // non-dense seqs: 3,6,9,…30
       data: { turn: i },
     }))
-    const ctx = liveCtx(events)
+    const ctx = liveCtx({ snapshotEvents: () => events })
     apply(ctx)
     const { body } = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'live1', afterSeq: 9 }) }))
     expect((body as { events: SessionEventLike[] }).events.map((event) => event.seq)).toEqual([12, 15, 18, 21, 24, 27, 30])
   })
 
   it('falls back to the persisted path when the session is not live', async () => {
-    const ctx = liveCtx([])
+    const ctx = liveCtx(undefined)
     apply(ctx)
     // Unique id: the module-level lastSeq cache remembers session ids used
     // by earlier tests in this file (a hit would skip readSession entirely).
     const { status } = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'cold-1', afterSeq: 0 }) }))
+    expect(status).toBe(200)
+    expect(ctx.sessionQuery.readSession).toHaveBeenCalled()
+  })
+
+  it('degrades to the persisted path when the live session exposes no log face', async () => {
+    const ctx = liveCtx({ someOtherField: true })
+    apply(ctx)
+    const { status } = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'cold-2', afterSeq: 0 }) }))
     expect(status).toBe(200)
     expect(ctx.sessionQuery.readSession).toHaveBeenCalled()
   })

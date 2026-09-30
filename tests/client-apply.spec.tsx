@@ -22,7 +22,7 @@ interface ApplyCtx {
  * what `ctx.get('betterSidebar')` reports; `registerTabSpy` (when present)
  * stands in for the real service method.
  */
-function makeCtx(betterSidebarValue: unknown, registerTabSpy?: ReturnType<typeof vi.fn>): {
+function makeCtx(betterSidebarValue: unknown, registerTabSpy?: (descriptor: unknown) => () => void): {
   ctx: ApplyCtx
   disposables: unknown[]
 } {
@@ -32,7 +32,7 @@ function makeCtx(betterSidebarValue: unknown, registerTabSpy?: ReturnType<typeof
   return {
     ctx: {
       get: (name: string) => (name === 'betterSidebar' ? sidebar : undefined),
-      effect: (fn: () => unknown) => {
+      effect: <T,>(fn: () => T): T => {
         const result = fn()
         disposables.push(result)
         return result
@@ -66,20 +66,23 @@ describe('client apply — registration entry', () => {
   })
 
   it('registers exactly one turn-outline tab when the service is present', () => {
-    const registerTab = vi.fn(() => () => {})
+    const registerTab = vi.fn((descriptor: unknown) => () => {})
     const { ctx, disposables } = makeCtx('service', registerTab)
     expect(() => apply(ctx)).not.toThrow()
     expect(registerTab).toHaveBeenCalledTimes(1)
-    const descriptor = registerTab.mock.calls[0][0] as {
+    const descriptor = registerTab.mock.calls[0]?.[0] as {
       id: string
       single: boolean
       order: number
       title: () => string
+      description: () => string
       component: unknown
     }
     expect(descriptor.id).toBe('turn-outline')
     expect(descriptor.single).toBe(true)
     expect(typeof descriptor.title).toBe('function')
+    // 0.2.0 native + menu: the guide page renders the descriptor's description.
+    expect(typeof descriptor.description).toBe('function')
     expect(typeof descriptor.component).toBe('function')
     // cordis contract: the registerTab disposer is the effect cleanup.
     expect(disposables.length).toBeGreaterThan(0)

@@ -13,14 +13,15 @@
  * Two read paths, hottest first:
  *
  *   LIVE sessions (the trail's hot case — the session is generating):
- *     borrow the live store's frozen `events` snapshot. The probe is O(1)
- *     (`events.at(-1).seq`), the tail slice is O(delta), and the whole path
- *     is synchronous — no await between borrowing the snapshot and writing
- *     the response, so no interleaved mutation. Zero deep clones: the store
- *     already deep-freezes its events, and `JSON.stringify` reads frozen
- *     objects fine. (The sessionQuery equivalents each `structuredClone`
- *     EVERY event — 3× per request through listEvents + readSession — which
- *     hammered the very process running the agent.)
+ *     borrow the live store's frozen event snapshot (`snapshotEvents()` on
+ *     DSH 0.2.0+, the `events` property on 0.1.x — both zero-copy borrows).
+ *     The probe is O(1) (last seq), the tail slice is O(delta), and the whole
+ *     path is synchronous — no await between borrowing the snapshot and
+ *     writing the response, so no interleaved mutation. Zero deep clones: the
+ *     store already deep-freezes its events, and `JSON.stringify` reads
+ *     frozen objects fine. (The sessionQuery equivalents each
+ *     `structuredClone` EVERY event — 3× per request through listEvents +
+ *     readSession — which hammered the very process running the agent.)
  *
  *   COLD / persisted sessions (idle, pulled only on activation):
  *     sessionQuery with a per-session lastSeq cache, exactly as before. The
@@ -165,14 +166,33 @@ function upperBound(events: ReadonlyArray<{ seq?: number }>, afterSeq: number): 
   return lo
 }
 
-/** Borrow the live store's frozen snapshot — O(1) amortized, zero copies. */
+/**
+ * Borrow the live store's frozen snapshot — O(1) amortized, zero copies.
+ * DSH 0.2.0 renamed the live session's frozen log from the `events` property
+ * to the `snapshotEvents()` method (the returned array is frozen and cached
+ * between appends, so the borrow stays zero-copy); older DSH exposed the
+ * array directly. Either face is accepted; the events must be ascending by
+ * seq for the binary-search page slice.
+ */
+function liveEventsOf(session: LiveSessionLike): ReadonlyArray<SessionEventLike> | undefined {
+  if (typeof session.snapshotEvents === 'function') {
+    try {
+      const snapshot = session.snapshotEvents()
+      if (Array.isArray(snapshot)) return snapshot
+    } catch {
+      return undefined
+    }
+  }
+  return Array.isArray(session.events) ? session.events : undefined
+}
+
 function liveSessionOf(ctx: HostCtx, sessionId: string): LiveSessionLike | undefined {
   const sessions = ctx.sessions
   if (sessions === undefined || typeof sessions.get !== 'function') return undefined
   try {
     const session = sessions.get(sessionId)
-    if (session === null || session === undefined || typeof session !== 'object') return undefined
-    return Array.isArray((session as { events?: unknown }).events)
+    if (session === null || typeof session !== 'object') return undefined
+    return liveEventsOf(session as LiveSessionLike) !== undefined
       ? (session as LiveSessionLike)
       : undefined
   } catch {
@@ -250,7 +270,7 @@ export function apply(ctx: HostCtx): void {
         // Live fast path: synchronous, O(1) probe, O(delta) projection.
         const live = liveSessionOf(ctx, sessionId)
         if (live !== undefined) {
-          respondPage(res, live.events, afterSeq, true)
+          respondPage(res, liveEventsOf(live) ?? [], afterSeq, true)
           return
         }
 

@@ -1,16 +1,24 @@
 /**
- * trail-jump.spec.ts — structured jump coverage (≈9 cases): chat view
- * anchor lookup, loadOlder paging, guard cap, hidden-node fallback, and the
- * trajectory-view mapping.
+ * trail-jump.spec.ts — structured jump coverage: chat view anchor lookup,
+ * loadOlder paging, guard cap, hidden-node fallback, and the trajectory-view
+ * mapping — across BOTH host lines:
+ *
+ *   0.2.0 — the conversation view registry (`uiConversation.binding(id)`
+ *           targets 'chat' / 'trajectory') assembled via viewStateForJump;
+ *   0.1.x — the legacy session snapshot fields (`snapshot.chat.nodes` /
+ *           `snapshot.views.get('trajectory')`).
  */
 import { describe, expect, it, vi } from 'vitest'
 import {
   findNodeForSeq,
   hasSeqInWindow,
   jumpToItem,
-  trajectoryRecordIdFor,
+  trajectoryRecordIdsFor,
+  viewStateForJump,
   type ChatNodeLike,
+  type ConversationTargetsLike,
   type DocumentLike,
+  type JumpViewState,
   type SessionFace,
   type SessionSnapshotLike,
 } from '../src/client/trail-jump'
@@ -38,6 +46,37 @@ function fakeSession(nodes: ChatNodeLike[], pages: number): SessionFace & { load
   }
 }
 
+/** A 0.2.0 conversation face exposing a 'chat' target whose window grows. */
+function fakeConversation(nodes: ChatNodeLike[], pages: number): ConversationTargetsLike & { grow: () => void } {
+  let loaded = 0
+  return {
+    grow: () => { loaded += 1 },
+    target(name: string) {
+      if (name !== 'chat') return undefined
+      return {
+        getSnapshot: () => ({ nodes: { values: () => nodes.slice(Math.max(0, nodes.length - (loaded + 1))) } }),
+      }
+    },
+  }
+}
+
+/** A session + conversation pair where loadOlder grows both windows. */
+function fakeModernSession(nodes: ChatNodeLike[], pages: number): { session: SessionFace; conversation: ConversationTargetsLike } {
+  const conversation = fakeConversation(nodes, pages)
+  let loaded = 0
+  let hasMore = pages > 1
+  const session: SessionFace = {
+    loadOlder: vi.fn(async () => {
+      loaded += 1
+      hasMore = loaded < pages - 1
+      conversation.grow()
+    }),
+    getSnapshot: () => ({ hasMore }) as SessionSnapshotLike,
+  }
+  void loaded
+  return { session, conversation }
+}
+
 const chatDocument = (row: { scrollIntoView: ReturnType<typeof vi.fn>; classList?: { add: ReturnType<typeof vi.fn> } } | null): DocumentLike => ({
   querySelector: vi.fn((selector: string) => (
     typeof selector === 'string' && selector.includes('data-chat-anchor-key') ? row : null
@@ -46,31 +85,94 @@ const chatDocument = (row: { scrollIntoView: ReturnType<typeof vi.fn>; classList
 })
 
 describe('hasSeqInWindow / findNodeForSeq', () => {
+  const view = (nodes: ChatNodeLike[]): JumpViewState => ({ hasMore: false, chatNodes: { values: () => nodes }, trajectoryView: undefined })
+
   it('window bounds are min..max of visible anchorSeq', () => {
-    const snapshot: SessionSnapshotLike = {
-      chat: { nodes: { values: () => [
-        node('a', 10), node('b', 20), node('hidden', 15, { visibility: 'hidden' }),
-      ] } },
-    }
-    expect(hasSeqInWindow(snapshot, 12)).toBe(true)
-    expect(hasSeqInWindow(snapshot, 5)).toBe(false)
+    const state = view([
+      node('a', 10), node('b', 20), node('hidden', 15, { visibility: 'hidden' }),
+    ])
+    expect(hasSeqInWindow(state, 12)).toBe(true)
+    expect(hasSeqInWindow(state, 5)).toBe(false)
   })
 
   it('hidden nodes are skipped; nearest wins on no exact match', () => {
-    const snapshot: SessionSnapshotLike = {
-      chat: { nodes: { values: () => [
-        node('a', 10), node('hidden', 15, { visibility: 'hidden' }), node('b', 18), node('c', 30),
-      ] } },
-    }
+    const state = view([
+      node('a', 10), node('hidden', 15, { visibility: 'hidden' }), node('b', 18), node('c', 30),
+    ])
     // Hidden (15) skipped → nearest visible below 15 is b(18).
-    expect(findNodeForSeq(snapshot, 15)?.key).toBe('b')
+    expect(findNodeForSeq(state, 15)?.key).toBe('b')
     // Between b(18) and c(30) the next row wins (content after the target).
-    expect(findNodeForSeq(snapshot, 20)?.key).toBe('c')
-    expect(findNodeForSeq(snapshot, 35)?.key).toBe('c')
+    expect(findNodeForSeq(state, 20)?.key).toBe('c')
+    expect(findNodeForSeq(state, 35)?.key).toBe('c')
   })
 })
 
-describe('jumpToItem — chat view', () => {
+describe('viewStateForJump — 0.2.0 conversation registry', () => {
+  it('prefers the conversation chat target over the legacy snapshot field', () => {
+    const conversation = fakeConversation([node('new', 30)], 1)
+    const session: SessionFace = {
+      loadOlder: async () => {},
+      getSnapshot: () => ({ hasMore: true, chat: { nodes: { values: () => [node('legacy', 5)] } } }),
+    }
+    const view = viewStateForJump(session, conversation)
+    expect(view.hasMore).toBe(true)
+    expect([...(view.chatNodes?.values() ?? [])].map((n) => n.key)).toEqual(['new'])
+  })
+
+  it('falls back to the legacy snapshot fields without a conversation face', () => {
+    const session: SessionFace = {
+      loadOlder: async () => {},
+      getSnapshot: () => ({
+        hasMore: false,
+        chat: { nodes: { values: () => [node('legacy', 5)] } },
+        views: { get: (kind) => kind === 'trajectory' ? { eventNodes: [] } : null },
+      }),
+    }
+    const view = viewStateForJump(session)
+    expect([...(view.chatNodes?.values() ?? [])].map((n) => n.key)).toEqual(['legacy'])
+    expect(view.trajectoryView).toEqual({ eventNodes: [] })
+  })
+
+  it('reads the trajectory target from the conversation registry (0.2.0)', () => {
+    const conversation: ConversationTargetsLike = {
+      target(name: string) {
+        return name === 'trajectory' ? { getSnapshot: () => ({ eventNodes: [{ kind: 'user', seq: 10 }], requests: [] }) } : undefined
+      },
+    }
+    const session: SessionFace = { loadOlder: async () => {}, getSnapshot: () => ({ hasMore: false }) }
+    const view = viewStateForJump(session, conversation)
+    expect(trajectoryRecordIdsFor({ seq: 10, kind: 'user' }, view.trajectoryView)).toEqual(['user\u0000seq\u000010'])
+  })
+})
+
+describe('jumpToItem — chat view (0.2.0 registry path)', () => {
+  it('exact node → row scrollIntoView(center) + flash class', async () => {
+    const row = { scrollIntoView: vi.fn(), classList: { add: vi.fn() } }
+    const { session, conversation } = fakeModernSession([node('k1', 10), node('k2', 20)], 1)
+    const outcome = await jumpToItem(session, { seq: 20, kind: 'user' }, { document: chatDocument(row), conversation })
+    expect(outcome).toEqual({ ok: true, mode: 'chat' })
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+    expect(row.classList.add).toHaveBeenCalledWith('ttl-flash')
+  })
+
+  it('loadOlder pages until the target is inside the window, reporting progress', async () => {
+    const row = { scrollIntoView: vi.fn(), classList: { add: vi.fn() } }
+    // 5 nodes; target = seq 10 (oldest). Initial window = newest 1 → 3 pages needed.
+    const nodes = [10, 20, 30, 40, 50].map((seq, i) => node(`k${i}`, seq))
+    const { session, conversation } = fakeModernSession(nodes, 4)
+    const pages: number[] = []
+    const outcome = await jumpToItem(session, { seq: 10, kind: 'user' }, {
+      document: chatDocument(row),
+      onProgress: (p) => { pages.push(p) },
+      conversation,
+    })
+    expect(outcome.ok).toBe(true)
+    expect(session.loadOlder).toHaveBeenCalled()
+    expect(pages.length).toBeGreaterThan(0)
+  })
+})
+
+describe('jumpToItem — chat view (0.1.x legacy path)', () => {
   it('exact node → row scrollIntoView(center) + flash class', async () => {
     const row = { scrollIntoView: vi.fn(), classList: { add: vi.fn() } }
     const session = fakeSession([node('k1', 10), node('k2', 20)], 1)
@@ -82,7 +184,6 @@ describe('jumpToItem — chat view', () => {
 
   it('loadOlder pages until the target is inside the window, reporting progress', async () => {
     const row = { scrollIntoView: vi.fn(), classList: { add: vi.fn() } }
-    // 5 nodes; target = seq 10 (oldest). Initial window = newest 1 → 3 pages needed.
     const nodes = [10, 20, 30, 40, 50].map((seq, i) => node(`k${i}`, seq))
     const session = fakeSession(nodes, 4)
     const pages: number[] = []
@@ -134,32 +235,46 @@ describe('jumpToItem — chat view', () => {
     expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
     expect(chatSelectorCalls).toBeGreaterThanOrEqual(2)
   })
+
+  it('matches a 0.2.0 grouped row through data-chat-node-key when the anchor key is a JSON pair', async () => {
+    const row = { scrollIntoView: vi.fn(), classList: { add: vi.fn() }, dataset: { chatNodeKey: 'k1' } }
+    const document: DocumentLike = {
+      // The exact anchor-key query misses (the row's anchor key is a JSON pair).
+      querySelector: vi.fn(() => null) as unknown as DocumentLike['querySelector'],
+      querySelectorAll: vi.fn((selector: string) => (
+        typeof selector === 'string' && selector.includes('data-chat-node-key') ? [row] : []
+      )) as unknown as DocumentLike['querySelectorAll'],
+    }
+    const session = fakeSession([node('k1', 10)], 1)
+    const outcome = await jumpToItem(session, { seq: 10, kind: 'user' }, { document })
+    expect(outcome).toEqual({ ok: true, mode: 'chat' })
+    expect(row.scrollIntoView).toHaveBeenCalled()
+  })
 })
 
 describe('jumpToItem — trajectory view', () => {
-  const trajectorySnapshot = (): SessionSnapshotLike => ({
-    hasMore: false,
-    views: {
-      get: (kind: string) => kind === 'trajectory' ? {
-        eventNodes: [
-          { kind: 'user', seq: 10 },
-          { kind: 'assistant', seq: 20, turn: 1, step: 2 },
-          { kind: 'tool-result', seq: 25, callId: 'c25' },
-        ],
-        requests: [{ purpose: 'compaction', startSeq: 30, resultSeq: 35 }],
-      } : null,
-    },
+  const trajectoryView = (): Record<string, unknown> => ({
+    eventNodes: [
+      { kind: 'user', seq: 10 },
+      { kind: 'assistant', seq: 20, turn: 1, step: 2 },
+      { kind: 'tool-result', seq: 25, callId: 'c25' },
+    ],
+    requests: [{ purpose: 'compaction', startSeq: 30, resultSeq: 35 }],
   })
 
-  it('maps user / assistant / tool / compaction items to row keys', () => {
-    const snapshot = trajectorySnapshot()
-    expect(trajectoryRecordIdFor({ seq: 10, kind: 'user' }, snapshot)).toBe('user\u0000seq\u000010')
-    expect(trajectoryRecordIdFor({ seq: 20, kind: 'output' }, snapshot)).toBe('assistant\u00001\u00002')
-    expect(trajectoryRecordIdFor({ seq: 25, kind: 'tool', callId: 'c25' }, snapshot)).toBe('tool\u0000call\u0000c25')
-    expect(trajectoryRecordIdFor({ seq: 35, kind: 'compaction' }, snapshot)).toBe('compacted\u0000seq\u000030')
+  it('maps user / assistant / tool / compaction items to row-key candidates', () => {
+    expect(trajectoryRecordIdsFor({ seq: 10, kind: 'user' }, trajectoryView())).toEqual(['user\u0000seq\u000010'])
+    // Assistant: legacy turn/step key first, 0.2.0 seq-grammar key second.
+    expect(trajectoryRecordIdsFor({ seq: 20, kind: 'output' }, trajectoryView())).toEqual([
+      'assistant\u00001\u00002',
+      'assistant\u0000seq\u000020',
+    ])
+    expect(trajectoryRecordIdsFor({ seq: 25, kind: 'tool', callId: 'c25' }, trajectoryView())).toEqual(['tool\u0000call\u0000c25'])
+    expect(trajectoryRecordIdsFor({ seq: 35, kind: 'compaction' }, trajectoryView())).toEqual(['compacted\u0000seq\u000030'])
+    expect(trajectoryRecordIdsFor({ seq: 1, kind: 'user' }, undefined)).toEqual([])
   })
 
-  it('jumps when the trajectory row exists', async () => {
+  it('jumps when the trajectory row exists (legacy snapshot source)', async () => {
     const row = { scrollIntoView: vi.fn(), dataset: { trajectoryRowKey: 'user\u0000seq\u000010' } }
     const document: DocumentLike = {
       querySelector: vi.fn(() => ({})) as unknown as DocumentLike['querySelector'], // trajectory active
@@ -169,6 +284,23 @@ describe('jumpToItem — trajectory view', () => {
     }
     const session = fakeSession([], 1)
     const outcome = await jumpToItem(session, { seq: 10, kind: 'user' }, { document })
+    expect(outcome).toEqual({ ok: true, mode: 'trajectory' })
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+  })
+
+  it('jumps when the trajectory row exists (0.2.0 conversation target)', async () => {
+    const row = { scrollIntoView: vi.fn(), dataset: { trajectoryRowKey: encodeURIComponent('user\u0000seq\u000010') } }
+    const document: DocumentLike = {
+      querySelector: vi.fn(() => ({})) as unknown as DocumentLike['querySelector'], // trajectory active
+      querySelectorAll: vi.fn((selector: string) => (
+        selector === 'tr[data-trajectory-row-key]' ? [row] : []
+      )) as unknown as DocumentLike['querySelectorAll'],
+    }
+    const { session, conversation } = fakeModernSession([], 1)
+    ;(conversation as ConversationTargetsLike & { target(name: string): unknown }).target = (name: string) => (
+      name === 'trajectory' ? { getSnapshot: () => trajectoryView() } : undefined
+    )
+    const outcome = await jumpToItem(session, { seq: 10, kind: 'user' }, { document, conversation })
     expect(outcome).toEqual({ ok: true, mode: 'trajectory' })
     expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
   })

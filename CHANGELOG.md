@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.0] - 2026-09-28
+
+### Changed（DSH 0.2.0-rc.x 适配线）
+
+- **适配 DSH 0.2.0-rc.2（DSH Desktop 2.0.17 内置运行时）+ better-sidebar 0.24.1**。0.2.0 对本插件消费的三处客户端缝做了重构，逐一迁移：
+  - session binding 的 `getSnapshot()` 不再携带 `chat.nodes` 与 `views`（chat 视图模型与 trajectory 视图模型全部迁入新的会话视图注册表）。跳回逻辑改走官方 `ctx.uiConversation.binding(sessionId)`（`chat` target 的 `nodes` Map 仍含 `{key, anchorSeq, visibility}`；`trajectory` target 的 `{eventNodes, requests}` 字段与旧快照同形），并在无该服务时回退旧版快照字段（0.1.x 双线兼容）（`src/client/trail-jump.ts` / `src/client/TrailTab.tsx`）。
+  - chat 行 DOM 锚点：0.2.0 分组行的 `data-chat-anchor-key` 是 JSON 对（`[nodeKey, groupPart]`），裸节点键改由新增的 `data-chat-node-key` 承载。行定位现在两个属性都匹配（`src/client/trail-jump.ts`）。
+  - client `sessions` 服务的提供方从旧 `@deepseek-ai/dsh-client-runtime` 种子（0.2.0 已移除该模块）迁到 `@deepseek-ai/dsh-api-session-controller`；`package.json` 的 `dsh.client.inject` 同步指向 0.2.0 模块并新增 `@deepseek-ai/dsh-client-ui-conversation`（`package.json`）。
+- **host live 零拷贝快路径兼容 0.2.0**：0.2.0 把 live Session 的冻结日志从 `.events` 属性改为 `snapshotEvents()` 方法（`snapshotEvents` 沿用 DSH 侧命名，冻结数组身份稳定、零拷贝语义不变）。现在优先探测方法、旧属性兜底，活跃会话路径在两条 DSH 线上都保持同步零拷贝（`src/index.ts` / `src/context-types.ts`）。
+- 订阅源增加 0.2.0 binding 的 `eventSource`（client 事件窗 feed，事件追加即触发节流刷新）；`session.subscribe` 保留，同源合并不叠加成本（`src/client/useTrail.ts`）。
+- tab descriptor 新增 `description`：0.1.5-rc.1+ / 0.2.0 的原生右侧栏 + 菜单会在标题下渲染说明行（`src/client/index.tsx`）。
+- 事件数据形状逐字段核对（0.2.0 session format v4）：`turn/start → data.turn`、`user/message → data.content + data.source.kind`、`assistant/message → data.message.content`、`tool/call → data.callId + data.arguments`、`tool/result → data.message.source.callId + data.error.{name,code}`、`compaction/summary → data.summary`，折叠投影（`src/wire.ts`）无需改动即兼容。
+- peer 声明放宽为 `dsh-better-sidebar >=0.17.0`：可选 peer + 运行时特性探测下，宽区间是诚实声明；未安装时依旧 inert。
+- 轨迹行键兼容：assistant 行在旧 `assistant\0turn\0step` 之外新增 0.2.0 的 `assistant\0seq\0<seq>` 候选（tool 行 `tool\0call\0<callId>` 语法 0.2.0 未变）。
+- 测试 80 → 94：live 快路径双形态（`snapshotEvents()` / `.events`）、conversation 注册表装配、双线跳转、`data-chat-node-key` 分组行匹配、descriptor `description` 等（`tests/`）。
+
+### 兼容性
+
+| 组合 | 状态 |
+|---|---|
+| DSH 0.2.0-rc.2 + better-sidebar 0.24.1（本机 Desktop 2.0.17 实测环境） | ✅ 目标线 |
+| DSH 0.1.2-rc.1 + better-sidebar 0.18.0 | ✅ 回退兼容（旧快照跳转 + `.events` live 路径） |
+| DSH 0.1.1-rc.x（stable）+ better-sidebar 0.17.1 | ✅ 回退兼容 |
+
 ## [0.2.7] - 2026-09-04
 
 ### Changed

@@ -34,12 +34,20 @@ export type FetchEvents = (sessionId: string, afterSeq: number) => Promise<Fetch
 export interface SessionsServiceLike {
   binding(sessionId: string): {
     session?: SessionFaceLike
+    /** 0.2.0 bindings also carry the client event window feed. */
+    eventSource?: EventSourceFaceLike
   } | undefined
 }
 
 export interface SessionFaceLike {
   subscribe(listener: () => void): () => void
   getSnapshot(): { running?: boolean } | null
+}
+
+/** The 0.2.0 client event window feed (entries + hasMore per snapshot). */
+export interface EventSourceFaceLike {
+  subscribe(listener: () => void): () => void
+  getSnapshot(): unknown
 }
 
 export type TrailStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -206,13 +214,31 @@ export function useTrail(
   }, [sessionId])
 
   // Activation + subscription-driven refresh (paused while invisible).
+  // Every 0.2.0 binding carries `eventSource` — the client event window feed
+  // whose subscribe fires on every accepted journal mutation — while the
+  // session face's own subscribe relays state flips. Both are subscribed
+  // when present (subscriptions of the same burst coalesce in schedulePull),
+  // so the trail stays current on either DSH line.
   React.useEffect(() => {
     if (sessionId.length === 0 || !visible) return undefined
     void pull()
     const binding = sessionsService?.binding(sessionId)
+    const disposers: Array<() => void> = []
     const session = binding !== undefined && binding.session !== undefined ? binding.session : undefined
-    if (session === undefined || typeof session.subscribe !== 'function') return undefined
-    return session.subscribe(() => { schedulePull() })
+    if (session !== undefined && typeof session.subscribe === 'function') {
+      disposers.push(session.subscribe(() => { schedulePull() }))
+    }
+    const eventSource = binding !== undefined ? binding.eventSource : undefined
+    if (eventSource !== undefined && typeof eventSource.subscribe === 'function') {
+      try {
+        disposers.push(eventSource.subscribe(() => { schedulePull() }))
+      } catch {
+        // A binding without a retained generation may refuse feeds — the
+        // session subscription above still drives refreshes.
+      }
+    }
+    if (disposers.length === 0) return undefined
+    return () => { for (const dispose of disposers) dispose() }
   }, [sessionId, visible, pull, schedulePull, sessionsService])
 
   return { turns, stats, status, error, refresh }

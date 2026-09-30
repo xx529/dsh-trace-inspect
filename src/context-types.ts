@@ -29,9 +29,10 @@ export interface SessionQueryLike {
 
 /**
  * The host `sessions` face (dsh-session SessionStore) we consume. Live
- * sessions expose `events` — an immutable frozen append-only snapshot that
- * DSH caches until the next append, so borrowing it is O(1) amortized and
- * requires no deep copy.
+ * sessions expose their append-only event log either as the frozen `events`
+ * snapshot (DSH 0.1.x) or through `snapshotEvents()` (DSH 0.2.0 renamed the
+ * property into a method; the returned array is frozen and identity-stable
+ * between appends). Both reads are O(1) amortized and require no deep copy.
  */
 export interface SessionsServiceLike {
   get(sessionId: string): unknown
@@ -39,7 +40,10 @@ export interface SessionsServiceLike {
 
 /** A live session's read-only face: the frozen event log snapshot. */
 export interface LiveSessionLike {
-  readonly events: ReadonlyArray<SessionEventLike>
+  /** DSH 0.1.x live sessions carried the log as a frozen array property. */
+  readonly events?: ReadonlyArray<SessionEventLike>
+  /** DSH 0.2.0+ exposes the same frozen snapshot through this method. */
+  snapshotEvents?: () => ReadonlyArray<SessionEventLike>
 }
 
 /** Minimal host context seen by `apply(ctx)`. */

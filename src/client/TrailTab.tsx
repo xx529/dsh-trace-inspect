@@ -24,10 +24,10 @@ import type { TurnItem, TrailTurn, TrailStep, SessionEventLike } from '../trail-
 import { stepsOf } from '../trail-model'
 import { detectLang, t, type Lang } from './locales'
 import { fetchTrailEvents, useTrail, type SessionsServiceLike } from './useTrail'
-import { jumpToItem, type JumpTarget, type SessionFace } from './trail-jump'
+import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
 
 export interface TrailTabProps {
-  /** cordis client context (used only for ctx.get('sessions')). */
+  /** cordis client context (used only for ctx.get('sessions') / ctx.get('uiConversation')). */
   ctx?: { get(name: string): unknown }
   scope: { sessionId: string; cwd?: string }
   visible: boolean
@@ -44,6 +44,26 @@ function sessionsOf(ctx: TrailTabProps['ctx']): SessionsServiceLike | undefined 
   return service !== undefined && service !== null && typeof (service as { binding?: unknown }).binding === 'function'
     ? service as SessionsServiceLike
     : undefined
+}
+
+/**
+ * The 0.2.0 conversation view registry (`ctx.uiConversation`) — optional
+ * peer: absent on older hosts, and `binding()` throws for sessions without a
+ * retained generation, so every read is guarded and the jump degrades to the
+ * legacy snapshot path.
+ */
+function conversationOf(ctx: TrailTabProps['ctx'], sessionId: string): ConversationTargetsLike | undefined {
+  if (ctx === undefined || typeof ctx.get !== 'function') return undefined
+  const service = ctx.get('uiConversation') as { binding?: unknown } | null | undefined
+  if (service === undefined || service === null || typeof service.binding !== 'function') return undefined
+  try {
+    const targets = (service as { binding(source: string): ConversationTargetsLike }).binding(sessionId)
+    return targets !== undefined && targets !== null && typeof targets.target === 'function'
+      ? targets
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function turnByIdentity(turn: TrailTurn): string {
@@ -381,6 +401,11 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     return session as unknown as SessionFace
   }, [sessionsService, sessionId])
 
+  const conversationForJump = React.useMemo<ConversationTargetsLike | undefined>(
+    () => conversationOf(props.ctx, sessionId),
+    [props.ctx, sessionId],
+  )
+
   const doJump = React.useCallback(async (target: JumpTarget, turn: TrailTurn): Promise<void> => {
     if (jumpingRef.current) return // ignore re-entry while a jump is in flight
     setActiveTurnId(turnByIdentity(turn))
@@ -395,6 +420,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     const outcome = await jumpToItem(sessionForJump, target, {
       document: window.document,
       onProgress: (pages) => setJumpPages(pages),
+      ...(conversationForJump !== undefined ? { conversation: conversationForJump } : {}),
     })
     jumpingRef.current = false
     setJumping(null)
@@ -403,7 +429,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     } else {
       setJumpMessage(t(lang, 'jumpFailed') as string)
     }
-  }, [sessionForJump, lang])
+  }, [sessionForJump, conversationForJump, lang])
 
   // ── Filtered rendering helpers ─────────────────────────────────────────
   const stepMatches = (step: TrailStep): boolean => {

@@ -44,7 +44,19 @@ function routeIcon(size: number): React.ReactNode {
   )
 }
 
-export const inject = ['sessions', 'betterSidebar']
+export const inject = ['sessions', 'uiConversation', 'betterSidebar']
+
+/**
+ * Localized one-liners for the native right-Sidebar guide page (DSH
+ * 0.1.5-rc.1+ / 0.2.0 render the descriptor's description under the title;
+ * a descriptor without one renders the bare title).
+ */
+function tabDescription(): string {
+  if (typeof navigator === 'undefined') return 'Turn outline'
+  return navigator.language.toLowerCase().startsWith('zh')
+    ? '按用户轮次折叠会话轨迹，一键定位回对话原位'
+    : 'Fold the session into per-turn steps and jump back to any of them'
+}
 
 export function apply(ctx: {
   get(name: string): unknown
@@ -75,6 +87,7 @@ export function apply(ctx: {
     title: () => (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh')
       ? '轮次轨迹'
       : 'Turn Outline'),
+    description: tabDescription,
     icon: (size: number) => routeIcon(size),
     order: 46,
     single: true,
