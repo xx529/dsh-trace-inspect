@@ -16,6 +16,7 @@ import {
   trajectoryRecordIdsFor,
   viewStateForJump,
   type ChatNodeLike,
+  type ChatRowLike,
   type ConversationTargetsLike,
   type DocumentLike,
   type JumpViewState,
@@ -77,7 +78,7 @@ function fakeModernSession(nodes: ChatNodeLike[], pages: number): { session: Ses
   return { session, conversation }
 }
 
-const chatDocument = (row: { scrollIntoView: ReturnType<typeof vi.fn>; classList?: { add: ReturnType<typeof vi.fn> } } | null): DocumentLike => ({
+const chatDocument = (row: ChatRowLike | null): DocumentLike => ({
   querySelector: vi.fn((selector: string) => (
     typeof selector === 'string' && selector.includes('data-chat-anchor-key') ? row : null
   )) as unknown as DocumentLike['querySelector'],
@@ -169,6 +170,120 @@ describe('jumpToItem — chat view (0.2.0 registry path)', () => {
     expect(outcome.ok).toBe(true)
     expect(session.loadOlder).toHaveBeenCalled()
     expect(pages.length).toBeGreaterThan(0)
+  })
+})
+
+describe('jumpToItem — 0.2.0 folded rows & loadThrough', () => {
+  /** A row that models the 0.2.0 `hidden="until-found"` fold contract. */
+  function hiddenUntilFoundRow(parent?: ChatRowLike): ChatRowLike & { hidden: boolean } {
+    const row: ChatRowLike & { hidden: boolean } = {
+      scrollIntoView: vi.fn(),
+      classList: { add: vi.fn() },
+      hidden: true,
+      hasAttribute(name: string) { return name === 'hidden' && row.hidden },
+      dispatchEvent(event: Event) {
+        if (event.type === 'beforematch') row.hidden = false
+        return true
+      },
+      ...(parent !== undefined ? { parentElement: parent } : {}),
+    }
+    return row
+  }
+
+  it('prefers loadThrough(seq) over the loadOlder loop when the face has it', async () => {
+    const row = { scrollIntoView: vi.fn(), classList: { add: vi.fn() } }
+    const nodes = [node('k1', 10), node('k2', 20)]
+    // Window starts at the newest node only; loadThrough pages back to cover
+    // the target — exactly the 0.2.0 jump-loader contract.
+    let windowNodes: ChatNodeLike[] = [nodes[1]]
+    const conversation: ConversationTargetsLike = {
+      target(name: string) {
+        if (name !== 'chat') return undefined
+        return { getSnapshot: () => ({ nodes: { values: () => windowNodes } }) }
+      },
+    }
+    const loadThrough = vi.fn(async () => { windowNodes = nodes })
+    const session: SessionFace = {
+      loadOlder: vi.fn(async () => {}),
+      loadThrough,
+      getSnapshot: () => ({ hasMore: true }) as SessionSnapshotLike,
+    }
+    const outcome = await jumpToItem(session, { seq: 10, kind: 'user' }, { document: chatDocument(row), conversation })
+    expect(loadThrough).toHaveBeenCalledWith(10)
+    expect(session.loadOlder).not.toHaveBeenCalled()
+    expect(outcome).toEqual({ ok: true, mode: 'chat' })
+  })
+
+  it('falls back to the loadOlder loop when loadThrough leaves the target uncovered', async () => {
+    const row = { scrollIntoView: vi.fn(), classList: { add: vi.fn() } }
+    const nodes = [10, 20, 30, 40, 50].map((seq, i) => node(`k${i}`, seq))
+    const { session, conversation } = fakeModernSession(nodes, 4)
+    const loadThrough = vi.fn(async () => {}) // no-op: window unchanged
+    ;(session as SessionFace & { loadThrough?: unknown }).loadThrough = loadThrough
+    const outcome = await jumpToItem(session, { seq: 10, kind: 'user' }, { document: chatDocument(row), conversation })
+    expect(loadThrough).toHaveBeenCalled()
+    expect(session.loadOlder).toHaveBeenCalled()
+    expect(outcome.ok).toBe(true)
+  })
+
+  it('reveals a hidden="until-found" row via beforematch before scrolling', async () => {
+    const row = hiddenUntilFoundRow()
+    const { session, conversation } = fakeModernSession([node('k1', 10), node('k2', 20)], 1)
+    const outcome = await jumpToItem(session, { seq: 20, kind: 'tool' }, { document: chatDocument(row), conversation })
+    expect(outcome).toEqual({ ok: true, mode: 'chat' })
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+    expect(row.hidden).toBe(false)
+  })
+
+  it('reveals through a hidden ancestor (folded group body)', async () => {
+    const row: ChatRowLike = { scrollIntoView: vi.fn(), classList: { add: vi.fn() } }
+    const parent = hiddenUntilFoundRow()
+    row.parentElement = parent
+    const { session, conversation } = fakeModernSession([node('k1', 10), node('k2', 20)], 1)
+    const outcome = await jumpToItem(session, { seq: 10, kind: 'user' }, { document: chatDocument(row), conversation })
+    expect(outcome).toEqual({ ok: true, mode: 'chat' })
+    expect(parent.hidden).toBe(false)
+    expect(row.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('reports row-hidden (and never scrolls) when the fold never opens', async () => {
+    const row: ChatRowLike = {
+      scrollIntoView: vi.fn(),
+      classList: { add: vi.fn() },
+      hasAttribute: (name: string) => name === 'hidden',
+      dispatchEvent: () => true,
+    }
+    const { session, conversation } = fakeModernSession([node('k1', 10), node('k2', 20)], 1)
+    const outcome = await jumpToItem(session, { seq: 20, kind: 'tool' }, { document: chatDocument(row), conversation })
+    expect(outcome).toEqual({ ok: false, error: 'row-hidden' })
+    expect(row.scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('retries the node lookup across frames while the projection rebuilds', async () => {
+    const row = { scrollIntoView: vi.fn(), classList: { add: vi.fn() } }
+    const nodes = [node('k1', 10), node('k2', 20)]
+    let reads = 0
+    const conversation: ConversationTargetsLike = {
+      target(name: string) {
+        if (name !== 'chat') return undefined
+        return {
+          getSnapshot: () => ({
+            nodes: {
+              values: () => {
+                reads += 1
+                // First read (pre-jump window probe) sees an empty store; the
+                // retry loop must re-read and find the nodes.
+                return reads <= 1 ? ([] as ChatNodeLike[]) : nodes
+              },
+            },
+          }),
+        }
+      },
+    }
+    const session: SessionFace = { loadOlder: async () => {}, getSnapshot: () => ({ hasMore: false }) }
+    const outcome = await jumpToItem(session, { seq: 20, kind: 'user' }, { document: chatDocument(row), conversation })
+    expect(outcome).toEqual({ ok: true, mode: 'chat' })
+    expect(reads).toBeGreaterThanOrEqual(2)
   })
 })
 

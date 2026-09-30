@@ -72,6 +72,8 @@ export interface SessionSnapshotLike {
 
 export interface SessionFace {
   loadOlder(): Promise<unknown>
+  /** 0.2.0 jump loader — pages backwards until the window covers seq. */
+  loadThrough?(seq: number): Promise<unknown>
   getSnapshot(): SessionSnapshotLike
 }
 
@@ -84,9 +86,24 @@ export interface JumpViewState {
   trajectoryView: unknown
 }
 
+/**
+ * One rendered chat row. 0.2.0 folds the process of completed turns: member
+ * rows stay mounted but carry `hidden="until-found"` (so find-in-page can
+ * reveal them via `beforematch`) — scrolling such a row silently no-ops, so
+ * the jump must reveal it first.
+ */
+export interface ChatRowLike {
+  scrollIntoView(opts?: unknown): void
+  dataset?: Record<string, string>
+  classList?: { add(name: string): void }
+  hasAttribute?(name: string): boolean
+  parentElement?: ChatRowLike | null
+  dispatchEvent?(event: unknown): boolean
+}
+
 export interface DocumentLike {
   querySelectorAll(selector: string): ArrayLike<{ dataset: Record<string, string>; click?(): void; scrollIntoView(opts?: unknown): void }>
-  querySelector(selector: string): { scrollIntoView(opts?: unknown): void; dataset?: Record<string, string>; classList?: { add(name: string): void } } | null
+  querySelector(selector: string): ChatRowLike | null
 }
 
 export interface JumpOptions {
@@ -292,15 +309,61 @@ function waitForNextFrame(): Promise<void> {
  * node key also rides `data-chat-node-key`); older builds only had the anchor
  * attribute. Both attributes are compared.
  */
-function findChatRow(document: DocumentLike, key: string): { scrollIntoView(opts?: unknown): void; dataset?: Record<string, string>; classList?: { add(name: string): void } } | null {
+function findChatRow(document: DocumentLike, key: string): ChatRowLike | null {
   const exact = document.querySelector(`[data-chat-anchor-key="${cssEscape(key)}"]`)
   if (exact !== null) return exact
   const rows = document.querySelectorAll('[data-chat-node-key],[data-chat-anchor-key]')
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
-    if (row.dataset !== undefined && (row.dataset.chatNodeKey === key || row.dataset.chatAnchorKey === key)) return row
+    if (row.dataset !== undefined && (row.dataset.chatNodeKey === key || row.dataset.chatAnchorKey === key)) return row as unknown as ChatRowLike
   }
   return null
+}
+
+// ── Folded-row reveal (0.2.0 turn-process folds) ─────────────────────────────
+// Completed turns fold their process by default (foldCompletedTurns + step
+// grouping). Folded member rows stay in the DOM with `hidden="until-found"`
+// and the page's own reveal contract is the `beforematch` event:
+// useSearchableHidden attaches a beforematch listener that unfolds the group.
+// scrollIntoView() on an until-found row has no rendered box and silently
+// does nothing, so the jump dispatches beforematch and waits for the row to
+// actually become visible before scrolling.
+
+function isHiddenInTree(row: ChatRowLike): boolean {
+  let el: ChatRowLike | null | undefined = row
+  while (el !== null && el !== undefined) {
+    if (typeof el.hasAttribute === 'function' && el.hasAttribute('hidden')) return true
+    el = el.parentElement
+  }
+  return false
+}
+
+function dispatchBeforematchUp(row: ChatRowLike): void {
+  let el: ChatRowLike | null | undefined = row
+  while (el !== null && el !== undefined) {
+    if (
+      typeof el.hasAttribute === 'function' && el.hasAttribute('hidden')
+      && typeof el.dispatchEvent === 'function' && typeof Event === 'function'
+    ) {
+      try {
+        el.dispatchEvent(new Event('beforematch'))
+      } catch {
+        // Event construction unavailable — leave the row as-is.
+      }
+    }
+    el = el.parentElement
+  }
+}
+
+/** Reveal a hidden row via the page's beforematch contract; false if still hidden. */
+async function revealRowUntilVisible(row: ChatRowLike, frames = 10): Promise<boolean> {
+  if (!isHiddenInTree(row)) return true
+  for (let index = 0; index < frames; index += 1) {
+    dispatchBeforematchUp(row)
+    await waitForNextFrame()
+    if (!isHiddenInTree(row)) return true
+  }
+  return !isHiddenInTree(row)
 }
 
 /**
@@ -349,20 +412,40 @@ export async function jumpToItem(
       return { ok: true, mode: 'trajectory' }
     }
 
-    // Chat view: load older pages until the target is in the window.
+    // Chat view: load older pages until the target is in the window. DSH 0.2.0
+    // ships a dedicated jump loader (`loadThrough(seq)` — pages backwards until
+    // the window covers seq); prefer it when present and keep the manual
+    // `loadOlder()` loop for older hosts.
     let pages = 0
+    if (!hasSeqInWindow(view, item.seq) && typeof session.loadThrough === 'function') {
+      await session.loadThrough(item.seq)
+      // The conversation projection rebuilds from the event window on notify —
+      // give it a couple of frames before re-reading the node store.
+      await waitForNextFrame()
+      await waitForNextFrame()
+      view = viewStateForJump(session, options.conversation)
+    }
     while (view.hasMore && !hasSeqInWindow(view, item.seq) && pages < guard) {
       await session.loadOlder()
       view = viewStateForJump(session, options.conversation)
       pages += 1
       options.onProgress?.(pages)
     }
-    const node = findNodeForSeq(view, item.seq)
+    // The projection may still be rebuilding right after the last page — retry
+    // the node lookup across a few frames before declaring failure.
+    let node = findNodeForSeq(view, item.seq)
+    let nodeRetries = 0
+    while (node === null && nodeRetries < 6) {
+      await waitForNextFrame()
+      view = viewStateForJump(session, options.conversation)
+      node = findNodeForSeq(view, item.seq)
+      nodeRetries += 1
+    }
     if (node === null) return { ok: false, error: 'seq-not-rendered' }
-    // After loadOlder() the session data updates immediately, but the chat
-    // DOM commits a tick later — give the freshly loaded row a few frames to
-    // mount before declaring failure. (Without this the FIRST attempt used to
-    // report "cannot locate" and the user had to click a second time.)
+    // After loadOlder()/loadThrough() the session data updates immediately, but
+    // the chat DOM commits a tick later — give the freshly loaded row a few
+    // frames to mount before declaring failure. (Without this the FIRST attempt
+    // used to report "cannot locate" and the user had to click a second time.)
     let row = findChatRow(document, node.key)
     let retries = 0
     while (row === null && retries < 6) {
@@ -371,6 +454,9 @@ export async function jumpToItem(
       retries += 1
     }
     if (row === null) return { ok: false, error: 'row-not-in-chat-view' }
+    // Folded turn-process rows are `hidden="until-found"`: reveal them through
+    // the page's own beforematch contract, otherwise scrollIntoView no-ops.
+    if (!(await revealRowUntilVisible(row))) return { ok: false, error: 'row-hidden' }
     row.scrollIntoView({ behavior: 'smooth', block: 'center' })
     if (row.classList !== undefined && typeof row.classList.add === 'function') {
       row.classList.add('ttl-flash')

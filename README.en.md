@@ -116,14 +116,14 @@ client (browser) inject: ['sessions','uiConversation','betterSidebar'] (the latt
 | Platform (fallback-compatible) | DSH 0.1.2-rc.1 / 0.1.1-rc.x (stable line) |
 | Dependencies | dsh-better-sidebar (optional peer, `>=0.17.0`; inert when absent), react (injected by the DSH client seed) |
 | Build | TypeScript + esbuild, no runtime npm dependencies |
-| Tests | vitest, 94 cases (fold / folder / jump / tab / host) |
+| Tests | vitest, 100 cases (fold / folder / jump / tab / host) |
 
 ## Development
 
 ```sh
 pnpm install          # if pnpm 10+ blocks build scripts, allow esbuild as prompted (see pnpm-workspace.yaml)
 pnpm typecheck        # tsc --noEmit
-pnpm test             # vitest run (94 cases)
+pnpm test             # vitest run (100 cases)
 pnpm build            # esbuild → lib/index.js + lib/client.js (includes bundle-contract self check)
 pnpm pack             # produces dsh-turn-outline-<version>.tgz (prepack rebuilds automatically)
 ```

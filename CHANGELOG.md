@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1] - 2026-09-30
+
+### Fixed（0.2.0 聊天视图折叠行定位）
+
+- **工具步骤 / 已完成轮次的过程行跳回失效**：DSH 0.2.0 默认折叠已完成轮次的过程组（演示策略 `foldCompletedTurns` + 步骤分组），折叠的成员行（`tool-call`、`assistant-step`）**仍挂在 DOM 里但带 `hidden="until-found"`**（为浏览器页内查找保留可发现性）。`scrollIntoView()` 对这种行没有渲染盒，静默无效——表现为提示已定位而视图不动。现在跳转复用 0.2.0 自己的揭示契约：向行及其祖先派发 `beforematch` 事件（聊天视图的 `useSearchableHidden` 监听它并展开折叠组），等行真正可见后再滚动；超过 10 帧仍不可见则如实报 `row-hidden` 失败，不再假成功（`src/client/trail-jump.ts`）。
+- **老轮次（如轮次 1/2）定位命中错误位置 / 首点失败**：历史回溯改用 0.2.0 会话控制器的专用跳转装载器 **`loadThrough(seq)`**（一次调用反向翻页直到事件窗口覆盖目标 seq），替代逐页 `loadOlder()` 循环（0.1.x 无此 API 自动回退旧循环）；同时给节点查找与行查找各加跨帧重试——会话投影在 notify 后才重建 chat node store，此前首次点击可能读到旧窗口（定位到错误行）或行尚未提交（报无法定位）。测试 94 → 100（`src/client/trail-jump.ts` / `tests/trail-jump.spec.ts`）。
+
 ## [0.3.0] - 2026-09-28
 
 ### Changed（DSH 0.2.0-rc.x 适配线）

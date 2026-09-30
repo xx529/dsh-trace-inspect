@@ -116,14 +116,14 @@ client（浏览器）  inject: ['sessions','uiConversation','betterSidebar']（�
 | 平台（回退兼容） | DSH 0.1.2-rc.1 / 0.1.1-rc.x（stable 线） |
 | 依赖 | dsh-better-sidebar（可选 peer，`>=0.17.0`；未装则 inert）、react（DSH client 种子注入） |
 | 构建 | TypeScript + esbuild，无运行时 npm 依赖 |
-| 测试 | vitest 94 用例（fold / folder / jump / tab / host） |
+| 测试 | vitest 100 用例（fold / folder / jump / tab / host） |
 
 ## 开发
 
 ```sh
 pnpm install          # pnpm 10+ 拦截构建脚本时按提示允许 esbuild（见 pnpm-workspace.yaml）
 pnpm typecheck        # tsc --noEmit
-pnpm test             # vitest run（94 用例）
+pnpm test             # vitest run（100 用例）
 pnpm build            # esbuild → lib/index.js + lib/client.js（含 bundle 契约自检）
 pnpm pack             # 产出 dsh-turn-outline-<version>.tgz（prepack 自动重新构建）
 ```
