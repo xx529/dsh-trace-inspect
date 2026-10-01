@@ -140,6 +140,7 @@ pnpm pack             # 产出 dsh-turn-outline-<version>.tgz（prepack 自动�
 | 页面报错 / 样式错乱 | client 改动后未硬刷新：Cmd/Ctrl+Shift+R |
 | 冷会话没有轨迹 | 先在会话中任意产生新事件（或激活该会话）再打开 tab；只读路由只回放已持久化的日志 |
 | 更新插件后不生效 | host 半变更需 `remove` + `add` 重装（同版本号重装可能被 pnpm 缓存跳过，见方式二） |
+| **市场更新后还是旧版本** | dshmarket 安装路径有 24h 发布冷却闸（供应链防护），新版本发布不足 24h 会被静默跳过（exit 0 不报错）。等 24h，或改用命令行立即安装：`npx @deepseek-ai/dsh plugin --profile desktop add dsh-turn-outline@<版本>` |
 
 ## License 与安全
 

@@ -140,6 +140,7 @@ Contributing: fork → change → `pnpm typecheck && pnpm test && pnpm build` �
 | Page errors / broken styles | Client change not hard-refreshed yet: Cmd/Ctrl+Shift+R |
 | No trail for a cold session | Generate any new event in the session (or activate it) before opening the tab; the read-only route only replays persisted logs |
 | Plugin update not taking effect | Host-half changes need a `remove` + `add` reinstall (same-version reinstalls can be skipped by the pnpm cache, see Option 2) |
+| **Marketplace update still shows the old version** | The dshmarket install path enforces a 24h release-age cooldown (supply-chain protection); versions published less than 24h ago are silently skipped (exit 0, no error). Wait 24h, or install immediately from the CLI: `npx @deepseek-ai/dsh plugin --profile desktop add dsh-turn-outline@<version>` |
 
 ## License & security
 
