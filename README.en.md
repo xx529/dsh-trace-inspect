@@ -29,6 +29,8 @@
 
 > Design mockups (left `A-inline-expand`, right `A2-result-markdown`): clicking a tool row expands an **inline detail band** — `Params` as a collapsible JSON tree (long strings folded into blocks with per-field copy), `Result` rendered as Markdown by default with a one-click switch to the raw source, and `Raw` keeping the wire text; the footer marks `full`/`truncated` plus the seq.
 >
+> Since v0.5.0 the band also offers: **session-authorized image thumbnails** (the real image, not a placeholder), **on-demand full content** (auto-fetches the untruncated payload when the 32 KiB cap clipped it), and a **zoomed reading view** (`⤢` / `⌘⇧O`: Esc closes, `↑↓` steps, `⌘F` searches, `⌘C` copies, JSON export).
+>
 > ⚠️ These are **design mockups, not device screenshots**; real screenshots and the pixel-level comparison are still pending (the collapsed-state visual baseline is the real screenshot above).
 
 ## Overview
@@ -40,9 +42,9 @@
 - **Fold the session into user turns** — the conversation is collapsed into a structured "input → tool steps → output" trail, so long sessions become scannable at a glance; multi-level folding inside a turn plus tool-type filter chips let you focus on what matters.
 - **Expand details in place (new in v0.4.0)** — click a tool row to open an inline detail band with three tabs:
   - `Params`: the full tool arguments (the host cap is now 32 KiB instead of 512 chars) as a collapsible JSON tree, with long strings folded into blocks and per-field copy;
-  - `Result`: the tool result text rendered as **Markdown** (GFM + TeX; raw HTML and unsafe protocols disabled), with a one-click switch to the raw source; `read`/`web_fetch` default to rendered, `bash`/`pwsh` to raw; image blocks render as a placeholder chip, failed results show the error name/code plus the raw text;
+  - `Result`: the tool result text rendered as **Markdown** (GFM + TeX; raw HTML and unsafe protocols disabled), with a one-click switch to the raw source; `read`/`web_fetch` default to rendered, `bash`/`pwsh` to raw; the `read` `<path>/<type>/<content>` envelope is unwrapped first (line numbers and the tool footer stripped); image blocks render as **session-authorized thumbnails** (`GET /trace-inspect/api/attachment`, readable only when that session actually referenced the attachment), falling back to a placeholder chip on load failure; failed results show the error name/code plus the raw text;
   - `Raw`: the raw projected argument text (whitespace preserved).
-  The footer marks `full`/`truncated` with the seq; results rewritten by a compaction plugin show the **replacement summary** and a `Replaced by compaction (seq #N)` note.
+  The footer marks `full`/`truncated` with the seq; results rewritten by a compaction plugin show the **replacement summary** and a `Replaced by compaction (seq #N)` note; when the 32 KiB cap clipped content, the band auto-fetches the **full payload** (`POST /trace-inspect/api/tool-detail`) and `⤢` opens the zoomed reading view.
 - **Structured jump-back** — click a turn row or the trailing `↗` button on a tool row (the row itself now expands) to auto-load history and scroll to the matching row in the chat view / trajectory view. On 0.2.0 navigation goes through the client `uiConversation` conversation view registry (`anchorSeq` node matching + `loadOlder` paging); on 0.1.x it falls back to the legacy session snapshot — no dependence on DOM text or hashed class names.
 - **Zero AI dependency** — pure event folding, no LLM calls: zero tokens, instant open, no failure states.
 - **Read-only & non-invasive** — never touches the DSH core: one read-only host route + one client tab; registers cleanly and unloads without residue.
@@ -140,7 +142,7 @@ client (browser) inject: ['sessions','uiConversation','betterSidebar'] (the latt
 | Platform (fallback-compatible) | DSH 0.1.2-rc.1 / 0.1.1-rc.x (stable line) |
 | Dependencies | dsh-better-sidebar (optional peer, `>=0.17.0`; inert when absent), react (injected by the DSH client seed) |
 | Build | TypeScript + esbuild, no runtime npm dependencies |
-| Tests | vitest, 272 cases (fold / folder / detail / wire / json-tree / markdown / jump / tab / host) |
+| Tests | vitest, 452 cases (fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + two independent adversarial suites) |
 
 ## Development
 

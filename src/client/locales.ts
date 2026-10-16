@@ -84,6 +84,20 @@ export interface Dict {
   wrapLabel: string
   unwrapLabel: string
   footnotes: string
+  // ── v0.5.0（契约 §10.4.2）：缩略图 / 按需完整详情 / 放大浮层 ──
+  imageLoadFailed: string
+  detailLoading: string
+  detailLoadFailed: string
+  detailRetry: string
+  detailLoadedFull: string
+  mergedNoSurfaceOp: (n: number) => string
+  zoomOpen: string
+  zoomTitle: (name: string) => string
+  zoomClose: string
+  zoomSearch: string
+  zoomNoMatch: string
+  zoomExport: string
+  zoomHint: string
 }
 
 const zh: Dict = {
@@ -155,6 +169,19 @@ const zh: Dict = {
   wrapLabel: '自动换行',
   unwrapLabel: '不换行',
   footnotes: '脚注',
+  imageLoadFailed: '图片加载失败，仅显示元数据',
+  detailLoading: '载入完整内容…',
+  detailLoadFailed: '完整内容加载失败，当前显示截断预览',
+  detailRetry: '重试',
+  detailLoadedFull: '已载入完整内容',
+  mergedNoSurfaceOp: (n) => `该内容由 ${n} 条结果合并，事件未声明 surfaceOp`,
+  zoomOpen: '放大查看',
+  zoomTitle: (name) => `${name} · 步骤详情`,
+  zoomClose: '关闭',
+  zoomSearch: '搜索步骤',
+  zoomNoMatch: '无匹配步骤',
+  zoomExport: '导出 JSON',
+  zoomHint: 'Esc 关闭 · ↑↓ 切步 · ⌘F 搜索',
 }
 
 const en: Dict = {
@@ -226,6 +253,19 @@ const en: Dict = {
   wrapLabel: 'Wrap',
   unwrapLabel: 'No wrap',
   footnotes: 'Footnotes',
+  imageLoadFailed: 'Image failed to load — metadata only',
+  detailLoading: 'Loading full content…',
+  detailLoadFailed: 'Failed to load full content — showing the truncated preview',
+  detailRetry: 'Retry',
+  detailLoadedFull: 'Full content loaded',
+  mergedNoSurfaceOp: (n) => `Merged from ${n} results — the events declared no surfaceOp`,
+  zoomOpen: 'Open zoomed view',
+  zoomTitle: (name) => `${name} · step details`,
+  zoomClose: 'Close',
+  zoomSearch: 'Search steps',
+  zoomNoMatch: 'No matching step',
+  zoomExport: 'Export JSON',
+  zoomHint: 'Esc close · ↑↓ step · ⌘F search',
 }
 
 const dicts: Record<Lang, Dict> = { zh, en }

@@ -20,14 +20,38 @@
  *     entirely on the hot path.
  */
 import * as React from 'react'
-import type { TurnItem, TrailTurn, TrailStep, TrailResult, SessionEventLike } from '../trail-model'
+import type {
+  TurnItem,
+  TrailTurn,
+  TrailStep,
+  TrailResult,
+  TrailResultImage,
+  SessionEventLike,
+} from '../trail-model'
 import { stepsOf } from '../trail-model'
 import { detectLang, t, type Lang } from './locales'
-import { fetchTrailEvents, useTrail, type SessionsServiceLike } from './useTrail'
+import {
+  fetchToolDetail,
+  fetchTrailEvents,
+  useTrail,
+  type SessionsServiceLike,
+  type ToolDetailItem,
+  type ToolDetailResult,
+} from './useTrail'
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
 import { JsonTree, parseJsonLoose } from './json-tree'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
 import { markdownLabels } from './markdown-labels'
+import {
+  TrailImages,
+  ZoomOverlay,
+  copyToClipboard,
+  toolDotClass,
+  type ResultView,
+} from './ZoomOverlay'
+
+/** Transport for the on-demand full tool detail (契约 §10.3.4). */
+export type FetchToolDetail = (sessionId: string, seqs: number[], signal?: AbortSignal) => Promise<ToolDetailResult>
 
 export interface TrailTabProps {
   /** cordis client context (used only for ctx.get('sessions') / ctx.get('uiConversation')). */
@@ -37,6 +61,8 @@ export interface TrailTabProps {
   tab: { id: string }
   /** test seam: override the events transport. */
   fetchEventsOverride?: (sessionId: string, afterSeq: number) => Promise<{ events: SessionEventLike[]; hasMore?: boolean }>
+  /** test seam: override the on-demand full-detail transport. */
+  fetchToolDetailOverride?: FetchToolDetail
 }
 
 type StepFilter = 'all' | 'failed' | string
@@ -90,14 +116,6 @@ function clipTitle(value: string): string {
   return value.length > TITLE_CAP ? `${value.slice(0, TITLE_CAP)}…` : value
 }
 
-/** Semantic dot tone for a tool name (native-restrained: 3 tones + neutral). */
-function toolDotClass(name: string): 'success' | 'warn' | 'neutral' {
-  const n = name.toLowerCase()
-  if (n.includes('edit') || n.includes('write') || n.includes('patch')) return 'warn'
-  if (n.includes('bash') || n.includes('command') || n.includes('exec') || n.includes('run')) return 'success'
-  return 'neutral'
-}
-
 /** Stable per-item key: event seq (never shifts when new steps arrive). */
 function keyOfItem(item: TurnItem): string {
   return `seq:${item.kind === 'tool' ? item.step.seq : item.seq}`
@@ -115,61 +133,109 @@ function targetFor(item: TurnItem): JumpTarget {
   return { seq: item.seq, kind: item.kind }
 }
 
-/** Which rendering the result pane shows for one step (remembered per seq). */
-type ResultView = 'rendered' | 'raw'
-
-/** Human-readable byte size for an image chip (`imageMeta` `{size}` slot). */
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return String(bytes)
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`
-}
-
-/** Clipboard write through the optional API; silently ignored when absent. */
-function copyToClipboard(text: string): void {
-  if (typeof navigator === 'undefined') return
-  const clipboard = navigator.clipboard
-  if (clipboard === undefined || typeof clipboard.writeText !== 'function') return
-  try {
-    const pending: unknown = clipboard.writeText(text)
-    if (pending !== null && typeof pending === 'object' && typeof (pending as Promise<void>).catch === 'function') {
-      void (pending as Promise<void>).catch(() => undefined)
-    }
-  } catch {
-    // Denied: the text is still selectable on screen.
-  }
-}
-
 /** The three panes of the inline detail band (契约 §6). */
 type DetailTab = 'params' | 'result' | 'raw'
+
+/** One step's on-demand full detail, as delivered by `/tool-detail`. */
+type DetailPhase = 'loading' | 'ready' | 'failed'
+
+/** Full-detail pane values derived from one `ToolDetailItem` (§10.3.2). */
+function detailTextOf(item: ToolDetailItem): string {
+  if (item.content === null) return ''
+  return item.content
+    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+}
+
+function detailImagesOf(item: ToolDetailItem): TrailResultImage[] {
+  if (item.content === null) return []
+  const out: TrailResultImage[] = []
+  for (const block of item.content) {
+    if (block.type !== 'image') continue
+    const ref = block.attachment
+    const image: TrailResultImage = {
+      attachmentId: ref.attachmentId,
+      mediaType: ref.mediaType,
+      bytes: ref.bytes ?? 0,
+    }
+    if (ref.width !== undefined) image.width = ref.width
+    if (ref.height !== undefined) image.height = ref.height
+    if (ref.name !== undefined) image.name = ref.name
+    out.push(image)
+  }
+  return out
+}
 
 interface StepDetailProps {
   /** DOM id the row points at with `aria-controls`. */
   id: string
   step: TrailStep
+  sessionId: string
   lang: Lang
   view: ResultView
   onSetView: (seq: number, view: ResultView) => void
+  /** Load (or join) the on-demand full detail of this step (§10.5.2). */
+  onLoadDetail: (seq: number) => Promise<ToolDetailResult>
+  /** Open the full-size overlay for this step (契约 §10.5.4). */
+  onZoom: (step: TrailStep, trigger: HTMLElement | null) => void
 }
 
 /**
  * Inline detail band under an expanded step: 参数 | 结果 | 原始 tabs, the
- * result pane with an optional 渲染/原文 switch, image placeholder chips and
- * a footer with the full/truncated pill, seq, replace and orphan hints.
+ * result pane with an optional 渲染/原文 switch, image thumbnails and a
+ * footer with the full/truncated pill, seq, replace and orphan hints.
  *
  * Untrusted content only ever reaches React children: results go through
  * `MarkdownResult`/`RawText`, arguments through `JsonTree`/`RawText`.
+ *
+ * v0.5.0: a step whose wire preview was clipped asks the host for the
+ * untruncated detail once (per step, inflight-deduped by the panel) and swaps
+ * the panes over to it; a failure keeps the preview plus a retry affordance.
+ * `mergedFrom > 1` with no replace is the F4 hint (events never declared a
+ * merge intent).
  */
 const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React.ReactElement {
-  const { id, step, lang, view, onSetView } = props
+  const { id, step, sessionId, lang, view, onSetView, onLoadDetail, onZoom } = props
   const result: TrailResult | undefined = step.result
   const args = step.args ?? ''
   const [tab, setTab] = React.useState<DetailTab>(result !== undefined ? 'result' : 'params')
   const [copied, setCopied] = React.useState(false)
+  /** On-demand full detail of THIS step, plus how its one automatic load went. */
+  const [detail, setDetail] = React.useState<ToolDetailItem | undefined>(undefined)
+  const [loadFailed, setLoadFailed] = React.useState(false)
+  /** Automatic loads are not retried; the user may spend exactly one retry. */
+  const [retries, setRetries] = React.useState(0)
   const labels = markdownLabels(lang)
-  const parsed = React.useMemo(() => parseJsonLoose(args), [args])
   const truncated = step.argsTruncated === true || result?.truncated === true
+  const needsDetail = truncated
+
+  const retryDetail = React.useCallback((): void => {
+    setRetries((current) => (current >= 1 ? current : current + 1))
+  }, [])
+
+  React.useEffect(() => {
+    if (!needsDetail) return undefined
+    let alive = true
+    setLoadFailed(false)
+    void onLoadDetail(step.seq).then((outcome) => {
+      if (!alive) return
+      const item = outcome.ok ? (outcome.items.find((entry) => entry.seq === step.seq) ?? outcome.items[0]) : undefined
+      if (item !== undefined) setDetail(item)
+      else setLoadFailed(true)
+    })
+    return () => { alive = false }
+  }, [needsDetail, onLoadDetail, step.seq, retries])
+
+  const detailPhase: DetailPhase = !needsDetail
+    ? 'ready'
+    : detail !== undefined ? 'ready' : loadFailed ? 'failed' : 'loading'
+  const loaded = detail !== undefined
+  const fullArgs = loaded && detail.arguments !== null ? detail.arguments : args
+  const fullParsed = React.useMemo(() => parseJsonLoose(fullArgs), [fullArgs])
+  const fullText = loaded ? detailTextOf(detail) : (result?.text ?? '')
+  const fullImages = loaded ? detailImagesOf(detail) : (result?.images ?? [])
+  const pillTruncated = loaded ? detail.truncated === true : truncated
 
   const tabButton = (value: DetailTab, label: string): React.ReactElement => (
     <button
@@ -182,32 +248,12 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
     >{label}</button>
   )
 
-  const imageRow = (images: NonNullable<TrailResult['images']>): React.ReactElement => (
-    <div className="ttl-imgRow" data-testid="ttl-img-row">
-      {images.map((image, index) => (
-        <span className="ttl-imgChip" data-testid="ttl-img-chip" key={`${image.attachmentId}:${index}`}>
-          <span>{(t(lang, 'imageLabel') as (name: string) => string)(image.name ?? image.mediaType)}</span>
-          <span className="ttl-imgMeta">{image.mediaType}</span>
-          {image.width !== undefined && image.height !== undefined
-            ? (
-              <span className="ttl-imgMeta">
-                {(t(lang, 'imageMeta') as (w: number, h: number, size: string) => string)(
-                  image.width, image.height, formatBytes(image.bytes),
-                )}
-              </span>
-            )
-            : null}
-        </span>
-      ))}
-    </div>
-  )
-
   const renderParams = (): React.ReactElement => (
-    parsed.ok
-      ? <JsonTree value={parsed.value} />
+    fullParsed.ok
+      ? <JsonTree value={fullParsed.value} />
       : (
         <>
-          <RawText text={args} />
+          <RawText text={fullArgs} />
           <div className="ttl-detailHint" data-testid="ttl-detail-unparsable">
             {t(lang, 'resultUnparsable') as string}
           </div>
@@ -215,34 +261,77 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
       )
   )
 
+  /** F4 hint: several results merged in with no `surfaceOp` (§10.5.3). */
+  const mergedNote = result !== undefined && (result.mergedFrom ?? 0) > 1 && result.replacedBy === undefined
+    ? (
+      <div className="ttl-detailMerged" role="note" data-testid="ttl-detail-merged">
+        {(t(lang, 'mergedNoSurfaceOp') as (n: number) => string)(result.mergedFrom ?? 0)}
+      </div>
+    )
+    : null
+
+  /** The on-demand load strip: loading / failed + retry (§10.5.2). */
+  const loadStrip = (): React.ReactElement | null => {
+    if (detailPhase === 'loading') {
+      return (
+        <div className="ttl-detailLoad" data-testid="ttl-detail-load">
+          {t(lang, 'detailLoading') as string}
+        </div>
+      )
+    }
+    if (detailPhase === 'failed') {
+      return (
+        <div className="ttl-detailLoad" data-testid="ttl-detail-load">
+          <span>{t(lang, 'detailLoadFailed') as string}</span>
+          <button
+            type="button"
+            className="ttl-detailRetry"
+            data-testid="ttl-detail-retry"
+            disabled={retries >= 1}
+            onClick={retryDetail}
+          >{t(lang, 'detailRetry') as string}</button>
+        </div>
+      )
+    }
+    return null
+  }
+
   const renderResult = (): React.ReactElement => {
-    if (result === undefined) {
+    const images = fullImages
+    const text = fullText
+    if (result === undefined && !loaded) {
       return <div className="ttl-detailHint" data-testid="ttl-detail-empty">{t(lang, 'resultEmpty') as string}</div>
     }
-    const images = result.images ?? []
-    const isError = result.isError || result.kind === 'error' || step.kind === 'error'
+    const isError = detail?.isError === true || result?.isError === true
+      || result?.kind === 'error' || step.kind === 'error'
     if (isError) {
-      const errorName = result.errorName ?? step.name
-      const errorCode = result.errorCode ?? step.errorCode
+      const errorName = detail?.error?.name ?? result?.errorName ?? step.name
+      const errorCode = detail?.error?.code ?? result?.errorCode ?? step.errorCode
       return (
         <div className="ttl-errorBlock" data-testid="ttl-error-block">
           <div className="ttl-errorName" data-testid="ttl-error-name">
             {errorCode !== undefined ? `${errorName} · ${errorCode}` : errorName}
           </div>
-          {result.text.length > 0 ? <RawText text={result.text} /> : null}
-          {images.length > 0 ? imageRow(images) : null}
+          {text.length > 0 ? <RawText text={text} /> : null}
+          {images.length > 0 ? <TrailImages images={images} sessionId={sessionId} lang={lang} /> : null}
+          {mergedNote}
         </div>
       )
     }
-    if (result.text.length === 0 && images.length === 0) {
-      return <div className="ttl-detailHint" data-testid="ttl-detail-empty">{t(lang, 'resultEmpty') as string}</div>
+    if (text.length === 0 && images.length === 0) {
+      return (
+        <>
+          <div className="ttl-detailHint" data-testid="ttl-detail-empty">{t(lang, 'resultEmpty') as string}</div>
+          {mergedNote}
+        </>
+      )
     }
-    const markdown = looksLikeMarkdown(result.text)
+    const markdown = looksLikeMarkdown(text)
     return (
       <>
         {markdown && view === 'rendered'
-          ? <MarkdownResult text={result.text} labels={labels} />
-          : result.text.length > 0 ? <RawText text={result.text} /> : null}
+          ? <MarkdownResult text={text} labels={labels} />
+          : text.length > 0 ? <RawText text={text} /> : null}
         {markdown
           ? (
             <div className="ttl-detailHint">
@@ -256,17 +345,24 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
             </div>
           )
           : null}
-        {images.length > 0 ? imageRow(images) : null}
+        {images.length > 0 ? <TrailImages images={images} sessionId={sessionId} lang={lang} /> : null}
+        {mergedNote}
       </>
     )
   }
 
   const copyAll = (): void => {
-    const text = result !== undefined && result.text.length > 0
-      ? `${args.length > 0 ? `${args}\n\n` : ''}${result.text}`
-      : args
+    const text = fullText.length > 0
+      ? `${fullArgs.length > 0 ? `${fullArgs}\n\n` : ''}${fullText}`
+      : fullArgs
     copyToClipboard(text)
     setCopied(true)
+  }
+
+  const openZoom = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    const wrap = event.currentTarget.closest('.ttl-stepWrap')
+    const row = wrap !== null ? wrap.querySelector('[data-testid="ttl-step"]') : null
+    onZoom(step, row instanceof HTMLElement ? row : null)
   }
 
   return (
@@ -283,22 +379,34 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
         {tabButton('raw', t(lang, 'detailRaw') as string)}
       </div>
       <div className="ttl-detailBody" data-testid={`ttl-detail-body-${tab}`}>
+        {loadStrip()}
         {tab === 'params' ? renderParams() : null}
         {tab === 'result' ? renderResult() : null}
         {tab === 'raw' ? <RawText text={args} /> : null}
       </div>
       <div className="ttl-detailFoot" data-testid="ttl-detail-foot">
         <span
-          className={`ttl-pill${truncated ? ' ttl-pillWarn' : ' ttl-pillOk'}`}
+          className={`ttl-pill${pillTruncated ? ' ttl-pillWarn' : ' ttl-pillOk'}`}
           data-testid="ttl-detail-pill"
-        >{t(lang, truncated ? 'truncatedPill' : 'fullPill') as string}</span>
+        >{t(lang, pillTruncated ? 'truncatedPill' : 'fullPill') as string}</span>
         <span data-testid="ttl-detail-seq">{`seq #${step.seq}`}</span>
+        {loaded
+          ? <span className="ttl-pill ttl-pillOk" data-testid="ttl-detail-full">{t(lang, 'detailLoadedFull') as string}</span>
+          : null}
         <button
           type="button"
           className="ttl-dtab"
           data-testid="ttl-detail-copy"
           onClick={copyAll}
         >{t(lang, copied ? 'copiedDone' : 'copyDetail') as string}</button>
+        <button
+          type="button"
+          className="ttl-dtab"
+          data-testid="ttl-detail-zoom"
+          title={t(lang, 'zoomOpen') as string}
+          aria-label={t(lang, 'zoomOpen') as string}
+          onClick={openZoom}
+        >⤢</button>
         {result?.replacedBy !== undefined
           ? (
             <span data-testid="ttl-detail-replaced">
@@ -320,11 +428,14 @@ interface StepRowProps {
   open: boolean
   view: ResultView
   lang: Lang
+  sessionId: string
   onJump: (target: JumpTarget, turn: TrailTurn) => void
   onToggleStep: (step: TrailStep, multi: boolean) => void
   onStepOpen: (step: TrailStep) => void
   onStepClose: (step: TrailStep) => void
   onSetView: (seq: number, view: ResultView) => void
+  onLoadDetail: (seq: number) => Promise<ToolDetailResult>
+  onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null) => void
 }
 
 /**
@@ -334,12 +445,23 @@ interface StepRowProps {
  * Clicking the row expands/collapses it; `↗` keeps the original locate action.
  * The detail band mounts ONLY for an open step, so a 1000-step list adds no
  * extra DOM.
+ *
+ * v0.5.0 adds the second zoom entry point: a focused row answers ⌘⇧O / Ctrl+Shift+O
+ * (契约 §10.5.4). Nothing else about the folded row changed.
  */
 const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactElement {
-  const { step, turn, open, view, lang, onJump, onToggleStep, onStepOpen, onStepClose, onSetView } = props
+  const {
+    step, turn, open, view, lang, sessionId,
+    onJump, onToggleStep, onStepOpen, onStepClose, onSetView, onLoadDetail, onZoom,
+  } = props
   const text = step.kind === 'error' ? step.error : step.argsPreview
   const tone = step.kind === 'error' || step.result?.isError === true ? 'red' : toolDotClass(step.name)
   const detailId = `ttl-detail-${step.kind}-${step.seq}`
+  /** Keep the band's memo effective: a stable handler per (row, turn). */
+  const openZoomForStep = React.useCallback(
+    (target: TrailStep, trigger: HTMLElement | null) => { onZoom(target, turn, trigger) },
+    [onZoom, turn],
+  )
   return (
     <div className="ttl-stepWrap" data-open={open ? 'true' : undefined} data-testid="ttl-step-wrap">
       <button
@@ -358,6 +480,9 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
           } else if (event.key === 'ArrowLeft') {
             event.preventDefault()
             onStepClose(step)
+          } else if ((event.key === 'o' || event.key === 'O') && event.shiftKey && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault()
+            onZoom(step, turn, event.currentTarget)
           }
         }}
       >
@@ -374,7 +499,18 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
         onClick={() => { onJump(targetFor({ kind: 'tool', step }), turn) }}
       >↗</button>
       {open
-        ? <StepDetail id={detailId} step={step} lang={lang} view={view} onSetView={onSetView} />
+        ? (
+          <StepDetail
+            id={detailId}
+            step={step}
+            sessionId={sessionId}
+            lang={lang}
+            view={view}
+            onSetView={onSetView}
+            onLoadDetail={onLoadDetail}
+            onZoom={openZoomForStep}
+          />
+        )
         : null}
     </div>
   )
@@ -390,6 +526,7 @@ interface TurnRowProps {
   filter: StepFilter
   isToolFilter: boolean
   lang: Lang
+  sessionId: string
   openSeqs: ReadonlySet<number>
   resultView: ReadonlyMap<number, ResultView>
   onToggle: (id: string) => void
@@ -399,12 +536,14 @@ interface TurnRowProps {
   onStepOpen: (step: TrailStep) => void
   onStepClose: (step: TrailStep) => void
   onSetView: (seq: number, view: ResultView) => void
+  onLoadDetail: (seq: number) => Promise<ToolDetailResult>
+  onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null) => void
 }
 
 const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactElement {
   const {
-    turn, index, expanded, active, showFull, filter, isToolFilter, lang, openSeqs, resultView,
-    onToggle, onShowEarlier, onJump, onToggleStep, onStepOpen, onStepClose, onSetView,
+    turn, index, expanded, active, showFull, filter, isToolFilter, lang, sessionId, openSeqs, resultView,
+    onToggle, onShowEarlier, onJump, onToggleStep, onStepOpen, onStepClose, onSetView, onLoadDetail, onZoom,
   } = props
   const id = turnByIdentity(turn)
 
@@ -456,11 +595,14 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
       open={openSeqs.has(step.seq)}
       view={resultView.get(step.seq) ?? defaultViewForTool(step.name)}
       lang={lang}
+      sessionId={sessionId}
       onJump={onJump}
       onToggleStep={onToggleStep}
       onStepOpen={onStepOpen}
       onStepClose={onStepClose}
       onSetView={onSetView}
+      onLoadDetail={onLoadDetail}
+      onZoom={onZoom}
     />
   )
 
@@ -723,16 +865,75 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     })
   }, [])
 
+  // ── On-demand full detail (v0.5.0, 契约 §10.5.2) ───────────────────────
+  // `fetcherRef` (not a dependency) keeps `loadDetail` stable for the whole
+  // session: a re-render must never re-trigger every open step's request.
+  const fetcherRef = React.useRef<FetchToolDetail>(props.fetchToolDetailOverride ?? fetchToolDetail)
+  fetcherRef.current = props.fetchToolDetailOverride ?? fetchToolDetail
+  const detailInflight = React.useRef(new Map<number, Promise<ToolDetailResult>>())
+  /** Load a step's full detail, joining an identical in-flight request. */
+  const loadDetail = React.useCallback((seq: number): Promise<ToolDetailResult> => {
+    const pending = detailInflight.current.get(seq)
+    if (pending !== undefined) return pending
+    const request = (async (): Promise<ToolDetailResult> => {
+      try {
+        return await fetcherRef.current(sessionId, [seq])
+      } catch {
+        // fetchToolDetail never rejects; a foreign override might.
+        return { ok: false, reason: 'network' }
+      } finally {
+        detailInflight.current.delete(seq)
+      }
+    })()
+    detailInflight.current.set(seq, request)
+    return request
+  }, [sessionId])
+
+  // ── Zoom overlay (v0.5.0, 契约 §10.5.4) ────────────────────────────────
+  /** The open overlay: which turn it was opened from and which step it shows. */
+  const [zoom, setZoom] = React.useState<{ turnId: string; seq: number } | null>(null)
+  /** The row to focus again once the dialog closes (契约: 焦点回到触发行). */
+  const zoomReturnRef = React.useRef<HTMLElement | null>(null)
+
+  const openZoom = React.useCallback((step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null): void => {
+    zoomReturnRef.current = trigger ?? (typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null)
+    setZoom({ turnId: turnByIdentity(turn), seq: step.seq })
+  }, [])
+
+  const closeZoom = React.useCallback((): void => { setZoom(null) }, [])
+
+  const zoomSteps = React.useMemo<readonly TrailStep[]>(() => {
+    if (zoom === null) return []
+    const turn = turns.find((entry) => turnByIdentity(entry) === zoom.turnId)
+    return turn === undefined ? [] : stepsOf(turn)
+  }, [zoom, turns])
+
+  // A closed dialog returns focus to the row that opened it (if still mounted).
+  React.useEffect(() => {
+    if (zoom !== null) return
+    const target = zoomReturnRef.current
+    if (target === null) return
+    zoomReturnRef.current = null
+    if (target.isConnected !== false && typeof target.focus === 'function') target.focus()
+  }, [zoom])
+
+  // A turn that scrolled out of the trail (session switch, filter) closes it.
+  React.useEffect(() => {
+    if (zoom !== null && zoomSteps.length === 0) setZoom(null)
+  }, [zoom, zoomSteps])
+
   // A different session starts from a clean slate; hiding the tab does too
   // (contract §6) so a re-shown panel never resurrects a stale open band.
   React.useEffect(() => {
     setOpenSeqs(new Set<number>())
     setResultView(new Map())
+    setZoom(null)
   }, [sessionId])
   React.useEffect(() => {
     if (visible) return
     setOpenSeqs(new Set<number>())
     setResultView(new Map())
+    setZoom(null)
   }, [visible])
 
   // ── Locate (jump) ──────────────────────────────────────────────────────
@@ -916,6 +1117,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
             filter={filter}
             isToolFilter={isToolFilter}
             lang={lang}
+            sessionId={sessionId}
             openSeqs={openSeqs}
             resultView={resultView}
             onToggle={toggleTurn}
@@ -925,6 +1127,8 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
             onStepOpen={openStep}
             onStepClose={closeStep}
             onSetView={setView}
+            onLoadDetail={loadDetail}
+            onZoom={openZoom}
           />
         ))}
       </div>
@@ -957,6 +1161,17 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
         : null}
       {followPaused && turns.length > 0
         ? <button type="button" className="ttl-toBottom" data-testid="ttl-to-bottom" onClick={scrollToBottom}>{t(lang, 'newUpdates') as string}</button>
+        : null}
+      {zoom !== null && zoomSteps.length > 0
+        ? (
+          <ZoomOverlay
+            steps={zoomSteps}
+            initialSeq={zoom.seq}
+            sessionId={sessionId}
+            lang={lang}
+            onClose={closeZoom}
+          />
+        )
         : null}
     </div>
   )

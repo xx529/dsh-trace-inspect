@@ -172,7 +172,7 @@ describe('A. surfaceOp 链路（顶层 / data 兜底 / 丢失）', () => {
     expect((projected.data ?? {}).surfaceOp).toBeUndefined()
   })
 
-  it('A4 端到端：顶层 surfaceOp 的 replace 改写目标步（不是退化 append）', () => {
+  it('A4 端到端：顶层 surfaceOp 的 replace 改写 result（不是退化 append），且不动 args（§11.2）', () => {
     const raw: Ev[] = [
       user(1, 'go'),
       turnStart(2, 1),
@@ -192,7 +192,8 @@ describe('A. surfaceOp 链路（顶层 / data 兜底 / 丢失）', () => {
     expect(step.result?.replacedBy).toBe(182)
     expect(step.result?.replacedFrom).toBe(20)
     expect(step.result?.seq).toBe(182)
-    expect(step.args).toBe('COMPACTED')
+    // §11.2（F7 收口）：replace 只改写 result，工具参数保持 tool/call 原值。
+    expect(step.args).toBe('cat big.log')
   })
 
   it('A5 data.surfaceOp 兜底：raw 日志（未经 wire）同样能应用 replace', () => {
@@ -376,20 +377,39 @@ describe('B. replace 目标 seq / 乱序 / 无目标', () => {
     expect(all[0]!.result?.text).toBe('AAA')
   })
 
-  it('B7 §9.3#7：replace 改写参数口径（args/argsPreview/argsTruncated/argsBytes）', () => {
+  it('B7 §11.2：replace 只改写 result，不改写参数（args/argsPreview/argsBytes/argsTruncated）', () => {
+    const original = '{"path":"a","new_string":"x"}'
     const turns = turnsOf([
       user(1, 'go'),
       turnStart(2, 1),
-      toolCall(10, 'edit', '{"path":"a","new_string":"x"}', 'c1'),
+      toolCall(10, 'edit', original, 'c1'),
       rawResult(20, 'c1', [textBlock('AAA')]),
       turnEnd(25, 1),
       topLevelReplace(30, 'c1', 'COMPACTED-ARGS', 20, 20),
     ])
     const step = stepAt(turns[0]!, 10)
-    expect(step.args).toBe('COMPACTED-ARGS')
-    expect(step.argsPreview).toBe('COMPACTED-ARGS')
+    // 结果侧照旧被替换（旧 §9.3#7 的结果语义不变）。
+    expect(step.result?.text).toBe('COMPACTED-ARGS')
+    expect(step.result?.replacedBy).toBe(30)
+    expect(step.result?.replacedFrom).toBe(20)
+    // 参数侧是「调用事实」：逐字段保持 tool/call 原值（§11.2 覆盖旧 §9.3#7）。
+    expect(step.args).toBe(original)
+    expect(step.argsPreview).toBe(original)
+    expect(step.argsBytes).toBe(original.length)
     expect(step.argsTruncated).toBe(false)
-    expect(step.argsBytes).toBe('COMPACTED-ARGS'.length)
+
+    // 边界：目标步原本没有 result 时，replace 也只新增 result，同样不动参数。
+    const bare = stepAt(turnsOf([
+      user(1, 'go'),
+      turnStart(2, 1),
+      toolCall(10, 'edit', original, 'c1'),
+      turnEnd(25, 1),
+      topLevelReplace(30, 'c1', 'COMPACTED-ARGS', 10, 10),
+    ])[0]!, 10)
+    expect(bare.args).toBe(original)
+    expect(bare.argsPreview).toBe(original)
+    expect(bare.result?.text).toBe('COMPACTED-ARGS')
+    expect(bare.result?.replacedBy).toBe(30)
   })
 
   it('B8 §9.3#1：replace 不改 step.kind（error 行保持 error，hasError 不抖）', () => {
@@ -1062,12 +1082,20 @@ describe('G. 安全与规范', () => {
     expect(Object.keys(pkg.peerDependencies ?? {}).sort()).toEqual(['dsh-better-sidebar', 'react'])
   })
 
-  it('G4 构建产物的 require 只含 react / ui-primitives（产物缺失时跳过）', () => {
+  it('G4 构建产物的 require 只含 react / react-dom / ui-primitives（产物缺失时跳过）', () => {
     const client = resolve(ROOT, 'lib/client.js')
     if (!existsSync(client)) return
     const code = readFileSync(client, 'utf8')
     const requires = [...code.matchAll(/require\("([^"]+)"\)/g)].map((match) => match[1]!)
-    expect([...new Set(requires)].sort()).toEqual(['@deepseek-ai/dsh-client-ui-primitives', 'react'])
+    // react-dom joined the allow-list in v0.5.0: the zoom overlay mounts through
+    // React.createPortal(document.body), which needs react-dom at runtime. All
+    // three entries are host-provided (build.mjs `external`) — the point of this
+    // assertion is that NO third-party runtime dependency sneaks into the bundle.
+    expect([...new Set(requires)].sort()).toEqual([
+      '@deepseek-ai/dsh-client-ui-primitives',
+      'react',
+      'react-dom',
+    ])
   })
 
   it('G5 改名一致性：src/ 与 tests/ 里没有旧包名；五处身份一致', () => {
@@ -1077,7 +1105,11 @@ describe('G. 安全与规范', () => {
     }
     const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as { name: string; version: string }
     expect(pkg.name).toBe('dsh-trace-inspect')
-    expect(pkg.version).toBe('0.4.0')
+    // Bump-proof release identity (Lead, 2026-10-17): the version must be a
+    // release version AND the newest CHANGELOG heading, so a bump can never
+    // leave them out of sync (nor break this test on every release).
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(readFileSync(resolve(ROOT, 'CHANGELOG.md'), 'utf8')).toContain(`## [${pkg.version}]`)
     expect(readFileSync(resolve(ROOT, 'cordis.patch.yml'), 'utf8')).toContain('id: trace-inspect')
     expect(readFileSync(resolve(ROOT, 'cordis.patch.yml'), 'utf8')).toContain('name: dsh-trace-inspect')
     expect(readFileSync(resolve(ROOT, 'build.mjs'), 'utf8')).toContain("id: 'dsh-trace-inspect'")
@@ -1275,7 +1307,7 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     expect(screen.getByTestId('ttl-detail').textContent).toContain('rollback failed: E1')
   })
 
-  it('H9 AC3 端到端：wire 投影后的 replace 让 UI 显示替换内容（而非旧长文）', async () => {
+  it('H9 AC3 端到端：replace 让「结果」显示替换内容，而「行预览/参数」保持原始命令（§11.2）', async () => {
     const raw: Ev[] = [
       user(1, 'go'),
       turnStart(2, 1),
@@ -1299,13 +1331,23 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     const turnRows = screen.getAllByTestId('ttl-turn')
     fireEvent.click(turnRows[0]!.querySelector('.ttl-turnToggle') as Element)
     await waitFor(() => { expect(screen.getAllByTestId('ttl-step').length).toBe(1) })
-    fireEvent.click(screen.getAllByTestId('ttl-step')[0]!)
+    const row = screen.getAllByTestId('ttl-step')[0]!
+    // §11.2（实机 F7 回归）：被 replace 覆盖的行，折叠预览仍必须是原始命令，
+    // 不能变成压缩摘要（旧实现会把 argsPreview 写成替换文本）。
+    expect(row.querySelector('.ttl-rowArgs')?.textContent).toBe('cat big.log')
+    fireEvent.click(row)
 
     const detail = screen.getByTestId('ttl-detail')
     expect(detail.textContent).toContain('COMPACTED')
     expect(detail.textContent).not.toContain('OLD-LONG-RESULT')
     expect(screen.getByTestId('ttl-detail-replaced').textContent)
       .toContain('Replaced by compaction (seq #182)')
+
+    // 「参数」页仍是原始命令；替换文本只出现在「结果」页。
+    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
+    const paramsBody = screen.getByTestId('ttl-detail-body-params')
+    expect(paramsBody.textContent).toContain('cat big.log')
+    expect(paramsBody.textContent).not.toContain('COMPACTED')
   })
 
   it('H8 图片结果：占位 chip 含 imageLabel / mediaType / imageMeta', async () => {

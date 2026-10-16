@@ -372,3 +372,371 @@ http=200 bytes=755817     → 753 events, hasMore=false（755 KB < 2 MiB 页预�
 ### 9.4 仍未在实机验证的（与 §5 一致，不重复算通过）
 
 客户端 tab 的**可视**验证：client 半在页面加载时注册，插件是本次会话运行期间才装的，所以需要用户在 GUI 里硬刷新（Cmd/Ctrl+Shift+R）后打开 better-sidebar 的 **+ 菜单 → 轮次轨迹** 才能看到新的展开交互；本报告没有做浏览器内的像素/交互复核（U1–U5 仍然成立）。
+
+---
+
+## 11. 第二轮口径变更复验：F7「replace 只改写 result」（契约 §11.2）
+
+复验时间 2026-10-17 02:17–02:20 (+08:00)。本节编号用 §11（**§10 特意留空**：契约 §11.1 把实机浏览器证据指向 `docs/verification-v1.md §10`，该节应由 Lead 补，我不占用）。
+
+### 11.1 口径变更与实现核对
+
+| 项 | 内容 |
+| --- | --- |
+| 旧口径 | `docs/detail-contract-v1.md:155`（§6.3.2）与 `:346`（§9.3#7）：replace 把 `result` **及** `args`/`argsPreview` **改写**为新内容 |
+| 新口径 | `docs/detail-contract-v1.md` **§11.2**（Lead 裁定，覆盖上述两处）：replace **只改写 `result`**（text/images/truncated/replacedBy/replacedFrom），**不得**改写 `args`/`argsPreview`/`argsBytes`/`argsTruncated` |
+| 实现 | `src/trail-model.ts` 的 `applyContent()` replace 分支现在只 `state.replaces.set(seq, …)` + `state.segments.set(seq, …)`，不再触碰 `step.args*`；指纹 `92e0385c7dd9`（§8 时为 `a04689e4a9ae`） |
+| 实机依据 | Lead 在独立 profile + Playwright 的真实会话里看到：被 replace 覆盖的步骤，行预览与「参数」页都成了 `[dsh-jev-compaction] …`，而日志里 `tool/call.arguments` 完好 → 与我在模型层看到的旧行为（A4/B7 原断言）完全一致 |
+
+### 11.2 被翻转 / 扩展的用例（只在 `tests/verify-detail.spec.ts`）
+
+| 用例 | 改动 |
+| --- | --- |
+| **A4**（`:175-196`） | 标题改为「…replace 改写 result（不是退化 append），且不动 args（§11.2）」；`expect(step.args).toBe('COMPACTED')` → **`expect(step.args).toBe('cat big.log')`**；结果侧断言（`result.text='COMPACTED'`、`replacedBy=182`、`replacedFrom=20`、`seq=182`）**不变** |
+| **B7**（`:380-413`） | 标题改为「§11.2：replace 只改写 result，不改写参数（args/argsPreview/argsBytes/argsTruncated）」；4 个参数断言从「等于替换文本」翻转为「**等于 tool/call 原值**」（`args`/`argsPreview` 为原文、`argsBytes = original.length`、`argsTruncated=false`）；保留结果侧断言；**新增边界**：目标步原本**没有 result** 时（replace 打 tool/call 的 seq 10）也只新增 result、不动参数 |
+| **H9**（`:1298` 起，端到端 UI） | 扩展为实机 F7 的回归守卫：折叠行预览 `.ttl-rowArgs` 仍是 `cat big.log`（不得变成压缩摘要）；「结果」页显示 `COMPACTED` + `Replaced by compaction (seq #182)`；切到「参数」页后显示原始命令且**不含** `COMPACTED` |
+
+### 11.3 同一断言的前后实测（旧口径 → 新口径）
+
+```
+① 旧实现 + 旧断言（§1 的 01:53 与 §8 的 01:58 两轮）
+   tests/verify-detail.spec.ts  70 passed (70)     ← 其中 A4 断言 args === 'COMPACTED' 通过
+   ⇒ 证明旧代码确实把 replace 内容写进了 args
+
+② T7 改后 + 旧断言（02:17:53，我未改任何断言前）
+   Test Files  1 failed (1)
+        Tests  2 failed | 68 passed (70)
+   A4 → expected 'cat big.log' to be 'COMPACTED'
+   B7 → expected '{"path":"a","new_string":"x"}' to be 'COMPACTED-ARGS'
+   ⇒ 证明新代码只改 result、不动 args
+
+③ 翻转断言后（本轮）
+   tests/verify-detail.spec.ts  70 passed (70)
+```
+
+### 11.4 该文件里「args 相关」断言的完整复查（Lead 要求顺带扫）
+
+`grep -n 'step.args\|argsPreview' tests/verify-detail.spec.ts` 命中：`:196`(A4)、`:396-399`(B7)、`:410`(B7 边界)。逐一判定：
+
+| 位置 | 性质 | 是否受 §11.2 影响 | 实测 |
+| --- | --- | --- | --- |
+| A4 `:196` | replace 后的**参数**断言 | **受影响 → 已翻转** | 通过 |
+| B7 `:396-399` / `:410` | replace 后的**参数**断言（含无 result 边界） | **受影响 → 已翻转** | 通过 |
+| H9 `:1298` 起 | replace 后的**行预览 / 参数页**（UI） | 受影响 → 已扩展为守卫 | 通过 |
+| E2 `:674` / E3 `:690` | wire 层 `tool/call` 投影边界（32768/32769、空 arguments） | 不经 replace，不受影响 | 通过（未改） |
+| H1 `:1188` | **无 replace** 的行预览（`npm test`） | 不受影响 | 通过（未改） |
+| A6 `:216` / A7 `:232` | surfaceOp 丢失时的**结果合并**语义 | 只断言 `result.text`，不涉及 args | 通过（未改） |
+
+结论：除 A4/B7/H9 外，没有其它依赖「replace 改写 args」的断言。
+
+### 11.5 重跑结果（真实输出）
+
+```
+$ pnpm typecheck
+tests/tool-detail-route.spec.ts(223,7): error TS2353: Object literal may only specify known
+properties, and 'surfaceOp' does not exist in type 'SessionEventLike'.
+[ELIFECYCLE] Command failed with exit code 2.        typecheck_exit=2
+（该文件是队友新增、未被跟踪的新文件；tests/verify-detail.spec.ts 对此错误 0 命中 → 见 §11.6 O1）
+
+$ pnpm typecheck        # 02:20:25 复测：该文件所有者已修好（同一命令）
+$ tsc --noEmit
+typecheck_exit=0
+
+$ pnpm test            # 02:19:17 与 02:19:21 连续两轮
+ Test Files  15 passed (15)
+      Tests  351 passed (351)                        test_exit=0
+（运行期间队友仍在写新测试：338 → 345 → 351；02:18:42 那一轮曾出现 1 个非本文件用例的瞬时失败）
+
+$ pnpm typecheck && pnpm test && pnpm build        # 02:20:48 收口复测
+typecheck_exit=0
+ Test Files  15 passed (15)
+      Tests  353 passed (353)                        test_exit=0
+build ok → lib/index.js + lib/client.js / bundle contract check ok
+（用例仍在增长：351 → 353，说明工作树仍在被队友写入；我的文件稳定 70/70）
+
+$ pnpm vitest run tests/verify-detail.spec.ts
+ Test Files  1 passed (1)      Tests  70 passed (70)
+
+$ pnpm build
+build ok → lib/index.js + lib/client.js
+bundle contract check ok                             build_exit=0
+（T7 改了 model，故重建同步产物：lib/index.js 8665c4808d36、lib/client.js 7b5f0d1e9b51）
+```
+
+### 11.6 本轮顺带发现（只报告，不修）
+
+| # | 严重度 | 事实 | 证据 / 复现 |
+| --- | --- | --- | --- |
+| **O1** | 观察（曾瞬时阻塞 CI，**已消除**） | 02:19 复验时 `pnpm typecheck` **失败**，唯一错误来自队友正在写的 `tests/tool-detail-route.spec.ts:223`：`const replace: SessionEventLike = { type, seq, surfaceOp: {…}, data: {…} }` —— `surfaceOp` 属于 `src/wire.ts` 的 `ProjectedEvent`，而 `src/context-types.ts` 的 `SessionEventLike` 没有该字段（TS2353）。**02:20:25 复测已是 `tsc --noEmit` exit 0**（所有者已修）。留档原因：CI 的 `ci.yml` 先跑 typecheck，这类字面量标注（也正是我第一轮踩过的同一个坑）在写入窗口内会让门禁变红 | 红：§11.5 上半段原文（02:19）；绿：`pnpm typecheck`（02:20:25）→ `typecheck_exit=0` |
+| **O2** | 低 | 旧口径文本仍在且无内联废弃标记：`docs/detail-contract-v1.md:155`（§6.3.2）与 `:346`（§9.3#7）仍写着「改写 args/result」。§11.2 声明了覆盖，但照旧文实现正是 F7 的成因。建议在两处加「（已被 §11.2 覆盖）」 | `sed -n '155p;346p' docs/detail-contract-v1.md` |
+| **O3** | 低 | 契约 §11.3（F8，`unwrapFileResult`）**尚未实现**：`grep -c unwrapFileResult src/client/markdown-result.tsx` → **0**，该文件指纹 `5c31f62f0312` 与 §8 相同 → 实机上 `read` 的 XML 信封仍会退化成转义文本，AC13 仍不通过。我的 F 组用例不受影响（F3 的输入都不是该信封） | 同上 grep |
+| **O4** | 信息 | 契约 §11.1 引用「证据见 `docs/verification-v1.md` §10」，但本报告当前没有 §10（§9 是 Lead 的提交/安装复核）。为避免误占，我用了 §11 | `grep -n '^## ' docs/verification-v1.md` |
+| **O5** | 信息 | 复验期间工作树持续变化（测试文件 11 → 15、用例 272 → 353、`pnpm typecheck` 曾瞬时由绿转红后又被所有者修好）→ 本节结论只对 §11.7 的指纹成立 | §11.7 |
+
+### 11.7 本轮指纹（复验针对的版本）
+
+```
+92e0385c7dd9 src/trail-model.ts               bd2e73c32596 src/wire.ts
+5c31f62f0312 src/client/markdown-result.tsx   8de0a3b49d86 docs/detail-contract-v1.md
+ff7b96c4d0a8 tests/verify-detail.spec.ts     84f19998e76e tests/trail-detail.spec.ts
+e3f523cc7754 tests/tool-detail-route.spec.ts 2af471e060c9 tests/detail-styles.spec.ts
+1db1d59f9874 tests/attachment-route.spec.ts  997c9c717e1a tests/attachment-url.spec.ts
+lib: 8665c4808d36 lib/index.js · 7b5f0d1e9b51 lib/client.js
+```
+
+### 11.8 本轮写入范围声明
+
+- 只改 `tests/verify-detail.spec.ts`（A4/B7 断言翻转 + B7 边界 + H9 扩展）与本文档（新增本节）。
+- 未修改 `src/trail-model.ts`、`src/client/markdown-result.tsx`、`docs/detail-contract-v1.md`、`CHANGELOG.md`、`scripts/check-lib.mjs` 及队友的任何测试文件；O1–O5 只报告不修。
+- 未执行 `git commit/push`；`pnpm build` 已把 `lib/` 与 T7 的新 model 同步（构建产物，属重建而非改动源码）。
+
+## 10. 独立 profile 实例的浏览器级复核（Lead，2026-10-17）
+
+> §5 列出的 U1–U7（未证实项）在本节用**真实浏览器 + 真实会话**复核。执行者是 Lead（T5 在 §11 中说明本节由 Lead 补），因此这里给出的是**原始观测值 + 可复现命令**，便于任何人重跑。
+
+### 10.1 环境（可复现）
+
+```sh
+# 从 shipped web 模板新建一个独立 profile（不碰 desktop / web）
+"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" \
+  trace-verify --from-default-profile web --port 19487 --no-open
+# 装依赖插件 + 本仓库（link: → 改 src 后重建并重启即可复测）
+"$CLI" plugin --profile trace-verify add dsh-better-sidebar@0.26.1
+"$CLI" plugin --profile trace-verify add /Users/lzx/Documents/GitHub/dsh-trace-inspect
+```
+
+| 项 | 值 |
+| --- | --- |
+| profile | `/Users/lzx/.dsh/profiles/trace-verify`（bundles: `@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`、`dsh-better-sidebar@0.26.1`、`dsh-trace-inspect`(link:)） |
+| 运行时 | DSH `0.2.0-rc.2`（App 内置 CLI，**不是** PATH 里 0.1.2-alpha.2 那个） |
+| 浏览器 | Playwright Chromium，1440×900 |
+| 会话 | `session-a29878e7…`（Research，5 轮 / 177 步 / 6 个 `read_image` / 84 处 replace）、`session-4d51254b…`（dsh-task-gantt，**145 轮 / 18,358 事件 / 2,698 步 / 2,232 处 replace / 37 张图**）、本仓库当前会话 |
+
+### 10.2 客户端半：注册与交互（实测数值）
+
+| 检查 | 方法 | 实测结果 |
+| --- | --- | --- |
+| tab 注册 | 打开右侧边栏 | 「+ 菜单」出现**「轮次轨迹」**；面板显示 `5 轮` + chips `全部 177 / 失败 2 / bash 131 / write 10 / edit 7 / read_image 6 / 更多` |
+| 行内展开（AC8 前半） | 点 `write` 步骤行 | 出现 `region "write 详情"`（`aria-label` 正确），页签 `参数/结果/原始`，默认选中 `结果`；页脚 `完整 · seq #923 · 复制全部` |
+| JSON 树（AC10） | 切「参数」页 | `.ttl-json` 3 行 + `.ttl-jsonToggle` 1 个 + `.ttl-strbox` 1 个（30 KB 字符串折叠）；`max-height:52px`、`overflow-y:auto`、单字段复制按钮存在；折叠↔展开 `1→3→1→3`；字体 `SF Mono…`、`11.5px/17px` |
+| 按工具默认视图（AC11） | 点 `bash` 步骤 | 「结果」页默认 **原文**（`ttl-md-raw` 存在、`.ttl-md` 不存在），同时提供「渲染/原文」切换；点击切换后 `.ttl-md` 出现 |
+| 视图记忆（AC12） | 切「原文」→ 收起 → 重新展开 | 仍为原文（`rememberedRaw: true`） |
+| 错误结果（AC14） | `失败` chip → 展开错误行 | `.ttl-errorBlock` 显示 `TeamError · TEAM_MEMBER_NOT_FOUND` + 原文；页脚 `完整 · seq #389` |
+| 图片块 | `read_image` chip → 展开有图的那步 | `图片：A-inline-expand.png` + `image/png` + `1440×860 · 143 KB` 占位 chip（缩略图 = v0.5.0 §10.5） |
+| 跳回定位（AC8 后半） | 在轮次 1 点某步 `↗` | 对话区自动加载更早内容并滚动；**视口内命中的叶子节点文本与该步参数逐字一致**（`top=247 ∈ 聊天视口 76–900`），`scrollHeight` 由 7,007 → 12,596 |
+| 键盘（AC18） | 行聚焦 `ArrowRight` / `ArrowLeft` | 展开 / 收起，焦点保持在行上（`aria-expanded` 同步） |
+| 会话切换 | 切到另一会话再回来 | 面板重挂、展开态清空（契约 §6） |
+| 折叠态度量（AC9） | 取 `.ttl-row` 计算样式 | `height 24px / font-size 12px / line-height 18px`，`padding 3px 6px`、`border-radius 4px` |
+
+### 10.3 AC9 的跨版本比对（为什么不是截图 diff）
+
+- **规则级**：把上游 `dsh-turn-outline@0.3.1` 的 CSS（`lib/client.js` 内联样式串）与当前 `src/client/styles.ts` 逐选择器比对，折叠态相关规则**逐字节相同**：
+  `.ttl-row`、`.ttl-rowDot`、`.ttl-rowName`、`.ttl-rowArgs`、`.ttl-chip`、`.ttl-turnRow`、`.ttl-turnHead` → 全部 `same: true`（脚本见本节末尾）。
+- **数值级**：实机 `getComputedStyle` 得到的行高/字号/行高/内边距/圆角与上表一致（v0.3.1 官方基线 12px/18px）。
+- **为什么不做像素 diff**：两个版本共用 `ttl-*` 类名，若并装在同一 profile 里会**互相污染 CSS**（后注入者覆盖同名选择器），截图 diff 的结论会失真。因此改为「规则逐字节 + 计算样式」这一对更严格且无污染的判据。v0.4.0 唯一新增的是契约要求的展开态元素（caret / `↗` / 详情带），折叠态本身未动。
+
+### 10.4 AC20：真实最大会话的量化（数据层 + IPC）
+
+对 `session-4d51254b…`（145 轮 / 18,358 事件 / 2,232 处 replace）跑真实路由分页 + 真实模型：
+
+```
+events=18358 pages=10 fetch=260ms pageMs=[67,21,19,23,…] maxPageMiB=1.346 totalMiB=10.11
+cache-miss page latency avg=23ms
+foldTurns: 182ms turns=145 steps=2698 withResult=2660 replaced=2232 images=37 heapDelta=12.3MiB
+TrailFolder incremental push: 150ms (122166 events/s) turns=145 stats={"total":2698,"failed":38,…}
+snapshot() on fold: 0.0ms
+```
+
+| 结论 | 数值 | 对照要求 |
+| --- | --- | --- |
+| 单页字节预算在真实数据上生效 | 最大页 **1.346 MiB** | ≤ 2 MiB（§5.2） |
+| 大会话分页连续性 | 10 页、`afterSeq` 无缝、260ms 全量 | 无重复/无断档 |
+| 客户端冷折叠吞吐 | 2,698 步 / 2,232 replace / 182ms | AC20 无卡顿 |
+| 客户端增量折叠吞吐（live 路径） | **12.2 万事件/秒**（150ms / 18,358 事件） | 会话运行中增量刷新 |
+| 折叠内存增量 | 12.3 MiB（含 2,660 条结果文本） | 客户端 LRU 建议上限 16 MiB |
+| 列表 DOM 规模 | 只渲染窗口内的 ~20 个 `.ttl-step-wrap`（其余折叠态不建 DOM） | §11 首屏性能 |
+
+> 说明：AC20 的 GUI 端「点开 tab 到首屏」在**中等会话**（977 事件 / 177 步）上观感即时、无长任务告警；**大会话的 GUI 挂载**与暗色对比度在 v0.5.0 构建后的复验轮里补测（见 §12）。这里给出的是同一风险点（传输 + 折叠）在真实最大会话上的硬数字。
+
+### 10.5 复核脚本（可重跑）
+
+- AC9 规则比对：`node /tmp/csscmp.mjs`（读上游 `lib/client.js` 与 `src/client/styles.ts`，打印每个选择器的 `same:`）
+- AC20 量化：`node --expose-gc /tmp/ac20.mjs session-4d51254b-d8f4-4f21-a245-6b3ee56f6a99`（走真实路由分页 + 真实 `trail-model`）
+
+### 10.6 观察项（非本插件缺陷）
+
+- 控制台固定出现核心宿主路由 `GET /api/changes.summary?…` 的 **404**（本 profile 未装提供该能力的插件）。与 `dsh-trace-inspect` 无关（我们只有 `/trace-inspect/api/*`）。
+- 本 profile 未装 `dsh-market`，因此「插件」页里的市场相关能力缺失，属环境差异。
+
+---
+
+## 12. v0.5.0 增量独立验证（T10，2026-10-17）
+
+> 验证者：`verifier-v050`（**独立于 T6/T7/T8/T9 实现者**，只找错、不改实现）。
+> 范围：契约 `docs/detail-contract-v1.md`「附：v0.5.0 契约补充」§10–§11 的增量 —— 两条新 host 路由（附件图 / 按需完整详情）、`mergedFrom`、F7、F8、ZoomOverlay、懒加载、规范与产物一致性。
+> 唯一新增测试文件：`tests/verify-v050.spec.tsx`（56 例）。§1–§11 既有内容未改动。
+
+**并发变更时间线（诚实记录）**：本轮验证与 Lead 的收口并行发生，期间有三处**他人**改动落在我验证过的文件上，我每次都重跑并更新结论：
+1. `tests/verify-detail.spec.ts` G4 在 06:17:53 被修（加入 `react-dom`）→ 全量从 448/1红 变为 449–452 全绿（**F-V1**）。
+2. `src/client/markdown-result.tsx` 在 06:38:40 被改（新增 §11.4#5 裁定：`.md` 信封且 body 无 Markdown 信号时显示解包后的 body）→ 我同步更新了 E9 并新增 E10，随后 `pnpm build` 重建 `lib/`（**F-V6**）。
+3. 契约同时新增了 **§11.5 实机复核第二轮**（Lead 在 19487 profile 上的浏览器级证据）；本轮我只做数据层/jsdom 层验证，**未独立复核 §11.5 的数字**（见 §12.5 U1）。
+4. `src/index.ts` 在 06:53:21 被改（只补 `ToolDetailItem.seq` 的 JSDoc，+5 行；即 **F-V4** 的修复）→ 我在 07:08 重建并复跑：`npx vitest run tests/verify-v050.spec.tsx` 56/56、`pnpm test` 452/452；`lib/index.js` 的 sha256 未变（纯注释）→ §12.6 的 `src/index.ts` 指纹已更新为该 revision，其余引用行号也已按 +5 平移校正。
+
+### 12.1 跑过的命令与真实输出
+
+| 命令 | 真实结果 |
+| --- | --- |
+| `pnpm typecheck` | **0**（`$ tsc --noEmit`，无诊断输出） |
+| `npx vitest run tests/verify-v050.spec.tsx` | **56 passed / 56**（`Test Files 1 passed`） |
+| `pnpm test`（06:07，G4 修复**前**） | **448 passed，1 failed**（17 个文件）；唯一失败 = `tests/verify-detail.spec.ts` G4（见 §12.3 **F-V1**） |
+| `pnpm test`（06:47 与 07:08 两轮，最终） | **452 passed / 452，17/17 文件全绿**（07:08 = `src/index.ts` 06:53 变更后重建复跑） |
+| `pnpm build` | **0** → `build ok → lib/index.js + lib/client.js` + `bundle contract check ok` |
+| `pnpm check:lib` | **1** → `[check:lib] lib/ is out of date — run \`pnpm build\` and commit the result: M lib/client.js …`（见 §12.3 **F-V2**） |
+| 连续两次 `pnpm build` 后 `shasum -a 256 lib/*` | 两次完全一致（`diff` 空）→ 构建确定性成立，工作区 `lib/` == 最新构建 |
+| `git status --porcelain -- lib` | ` M lib/client.js` / ` M lib/client.js.map` / ` M lib/index.js` / ` M lib/index.js.map`（v0.5.0 尚未提交，故 check:lib 非 0） |
+
+复现（本轮全部命令均可直接重跑）：
+
+```bash
+cd /Users/lzx/Documents/GitHub/dsh-trace-inspect
+pnpm typecheck && npx vitest run tests/verify-v050.spec.tsx && pnpm test
+pnpm build && pnpm check:lib
+```
+
+**F11 的 HEAD 基线对照**（折叠态行结构，`git show HEAD:src/client/TrailTab.tsx`）：
+v0.4.0 的 `.ttl-stepWrap` 子节点 = `button.ttl-row`（内含 `ttl-caret` / `ttl-rowDot` / `ttl-rowName` / `ttl-rowArgs` 共 4 个 span）+ `button.ttl-jump` + 条件渲染 `StepDetail`；v0.5.0 只在该行 `onKeyDown` 里多了一个 `⌘⇧O` 分支，节点结构逐字相同 → F11 的「折叠态未新增子节点」成立。
+
+### 12.2 结论表（逐项 已证实 / 未证实 / 不成立）
+
+| # | 契约项 | 结论 | 证据（文件:行号 / 用例） |
+| --- | --- | --- | --- |
+| 1 | 附件路由**只按会话日志授权**（有引用 200；无引用 404；别的 session 引用 → 404；不按 id 直读） | 已证实 | A1/A2/A9；`src/index.ts:659-674`、`src/index.ts:383-396`、`src/index.ts:621-635` |
+| 2 | 200 的响应头：`content-type` = 该 image 块的 `mediaType`、`x-content-type-options: nosniff`、`cache-control: private, max-age=300`、原始字节 | 已证实 | A3；`src/index.ts:417-423` |
+| 3 | 非 GET → 405；围栏（非 loopback Host / cross-site / 异源 Origin）→ 403；无 Origin 的 `<img>` GET 放行 | 已证实 | A4/A5；`src/index.ts:367-374`、`src/index.ts:116-129` |
+| 4 | `attachments` 服务缺失 / 无 `readImage` / 读取拒绝 → 404 且不抛未捕获异常 | 已证实 | A6；`src/index.ts:405-409`、`src/index.ts:424-427`、`src/index.ts:685-703` |
+| 5 | `mediaType` 不在平台 4 个白名单 → 404 且**不调用** `readImage`，不回显该 mediaType | 已证实 | A7（含 `IMAGE/PNG`、`image/svg+xml`、`image/avif` 等 5 种反例 + 4 种白名单正例）；`src/index.ts:400-403`、`src/index.ts:500` |
+| 6 | sessionId/attachmentId 空 / 空白 / 控制字符 / >512 → 400；恰好 512 属结构性合法（→404） | 已证实 | A8；`src/index.ts:546-549`、`src/index.ts:477-478` |
+| 7 | 授权结果按 session 缓存：LRU ≤16、TTL ≤10s、**不同 session 不互相命中** | 已证实 | A2/A10/A11；`src/index.ts:644-674`、`src/index.ts:480-482` |
+| 8 | `/tool-detail`：`seqs` 非数组或 >32 → 400；恰好 32 → 200；不存在的 seq 被省略 | 已证实 | B1/B2/B3；`src/index.ts:456-460` |
+| 9 | 不施 `ARGS_CAP`/`RESULT_CAP`：>32 KiB 参数与结果完整返回 | 已证实 | B4（40 KiB 逐字节相等，`truncated` 缺省）；`src/index.ts:578-584`、`src/index.ts:837-842` |
+| 10 | 响应 >8 MiB → 按 4 MiB 截断、`truncated:true`、`argsBytes`/`contentBytes` 仍为原始大小、整包 ≤8 MiB | 已证实 | B7；`src/index.ts:965-978`、`src/index.ts:931-952` |
+| 11 | 4 MiB 边界落在多字节码点中间 → 退到码点边界，**无 U+FFFD** | 已证实 | B8（3 字节字符，截断后字节数仍为 3 的倍数）；`src/index.ts:920-928` |
+| 12 | 按 `callId` 聚合整步：请求 call seq 或任一 result seq 都返回同名/同参数/同内容 | 已证实（**F-V4** 已由 Lead 补齐接口注释，见 §12.3） | B5；`src/index.ts:851-917` |
+| 13 | `replace` 聚合语义与客户端折叠一致（替换前内容整段丢弃） | 已证实 | B6；`src/index.ts:813-817` |
+| 14 | `mergedFrom`：首次 = 1、append 递增、replace 重置为 1（并记 `replacedBy`/`replacedFrom`） | 已证实 | C1/C2/C3；`src/trail-model.ts:472`、`src/trail-model.ts:415-480` |
+| 15 | 「无序到达一致」（replace 早于其覆盖的 append，call 已登记） | 已证实 | C4 |
+| 16 | 契约字面「最终结果必须与到达顺序无关」在 **replace 早于其 tool/call** 时 | **不成立**（低危：真实链路不可达，见 **F-V3**） | C5（characterization 用例） |
+| 17 | `TrailFolder`（增量）与 `foldTurns`（批量）同流输出一致 | 已证实 | C6；`src/trail-model.ts:488-654` |
+| 18 | **F7** `replace` 只改 `result`；`args`/`argsPreview`/`argsBytes`/`argsTruncated` 逐字段保持原值 | 已证实 | D1/D3；`src/trail-model.ts:643-652`（`applyContent` 不再写 args） |
+| 19 | F7 边界：目标步**原本无 result** 时 replace 建出 result，参数原样 | 已证实 | D2 |
+| 20 | **F8** `.md` 信封解包 + `^\d+: ?` 行号剥离，Markdown 判定/渲染都以 `body` 为输入 | 已证实 | E1/E7；`src/client/markdown-result.tsx:84-112`、`130-137` |
+| 21 | F8 末尾工具 chrome（`(End of file - total N lines)` / `(Showing lines A-B of N. …)`）被剥离；**正文中间同形文本不误删** | 已证实 | E2/E3；`src/client/markdown-result.tsx:55`、`101-111` |
+| 22 | F8 `.ts`/`.json`/image 信封一律原文（不因正文含 `#`/`| --- |` 而误渲染） | 已证实 | E4/E6；`src/client/markdown-result.tsx:115-117`、`130-137` |
+| 23 | F8 缺 `</content>` / 非信封 → `unwrapFileResult` 返回 `null` | 已证实 | E5；`src/client/markdown-result.tsx:62-63`、`86-87` |
+| 24 | F8 `loadPrimitives()` 为 null → 显示**原信封** + `markdownFallback`（§11.4 裁定 4） | 已证实 | E8；`src/client/markdown-result.tsx:241-252` |
+| 24b | F8 `.md` 信封但 body 无 Markdown 信号 → 字面回退显示**解包后的 body**（§11.4#5） | 已证实 | E9/E10；`src/client/markdown-result.tsx:135-142`、`257` |
+| 25 | F8 `<type>image</type>` 信封也返回对象、但不渲染（§11.4 裁定 3） | 已证实 | E4 |
+| 26 | **ZoomOverlay**：`role=dialog`+`aria-modal`、Esc 关闭、↑↓ 切步、⌘F 搜索、⌘C 复制当前页、导出 JSON、关闭后焦点回触发行 | 已证实 | F1–F6；`src/client/ZoomOverlay.tsx:434-450`、`312-348`、`src/client/TrailTab.tsx:911-918` |
+| 27 | 懒加载：inflight 去重（同一 seq 并发只发 1 次）、失败保留预览、用户重试**最多 1 次** | 已证实 | F7/F8；`src/client/TrailTab.tsx:873-890`、`207-215`、`274-297` |
+| 28 | 缩略图：`attachmentUrl` + `loading="lazy"` + `alt`；`onError` 隐藏 img、保留 chip、显示 `imageLoadFailed` | 已证实 | F9；`src/client/ZoomOverlay.tsx:133-187` |
+| 29 | sessionId 为空/空白 或 attachmentId 为空 → 不渲染 `<img>`（不发未授权请求） | 已证实 | F10；`src/client/attachment-url.ts:23-29` |
+| 30 | 折叠态行 DOM 与 v0.4.0 一致（未新增子节点） | 已证实 | F11 + §12.1 的 HEAD 源码对照 |
+| 31 | 无新增 npm **运行时**依赖（HEAD 对比：`dependencies` 均缺省、peer 相同、lockfile importers 无 `dependencies:`） | 已证实 | G1；`package.json`、`pnpm-lock.yaml`、`git show HEAD:package.json` |
+| 32 | 产物只 require 宿主种子（react / react-dom / ui-primitives） | 已证实 | G2；`lib/client.js` 的 3 个 `require` |
+| 33 | 未把不可信内容交给 `innerHTML`/`dangerouslySetInnerHTML`/`eval`（源码仅注释提及，产物 0 命中） | 已证实 | G3；`lib/client.js` 无 `innerHTML|dangerouslySetInnerHTML|eval(|new Function(` |
+| 34 | UI 无裸 hex（hex 仅出现在 `var(--…)` fallback 内）；20 个新类名 + 13 个新文案键齐备 | 已证实（1 处 `rgba(0,0,0,0)` 见 **F-V5**） | G4；`src/client/styles.ts:1138` 等、`src/client/locales.ts:172-184,256-268` |
+| 35 | `package.json.version` == CHANGELOG 最新标题（bump-proof） | 已证实 | H1（两者均 `0.5.0`） |
+| 36 | `lib/` 由 git 跟踪，且 v0.5.0 host/client 标记都在产物里 | 已证实（构建产物与 src 一致）；`pnpm check:lib == 0` 只能等提交后成立 → **F-V2** | H2/H3 |
+| 37 | AC9 像素级一致 / AC13 真实表格溢出 / AC17 明暗对比度 / AC20 大会话 GUI 挂载 | 证据由 Lead 在契约 **§11.5 实机复核第二轮**给出（19487 profile / Playwright）；**本验证者未独立复核**，且 §11.5 自认仍缺「懒加载 GUI 点击路径」与「大会话 GUI 挂载」 | 契约 §11.5；见 §12.5 U1 |
+
+### 12.3 发现的真实缺陷（含复现命令）
+
+**F-V1【中 · 本轮已修复】`pnpm test` 曾变红：`tests/verify-detail.spec.ts` G4 的期望集没有跟进 v0.5.0 的 `react-dom`。**
+
+- 状态：**修复已落地（并发，非本验证者所改）**。06:07 我跑全量时的真实输出是 `Test Files 1 failed | 16 passed`、`Tests 1 failed | 448 passed`；06:17:53 该测试被改（`ls -l` mtime，标题变为「G4 构建产物的 require 只含 react / react-dom / ui-primitives」），06:33 我重跑全量为 **449 passed / 449（17/17）**，最终一轮（06:47，§11.4#5 落地并重建后）为 **452 passed / 452（17/17）**。本节保留原始观测，供追溯。
+- 修复前现象：`expected [ …(3) ] to deeply equal [ …(2) ]`，`+ "react-dom"`。
+- 位置：`tests/verify-detail.spec.ts:1086-1091`（v0.4.0 验证者所写）断言 `lib/client.js` 的 `require` 集合恰为 `['@deepseek-ai/dsh-client-ui-primitives','react']`。
+- 事实：v0.5.0 的 `ZoomOverlay` 用 `React.createPortal`，`build.mjs` 明确把 `react-dom` 与 `react` 一起标为 external（`build.mjs:8-12` 注释 + `external: ['react','react-dom','@deepseek-ai/dsh-client-ui-primitives']`），产物因此出现第 3 个 `require("react-dom")`。
+- 判定：**实现与 build 自洽，过期的是这条断言**（不是「多了一个运行时依赖」：`package.json` 无 `dependencies`，`react-dom` 只是 devDependency/宿主种子 —— 见 32/31 行结论与本机证据：`dsh-activity-bell`、`dsh-better-sidebar`（×4）、`dsh-diff-approval`、`dsh-oh-my-claude` 共 7 个已装插件的 client bundle 同样 `require("react-dom")`，`app.asar` 内有 `react-dom` seed）。
+- 复现：`npx vitest run tests/verify-detail.spec.ts -t G4`（**修复后已绿**；修复前用同命令可复现）。
+- 处置：**已修复**——期望集加入 `react-dom`，与 `tests/verify-v050.spec.tsx` G2/G3 的「宿主种子白名单」口径一致（本验证者未改该文件，仅报告）。
+
+**F-V2【中/流程】`pnpm check:lib` 非 0，但 `lib/` 与最新构建一致 —— 阻塞点只是「v0.5.0 未提交」。**
+
+- 现象：`pnpm build` 成功（`bundle contract check ok`）后立即 `pnpm check:lib` → exit 1，输出 `M lib/client.js` 等 4 行。
+- 原因：`scripts/check-lib.mjs:41-45` 用 `git status --porcelain --ignored -- lib` 判定「构建产物未被改动/未跟踪」，因此**只要 lib/ 的改动还没 commit 就必然非 0**；契约 §10.6 要求的正是「先 `pnpm build` 再 commit」。
+- 反证「是漂移而非仅未提交」：连续两次 `pnpm build` 后 `lib/{index,client}.js(.map)` 的 sha256 完全一致（`diff` 空），且 `git status` 里只有这 4 个 ` M`（无 untracked/deleted）→ 工作区 lib/ 就是最新 src 的产物。
+- 复现：`pnpm build && pnpm check:lib`。
+- 结论：**不是代码缺陷**；Lead 提交 `lib/` 后该门禁即为 0（`tests/verify-v050.spec.tsx` H2/H3 已在提交前把「lib 与 src 同步」的等价物固化）。
+
+**F-V3【低/不可达】契约字面「最终结果必须与到达顺序无关」（§3.3 / §9.3#2）在 replace 早于其 `tool/call` 时不成立。**
+
+- 现象：把 `[user, turn/start, replace(6), tool/call(3), result(4), result(5), turn/end]` 交给 `foldTurns`，replace 因「`seqIndex` 无命中且 `byCallId` 尚无 c1」被整条丢弃：结果 `text='AB'`、`replacedBy=undefined`、`mergedFrom=2`；而升序输入为 `text='[pruned]'`、`mergedFrom=1`。
+- 可达性：不可达。`TrailFolder.push` 有 seq 水位线（`src/trail-model.ts:968`），wire 页按 seq 升序，且 replace 事件自身 seq 恒大于被替换 seq（契约 §0 实测 seq=182 替换 20/22）。`foldTurns` 只吃升序数组。
+- 复现：`npx vitest run tests/verify-v050.spec.tsx -t 'C5'`。
+- 处置建议：保持现状（与 §9.3#2 的「replace 先到/后到一致」在可达范围内成立 —— C4 已证实）；若 Lead 想收紧措辞，可在契约里把 §3.3 的「与到达顺序无关」限定为「在 replace 的目标已登记的前提下」。
+
+**F-V4【低/文档 · 已修复（并发）】`ToolDetailItem.seq` 的口径与接口注释不完全一致。**
+
+- 原事实（我验证时）：接口注释写 `seq: number // tool/call 事件的 seq（= 客户端 TrailStep.seq）`；实测请求 **result seq** 时返回的 `item.seq` 就是该 result seq（`items.push({ seq, … })` 用的是请求值），而 `arguments`/`content` 仍是整步内容。
+- 影响：客户端只请求 `step.seq`（= call seq），功能无影响；仅当别的调用方按「result seq 请求 + 读 item.seq 当 call seq」使用时会误解。
+- 处置：**Lead 已在 06:53 补齐接口注释**（接口现位于 `src/index.ts:722-738`，`seq` 的 JSDoc 明确「Echo of the requested seq … see T10 F-V4」，取值处 `src/index.ts:904`）。我已按新 revision 重跑 B5（行为未变、断言仍绿）。
+- 复现：`npx vitest run tests/verify-v050.spec.tsx -t 'B5'`。
+
+**F-V5【信息】`styles.ts` 有 1 处非 token 颜色字面量 `rgba(0, 0, 0, 0)`。**
+
+- 位置：`src/client/styles.ts:532`，`@keyframes ttl-flash` 的 `100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }` —— 全透明收尾帧，视觉上等价 `transparent`。
+- 判定：不构成主题色硬编码（契约 §4.5 的「无硬编码颜色」针对 hex/token 化；契约自身也为缩进参考线指定了 `rgba(255,255,255,.12)`）。其余 48 处 `rgba(` 均在 `var(--dsw-…)` fallback 内。裸 hex = 0（G4）。
+- 复现：`grep -n 'rgba(' src/client/styles.ts | grep -v 'var(--dsw'`。
+
+**F-V6【低/边界 · 已被 §11.4#5 裁定并修复（并发）】`.md` 信封但 body 不含任何 Markdown 信号时，回退曾显示原信封（含 `<path>` tag 与行号）。**
+
+- 我验证时的行为（06:47 之前）：`src/client/markdown-result.tsx:250` 为 `if (!markdown) return <RawText text={text} />`，`text` 是 wire 原文 → 显示 `<path>…</path>` + `1: …`。
+- 契约状态：§11.3/§11.4 原表只裁定了「非 `.md` 一律原文」与「渲染器缺失显示原信封」，未覆盖此边界；我在 06:47 前的 E9 用例中作为**边界观察**记录。
+- 处置：Lead 已新增 **§11.4#5** 裁定（`.md` 信封的字面回退也显示解包后的 body），`src/client/markdown-result.tsx` 在 06:38:40 落地 `unwrappedBody`，`if (!markdown) return <RawText text={unwrappedBody ?? text} />`（`src/client/markdown-result.tsx:255`）。我已把 E9 更新为新口径并新增 E10（`.ts` 信封仍显示原信封全文）——两者均绿。
+- 复现（新口径）：`npx vitest run tests/verify-v050.spec.tsx -t 'E9'`、`-t 'E10'`。
+
+### 12.4 对抗用例分组计数（`tests/verify-v050.spec.tsx`，56 例全绿）
+
+| 组 | 主题 | 用例数 | 编号 |
+| --- | --- | --- | --- |
+| A | 附件图路由授权（防越权、响应头、405/403/404/400、TTL/LRU、畸形块） | 11 | A1–A11 |
+| B | `/tool-detail`（seqs 边界、不截断、callId 聚合、8 MiB/4 MiB、UTF-8 边界、405/413） | 8 | B1–B8 |
+| C | `mergedFrom`（首次/递增/replace 重置/顺序/双实现一致） | 6 | C1–C6 |
+| D | F7（replace 只改 result、无 result 边界、邻居不受影响） | 3 | D1–D3 |
+| E | F8（解包/行号/footer/中间同形/非 md/缺标签/CRLF/渲染器缺失/§11.4#5 边界） | 10 | E1–E10 |
+| F | 组件（ZoomOverlay 键盘与 a11y、焦点回归、inflight 去重、重试上限、缩略图回退、折叠态 DOM） | 11 | F1–F11 |
+| G | 规范（依赖、宿主种子、innerHTML/eval、裸 hex、类名/文案键） | 4 | G1–G4 |
+| H | 产物一致性（版本/CHANGELOG、lib 跟踪与标记、lib 响应头词表） | 3 | H1–H3 |
+| **合计** | | **56** | |
+
+### 12.5 未证实项（不要当成通过）
+
+| # | 未证实项 | 为什么 | 补测方式 |
+| --- | --- | --- | --- |
+| U1 | AC9 像素级一致 / AC13 真实表格溢出 / AC17 明暗对比度 / AC20 大会话 GUI 挂载 | **本验证者没有浏览器/独立 profile 环境**，只做到数据层 + jsdom 组件层；契约 §11.5 已由 Lead 给出实机数字，但我**未独立复核**（不把别人的观测当自己的证据） | 若要独立复核：按 §10.3 起 19487 profile + Playwright 重跑 §11.5 的检查项；§11.5 自认仍缺「懒加载 GUI 点击路径」与「大会话 GUI 挂载」 |
+| U2 | `react-dom` 在真实宿主 client 模块图中的可解析性（本插件 portal 的实际打开） | 本机证据只有「7 个已装插件的 client bundle 同样 require react-dom」+ `app.asar` 的 `react-dom` seed 字符串；F6 只验到 jsdom 层 | 在 19487 profile 打开一次详情浮层（`⤢` / `⌘⇧O`），确认无模块解析错误 |
+| U3 | 真实 `attachments.readImage` 对「缺 width/height」ref 的行为 | A7 的 200 来自 mock 的「第二次调用成功」；契约 §10.3.1 只说「尝试」，未承诺真实服务接受 `{bytes:0,width:0,height:0}` | 在真实会话对一张 `read_image` 结果请求 `/api/attachment`，观察状态码与 `content-type` |
+| U4 | 附件字节的内容正确性（hash/尺寸是否与块声明一致） | 本轮只验证「路由把 `readImage` 的字节原样下发 + 头正确」，未核对 PNG 头/尺寸 | 取真实附件响应，比对 `image/png` magic 与块里的 `width/height/bytes` |
+| U5 | 会话中途新增 image 块后、10s TTL 内的授权即时性 | A10 只验证 TTL 边界；「新块在 TTL 窗口内不被授权」是缓存语义的必然结果，未单独构造实时会话场景 | 对 live session 做「先 404 → 追加 image 块 → 立即 200（需等 TTL 或换 session）」的端到端观察 |
+
+### 12.6 改后关键文件指纹（sha256，2026-10-17 本轮验证时点）
+
+| 文件 | sha256 |
+| --- | --- |
+| `src/index.ts` | `3e1a3cabd598ce9808c87cd1984153b46889eea928d62868d3fd2cc1efc5f205` |
+| `src/trail-model.ts` | `19b6be3f80f4ee59797b93b4c91a73a73c84970903f5cfca3eda6977f6cb95fb` |
+| `src/client/attachment-url.ts` | `d7237c3f8116434f595a127e357affe60811b336114e69fab356c8261a70d236` |
+| `src/client/useTrail.ts` | `d3e26201499611e43b352385047635f2c7780eb7c281462470418da62c366188` |
+| `src/client/TrailTab.tsx` | `b2dd48f1b90a102ee5eabf91138cd1b6ae7a4deaa5abcb0f2d2e093df3d4c4a5` |
+| `src/client/ZoomOverlay.tsx` | `8903f69e7101a304c56e9c799eaca5b2f88d5ac07d0c9f72bb4de0655a839535` |
+| `src/client/markdown-result.tsx` | `a7011b2478d3c94375ba8a86119abc9d0cb7ed8bed081d1fa9dc7c7428839a53` |
+| `src/client/styles.ts` | `8d9a0b90591569c2a062e4a5d90038a16a17b8d652f92a21c12d2b5a252f4b87` |
+| `src/client/locales.ts` | `a4f35efd80fee34e8bd4b2ba8c7297c857887494cb653397c0d4ac4cafac81a8` |
+| `tests/verify-v050.spec.tsx` | `a77bfce98b8a4168f7b314fed53f5d78ea9c84b298a54094a1eac1ca013d94c4` |
+| `lib/index.js`（`pnpm build` 后） | `ce5bab2e7d57bcbcd77183082da3bb5022848be873b16dba8e14549bae9a8e5d` |
+| `lib/client.js`（`pnpm build` 后） | `c7f2e47c48d0316e55ccc146987a1a14edf84f7428d5ba23c0da62804ea412c2` |
+| `package.json` | `570968138111d07cc6b94b5ea16eee82b2f9ecd1b0c9ce2fbedec8f41a3914f5` |
+| `CHANGELOG.md` | `64ee40b1a597ea3bd5afceca8f6bef135d8f53dc5472e791197330f35183896f` |
+
+> §12 的结论仅对本表指纹对应的代码成立；`pnpm build` 之后再改 `src/` 会使 `lib/*` 指纹变化，需重新核对。

@@ -165,7 +165,7 @@ describe('tool/call — full arguments (§3.1)', () => {
     expect(step.argsTruncated).toBe(false)
   })
 
-  it('registers the tool/call seq in seqIndex (a replace may target it)', () => {
+  it('registers the tool/call seq in seqIndex (a replace may target it); F7: replace 只改写 result', () => {
     const turns = foldTurns([
       user(1, 'x'), turnStart(2, 1),
       toolCall(3, 'bash', '{"command":"pwd"}', 'c3'),
@@ -179,12 +179,15 @@ describe('tool/call — full arguments (§3.1)', () => {
       text: 'PRUNED',
       truncated: false,
       isError: false,
+      mergedFrom: 1,
       replacedBy: 20,
       replacedFrom: 3,
     })
-    expect(step.args).toBe('PRUNED')
-    expect(step.argsPreview).toBe('PRUNED')
-    expect(step.argsBytes).toBe(6)
+    // F7 (§11.2): the arguments are the call's fact — a replace never rewrites them.
+    expect(step.args).toBe('{"command":"pwd"}')
+    expect(step.argsPreview).toBe('{"command":"pwd"}')
+    expect(step.argsBytes).toBe('{"command":"pwd"}'.length)
+    expect(step.argsTruncated).toBe(false)
   })
 })
 
@@ -205,6 +208,7 @@ describe('tool/result — append merging (§3.3)', () => {
       text: '/Users/lzx',
       truncated: false,
       isError: false,
+      mergedFrom: 1,
     })
     expect(steps[0].orphan).toBeUndefined()
   })
@@ -317,7 +321,7 @@ describe('tool/result — append merging (§3.3)', () => {
       turnEnd(5, 1),
     ])
     const result = stepsOf(turns[0])[0].result
-    expect(result).toEqual({ seq: 4, kind: 'text', text: '', truncated: false, isError: false })
+    expect(result).toEqual({ seq: 4, kind: 'text', text: '', truncated: false, isError: false, mergedFrom: 1 })
   })
 
   it('passes contentTruncated through as truncated', () => {
@@ -371,6 +375,138 @@ describe('tool/result — append merging (§3.3)', () => {
   })
 })
 
+describe('result.mergedFrom (§10.3.5)', () => {
+  const stepOf = (events: Ev[]) => stepsOf(foldTurns(events as unknown as SessionEventLike[])[0])[0]
+
+  it('is 1 on the first attach (one event produced the content)', () => {
+    const step = stepOf([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      wireResult(4, 'c3', [text('only')]),
+      turnEnd(5, 1),
+    ])
+    expect(step.result?.mergedFrom).toBe(1)
+    expect(step.result?.replacedBy).toBeUndefined()
+  })
+
+  it('counts every append segment merged into one content', () => {
+    const step = stepOf([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      wireResult(10, 'c3', [text('A')]),
+      wireResult(20, 'c3', [text('B')]),
+      wireResult(30, 'c3', [text('C')]),
+      turnEnd(31, 1),
+    ])
+    expect(step.result?.text).toBe('ABC')
+    expect(step.result?.mergedFrom).toBe(3)
+    // The v1.0 F4 case: merged without any declared merge intent.
+    expect(step.result?.replacedBy).toBeUndefined()
+  })
+
+  it('does not depend on arrival order', () => {
+    const call = [user(1, 'x'), turnStart(2, 1), toolCall(3, 'bash', 'pwd', 'c3')]
+    const tail = [turnEnd(31, 1)]
+    const ordered = stepOf([...call, wireResult(10, 'c3', [text('A')]), wireResult(20, 'c3', [text('B')]), ...tail])
+    const reversed = stepOf([...call, wireResult(20, 'c3', [text('B')]), wireResult(10, 'c3', [text('A')]), ...tail])
+    expect(reversed.result).toEqual(ordered.result)
+    expect(reversed.result?.mergedFrom).toBe(2)
+  })
+
+  it('resets to 1 on a replace and grows again with a later append', () => {
+    const replaced = stepOf([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      wireResult(4, 'c3', [text('OLD-1')]),
+      wireResult(5, 'c3', [text('OLD-2')]),
+      wireReplace(20, 'c3', 'PRUNED', 4, 5),
+      turnEnd(30, 1),
+    ])
+    expect(replaced.result?.text).toBe('PRUNED')
+    expect(replaced.result?.mergedFrom).toBe(1)
+    expect(replaced.result?.replacedBy).toBe(20)
+
+    const thenAppended = stepOf([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      wireResult(4, 'c3', [text('OLD-1')]),
+      wireResult(5, 'c3', [text('OLD-2')]),
+      wireReplace(20, 'c3', 'PRUNED', 4, 5),
+      wireResult(21, 'c3', [text(' + more')]),
+      turnEnd(30, 1),
+    ])
+    expect(thenAppended.result?.text).toBe('PRUNED + more')
+    expect(thenAppended.result?.mergedFrom).toBe(2)
+    expect(thenAppended.result?.replacedBy).toBe(20)
+  })
+
+  it('a duplicate seq does not inflate the count', () => {
+    const step = stepOf([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      wireResult(4, 'c3', [text('first')]),
+      wireResult(4, 'c3', [text('second')]),
+      turnEnd(5, 1),
+    ])
+    expect(step.result?.mergedFrom).toBe(1)
+  })
+
+  it('is 1 for an error result and for an orphan, and counts image appends', () => {
+    const errorStep = stepsOf(foldTurns([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      ev('tool/result', 4, { callId: 'c3', error: { name: 'Boom' } }),
+      turnEnd(5, 1),
+    ] as unknown as SessionEventLike[])[0])[1]
+    expect(errorStep.result?.mergedFrom).toBe(1)
+
+    const orphan = stepOf([
+      user(1, 'x'), turnStart(2, 1),
+      wireResult(3, 'ghost', [text('orphan')]),
+      turnEnd(4, 1),
+    ])
+    expect(orphan.orphan).toBe(true)
+    expect(orphan.result?.mergedFrom).toBe(1)
+
+    const images = stepOf([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'read', 'shot', 'c3'),
+      wireResult(10, 'c3', [image('i1')]),
+      wireResult(20, 'c3', [image('i2')]),
+      turnEnd(30, 1),
+    ])
+    expect(images.result?.images?.map((entry) => entry.attachmentId)).toEqual(['i1', 'i2'])
+    expect(images.result?.mergedFrom).toBe(2)
+  })
+
+  it('foldTurns and TrailFolder agree on mergedFrom after every prefix', () => {
+    assertIncrementalEqualsBatch([
+      user(1, 'q1'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      wireResult(4, 'c3', [text('chunk-1')]),
+      wireResult(5, 'c3', [text('chunk-2')]),
+      wireReplace(6, 'c3', 'COMPACTED', 4, 5),
+      wireResult(7, 'c3', [text(' tail')]),
+      assistant(8, 'answer'),
+      turnEnd(9, 1),
+    ])
+  })
+
+  it('is carried in the folder snapshot of a frozen turn', () => {
+    const folder = new TrailFolder()
+    const events = [
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      wireResult(4, 'c3', [text('A')]),
+      wireResult(5, 'c3', [text('B')]),
+      turnEnd(6, 1),
+    ]
+    for (const event of events) folder.push(event as unknown as SessionEventLike)
+    expect(stepsOf(folder.snapshot()[0])[0].result?.mergedFrom).toBe(2)
+  })
+})
+
 describe('tool/result — errors (§3.2)', () => {
   const errorEvents = (): Ev[] => [
     user(1, 'x'), turnStart(2, 1),
@@ -400,6 +536,7 @@ describe('tool/result — errors (§3.2)', () => {
       isError: true,
       errorName: 'TimeoutError',
       errorCode: 'ETIMEDOUT',
+      mergedFrom: 1,
     })
     expect(turns[0].hasError).toBe(true)
     expect(turns[0].status).toBe('error')
@@ -436,16 +573,17 @@ describe('tool/result — errors (§3.2)', () => {
     expect(step.kind).toBe('error')
     expect(step.error).toBe('Boom')
     expect(step.errorCode).toBeUndefined()
-    expect(step.result).toEqual({ seq: 4, kind: 'error', text: '', truncated: false, isError: true, errorName: 'Boom' })
+    expect(step.result).toEqual({ seq: 4, kind: 'error', text: '', truncated: false, isError: true, errorName: 'Boom', mergedFrom: 1 })
   })
 })
 
 describe('surfaceOp replace (§3.3)', () => {
-  it('rewrites the target result and args, tagging replacedBy / replacedFrom', () => {
+  it('rewrites the target result (F7: replace 只改写 result), tagging replacedBy / replacedFrom', () => {
     const replacement = '[dsh-jev-compaction] pruned'
+    const originalArgs = '{"command":"cat huge.log"}'
     const turns = foldTurns([
       user(1, 'x'), turnStart(2, 1),
-      toolCall(3, 'bash', '{"command":"cat huge.log"}', 'c3'),
+      toolCall(3, 'bash', originalArgs, 'c3'),
       wireResult(4, 'c3', [text('x'.repeat(5000)), image('i1')]),
       rawReplace(30, 'c3', replacement, 4, 4),
       turnEnd(40, 1),
@@ -457,13 +595,30 @@ describe('surfaceOp replace (§3.3)', () => {
       text: replacement,
       truncated: false,
       isError: false,
+      mergedFrom: 1,
       replacedBy: 30,
       replacedFrom: 4,
     })
-    expect(step.args).toBe(replacement)
-    expect(step.argsPreview).toBe(replacement)
-    expect(step.argsBytes).toBe(replacement.length)
+    // F7 (§11.2): compaction replaces the RESULT; the original command stays
+    // visible in the row preview and on the 参数 tab.
+    expect(step.args).toBe(originalArgs)
+    expect(step.argsPreview).toBe(originalArgs)
+    expect(step.argsBytes).toBe(originalArgs.length)
     expect(step.argsTruncated).toBe(false)
+  })
+
+  it('F7: a replace never touches args even when the step is a tool/call-only target', () => {
+    const turns = foldTurns([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"ls -la"}', 'c3'),
+      wireReplace(9, 'c3', '[dsh-jev-compaction] pruned', 3, 3),
+      turnEnd(10, 1),
+    ])
+    const step = stepsOf(turns[0])[0]
+    expect(step.result?.text).toBe('[dsh-jev-compaction] pruned')
+    expect(step.args).toBe('{"command":"ls -la"}')
+    expect(step.argsPreview).toBe('{"command":"ls -la"}')
+    expect(step.argsBytes).toBe('{"command":"ls -la"}'.length)
   })
 
   it('rewrites every step whose seq falls inside [startSeq,endSeq]', () => {
@@ -695,7 +850,8 @@ describe('foldTurns ≡ TrailFolder on detail fixtures (§3.7)', () => {
     expect(stepAfter).toBe(stepBefore) // the same step object, rewritten in place
     expect(stepAfter.result?.text).toBe('NEW')
     expect(stepAfter.result?.replacedBy).toBe(6)
-    expect(stepAfter.args).toBe('NEW')
+    // F7 (§11.2): the replace rewrites the result only — args stay the call's.
+    expect(stepAfter.args).toBe('pwd')
 
     // A re-sent older page is still skipped by the watermark.
     folder.push(events[3] as unknown as SessionEventLike)

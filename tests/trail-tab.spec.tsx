@@ -4,12 +4,16 @@
  * tool-group expansion, preview pane, plus the v0.4.0 inline step detail
  * (AC8 click-to-expand vs ↗ locate, AC12 remembered render/raw view, AC14
  * error name/code + raw text, AC18 arrow-key disclosure, filter pruning).
+ *
+ * v0.5.0 additions (契约 §10.5): image thumbnails with the `onError` chip
+ * fallback, the on-demand full detail (loading / success / failure + one user
+ * retry), the F4 `mergedNoSurfaceOp` note and the full-size overlay entries.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { TrailTab } from '../src/client/TrailTab'
-import { MAX_PULL_PAGES } from '../src/client/useTrail'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { TrailTab, type FetchToolDetail } from '../src/client/TrailTab'
+import { MAX_PULL_PAGES, type ToolDetailItem, type ToolDetailResult } from '../src/client/useTrail'
 import { setPrimitivesForTest, type PrimitivesModule } from '../src/client/ui-primitives'
 import type { SessionEventLike } from '../src/trail-model'
 
@@ -94,6 +98,86 @@ function fakePrimitives(): PrimitivesModule {
   }
 }
 
+/** One image result: `read_image` produced `a.png` (契约 §10.2/§10.5.1). */
+const imageTurn = (): Ev[] => [
+  user(1, 'look at the shot'),
+  turnStart(2, 1),
+  toolCall(3, 'read_image', '{"path":"a.png"}', 'c3'),
+  ev('tool/result', 4, {
+    callId: 'c3',
+    content: [{
+      type: 'image',
+      attachment: {
+        attachmentId: 'sha256:abc',
+        mediaType: 'image/png',
+        bytes: 2048,
+        width: 100,
+        height: 50,
+        name: 'a.png',
+      },
+    }],
+    contentBytes: 0,
+  }),
+  turnEnd(5, 1),
+]
+
+/** One clipped step: the wire preview is truncated on BOTH sides (§10.5.2). */
+const truncatedTurn = (): Ev[] => [
+  user(1, 'big file'),
+  turnStart(2, 1),
+  ev('tool/call', 3, {
+    name: 'read',
+    arguments: '{"path":"big.md"}',
+    argsBytes: 99999,
+    argsTruncated: true,
+    callId: 'c3',
+  }),
+  ev('tool/result', 4, {
+    callId: 'c3',
+    content: [{ type: 'text', text: 'wire preview' }],
+    contentBytes: 99999,
+    contentTruncated: true,
+  }),
+  turnEnd(5, 1),
+]
+
+const FULL_DETAIL: ToolDetailItem = {
+  seq: 3,
+  callId: 'c3',
+  name: 'read',
+  arguments: '{"path":"big.md","full":true}',
+  argsBytes: 99999,
+  content: [{ type: 'text', text: 'full result body' }],
+  contentBytes: 16,
+  isError: false,
+  error: null,
+}
+
+/** Two appends into the same call: `mergedFrom = 2`, no surfaceOp (F4). */
+const mergedTurn = (): Ev[] => [
+  user(1, 'stream'),
+  turnStart(2, 1),
+  toolCall(3, 'read', '{"path":"a.md"}', 'c3'),
+  toolResult(4, 'c3', 'part one '),
+  toolResult(5, 'c3', 'part two'),
+  turnEnd(6, 1),
+]
+
+/** The same two appends, then a compaction replace → `mergedFrom` resets to 1. */
+const replacedTurn = (): Ev[] => [
+  user(1, 'stream'),
+  turnStart(2, 1),
+  toolCall(3, 'read', '{"path":"a.md"}', 'c3'),
+  toolResult(4, 'c3', 'part one '),
+  ev('tool/result', 5, {
+    callId: 'c3',
+    content: [{ type: 'text', text: '[compacted]' }],
+    surfaceOp: { op: 'replace', startSeq: 4, endSeq: 4 },
+    sourceEventSeqs: [4],
+  }),
+  turnEnd(6, 1),
+]
+
 
 const renderTab = (events: SessionEventLike[], failFirst = false) => {
   let calls = 0
@@ -112,6 +196,20 @@ const renderTab = (events: SessionEventLike[], failFirst = false) => {
     />,
   )
   return { fetchEventsOverride }
+}
+
+/** Mount the panel on the single clipped step, with an injected detail transport. */
+const renderTruncatedTab = (fetchToolDetailOverride: FetchToolDetail): void => {
+  render(
+    <TrailTab
+      ctx={{ get: () => undefined }}
+      scope={{ sessionId: 's1' }}
+      visible
+      tab={{ id: 'trace-inspect' }}
+      fetchEventsOverride={async (): Promise<{ events: SessionEventLike[] }> => ({ events: truncatedTurn() })}
+      fetchToolDetailOverride={fetchToolDetailOverride}
+    />,
+  )
 }
 
 describe('TrailTab', () => {
@@ -454,5 +552,182 @@ describe('TrailTab', () => {
     expect(calls).toBe(MAX_PULL_PAGES * 2)
     // Duplicates were dropped by the watermark and the panel stays healthy.
     expect(screen.queryByTestId('ttl-error')).toBeNull()
+  })
+
+  // ── v0.5.0 · image thumbnails (契约 §10.5.1) ───────────────────────────
+
+  it('renders an image block as a lazy session-authorized thumbnail plus its metadata', async () => {
+    renderTab(imageTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+
+    const thumb = (await screen.findByTestId('ttl-img-thumb')) as HTMLImageElement
+    expect(thumb.getAttribute('loading')).toBe('lazy')
+    expect(thumb.className).toBe('ttl-imgThumb')
+    expect(thumb.getAttribute('src')).toBe('/trace-inspect/api/attachment?sessionId=s1&attachmentId=sha256%3Aabc')
+    expect(thumb.getAttribute('alt')).toBe('Image: a.png')
+    expect(thumb.parentElement?.className).toBe('ttl-imgThumbWrap')
+    // The metadata/chip row stays visible underneath the thumbnail.
+    const chip = screen.getByTestId('ttl-img-chip')
+    expect(chip.textContent).toContain('Image: a.png')
+    expect(chip.textContent).toContain('image/png')
+    expect(chip.textContent).toContain('100×50 · 2 KB')
+    expect(screen.queryByTestId('ttl-img-failed')).toBeNull()
+  })
+
+  it('an image that fails to load hides the img, keeps the chip and warns', async () => {
+    renderTab(imageTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+
+    const thumb = await screen.findByTestId('ttl-img-thumb')
+    fireEvent.error(thumb)
+    expect(screen.queryByTestId('ttl-img-thumb')).toBeNull()
+    expect(screen.queryByTestId('ttl-img-thumb-wrap')).toBeNull()
+    expect(screen.getByTestId('ttl-img-chip').textContent).toContain('Image: a.png')
+    expect(screen.getByTestId('ttl-img-failed').textContent).toBe('Image failed to load — metadata only')
+  })
+
+  // ── v0.5.0 · on-demand full detail (契约 §10.5.2) ──────────────────────
+
+  it('loads the untruncated detail on open and swaps both panes over to it', async () => {
+    const detail = vi.fn<FetchToolDetail>(async () => ({ ok: true, items: [FULL_DETAIL] }))
+    renderTruncatedTab(detail)
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+
+    // Success: the footer says the full content is in, and the pill flips.
+    expect(await screen.findByTestId('ttl-detail-full')).toBeTruthy()
+    expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Full')
+    expect(screen.queryByTestId('ttl-detail-load')).toBeNull()
+    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('full result body')
+
+    // 参数 now renders the complete arguments, not the clipped wire preview
+    // (the wire value was `{"path":"big.md"}` — the `full` key proves the swap).
+    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
+    const params = screen.getByTestId('ttl-detail-body-params')
+    expect(params.querySelector('.ttl-json')).toBeTruthy()
+    expect(params.textContent).toContain('full')
+
+    expect(detail).toHaveBeenCalledTimes(1)
+    expect(detail.mock.calls[0][0]).toBe('s1')
+    expect(detail.mock.calls[0][1]).toEqual([3])
+  })
+
+  it('shows the loading strip while the full detail is in flight', async () => {
+    let settle: (outcome: ToolDetailResult) => void = () => undefined
+    const pending = new Promise<ToolDetailResult>((resolve) => { settle = resolve })
+    renderTruncatedTab(() => pending)
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+
+    const strip = await screen.findByTestId('ttl-detail-load')
+    expect(strip.textContent).toContain('Loading full content…')
+    // The wire preview stays on screen during the load.
+    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('wire preview')
+
+    await act(async () => { settle({ ok: true, items: [] }) })
+    // An answer without a matching item degrades to the failure branch.
+    expect(await screen.findByTestId('ttl-detail-retry')).toBeTruthy()
+  })
+
+  it('keeps the preview and offers one retry when the full detail fails', async () => {
+    const detail = vi.fn(async (): Promise<ToolDetailResult> => ({ ok: false, reason: 'network' }))
+    renderTruncatedTab(detail)
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+
+    const strip = await screen.findByTestId('ttl-detail-load')
+    expect(strip.textContent).toContain('Failed to load full content — showing the truncated preview')
+    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('wire preview')
+    const retry = (await screen.findByTestId('ttl-detail-retry')) as HTMLButtonElement
+    expect(retry.textContent).toBe('Retry')
+    expect(retry.disabled).toBe(false)
+
+    // The user's single retry goes through and the panes update.
+    detail.mockResolvedValueOnce({ ok: true, items: [FULL_DETAIL] })
+    fireEvent.click(retry)
+    expect(await screen.findByTestId('ttl-detail-full')).toBeTruthy()
+    expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Full')
+    expect(detail).toHaveBeenCalledTimes(2)
+  })
+
+  it('spends at most one user-triggered retry (no automatic re-fetch loop)', async () => {
+    const detail = vi.fn(async (): Promise<ToolDetailResult> => ({ ok: false, reason: 'http' }))
+    renderTruncatedTab(detail)
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+
+    fireEvent.click(await screen.findByTestId('ttl-detail-retry'))
+    await waitFor(() => {
+      expect((screen.getByTestId('ttl-detail-retry') as HTMLButtonElement).disabled).toBe(true)
+    })
+    // One automatic call + exactly one user retry.
+    expect(detail).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByTestId('ttl-detail-retry'))
+    expect(detail).toHaveBeenCalledTimes(2)
+  })
+
+  it('never asks for the full detail of a step that was not clipped', async () => {
+    const detail = vi.fn(async (): Promise<ToolDetailResult> => ({ ok: true, items: [FULL_DETAIL] }))
+    render(
+      <TrailTab
+        ctx={{ get: () => undefined }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'trace-inspect' }}
+        fetchEventsOverride={async (): Promise<{ events: SessionEventLike[] }> => ({ events: oneTurn() })}
+        fetchToolDetailOverride={detail}
+      />,
+    )
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    expect(await screen.findByTestId('ttl-detail')).toBeTruthy()
+    expect(detail).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('ttl-detail-load')).toBeNull()
+  })
+
+  // ── v0.5.0 · F4 hint (契约 §10.5.3) ────────────────────────────────────
+
+  it('flags merged content that never declared a surfaceOp (F4)', async () => {
+    renderTab(mergedTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    const note = await screen.findByTestId('ttl-detail-merged')
+    expect(note.getAttribute('role')).toBe('note')
+    expect(note.textContent).toBe('Merged from 2 results — the events declared no surfaceOp')
+    expect(note.className).toContain('ttl-detailMerged')
+  })
+
+  it('does not flag merged content once a replace owns the result', async () => {
+    renderTab(replacedTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    expect(await screen.findByTestId('ttl-detail-replaced')).toBeTruthy()
+    expect(screen.queryByTestId('ttl-detail-merged')).toBeNull()
+  })
+
+  // ── v0.5.0 · zoom entries (契约 §10.5.4) ───────────────────────────────
+
+  it('the detail footer ⤢ opens the overlay and Esc returns focus to the row', async () => {
+    renderTab(threeSteps())
+    const steps = await screen.findAllByTestId('ttl-step')
+    fireEvent.click(steps[0])
+    const zoomButton = await screen.findByTestId('ttl-detail-zoom')
+    expect(zoomButton.getAttribute('title')).toBe('Open zoomed view')
+    expect(zoomButton.getAttribute('aria-label')).toBe('Open zoomed view')
+
+    fireEvent.click(zoomButton)
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    // The outline is the whole current turn (3 steps), not just the open one.
+    expect(screen.getAllByTestId('ttl-zoom-step')).toHaveLength(3)
+    expect(screen.getByTestId('ttl-zoom-title').textContent).toBe('bash · step details')
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => { expect(screen.queryByTestId('ttl-zoom')).toBeNull() })
+    expect(document.activeElement).toBe(steps[0])
+  })
+
+  it('⌘⇧O on a focused step row opens the overlay on that step', async () => {
+    renderTab(threeSteps())
+    const steps = await screen.findAllByTestId('ttl-step')
+    fireEvent.keyDown(steps[2], { key: 'O', shiftKey: true, metaKey: true })
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.getAttribute('aria-label')).toBe('read · step details')
+    expect(screen.getByTestId('ttl-zoom-title').textContent).toContain('read')
+    // The row itself never expanded (⌘⇧O is not a disclosure key).
+    expect(screen.queryByTestId('ttl-detail')).toBeNull()
   })
 })

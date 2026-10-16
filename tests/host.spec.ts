@@ -3,7 +3,7 @@
  * afterSeq filtering, the lastSeq cache short-circuit and its probe TTL.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { apply, isTrustedApiRequest, PROBE_TTL_MS } from '../src/index'
+import { apply, ATTACHMENT_PATH, EVENTS_PATH, isTrustedApiRequest, PROBE_TTL_MS, TOOL_DETAIL_PATH } from '../src/index'
 import { PAGE_BUDGET_BYTES, PAGE_SIZE } from '../src/wire'
 import type { HostCtx, HttpHeadersLike, HttpRequestLike, HttpResponseLike, SessionEventLike } from '../src/context-types'
 
@@ -17,11 +17,13 @@ const snapshot = { events: events() }
 
 type Handler = (req: HttpRequestLike, res: HttpResponseLike) => Promise<void>
 
-function fakeCtx(overrides: Partial<HostCtx> = {}): HostCtx & { captured: Handler[] } {
+function fakeCtx(overrides: Partial<HostCtx> = {}): HostCtx & { captured: Handler[]; paths: string[] } {
   const captured: Handler[] = []
+  const paths: string[] = []
   const ctx: HostCtx = {
     webServer: {
       register: (route) => {
+        paths.push(route.path)
         captured.push(route.handler as Handler)
       },
     },
@@ -32,7 +34,7 @@ function fakeCtx(overrides: Partial<HostCtx> = {}): HostCtx & { captured: Handle
     effect: (fn) => fn(),
     ...overrides,
   }
-  return Object.assign(ctx, { captured })
+  return Object.assign(ctx, { captured, paths })
 }
 
 interface ReqOverrides {
@@ -86,6 +88,17 @@ describe('isTrustedApiRequest', () => {
     expect(isTrustedApiRequest({ headers: { host: '127.0.0.1:43120', 'sec-fetch-site': 'cross-site' } })).toBe(false)
     expect(isTrustedApiRequest({ headers: { host: '127.0.0.1:43120', origin: 'http://evil.example.com' } })).toBe(false)
     expect(isTrustedApiRequest({ headers: { host: '127.0.0.1:43120', origin: 'http://127.0.0.1:43120' } })).toBe(true)
+  })
+})
+
+describe('route table (v0.5.0)', () => {
+  it('registers the three exact routes, events first (the handler every other test drives)', () => {
+    const ctx = fakeCtx()
+    apply(ctx)
+    expect(ctx.paths).toEqual([EVENTS_PATH, ATTACHMENT_PATH, TOOL_DETAIL_PATH])
+    expect(ctx.paths[0]).toBe('/trace-inspect/api/events')
+    expect(ATTACHMENT_PATH).toBe('/trace-inspect/api/attachment')
+    expect(TOOL_DETAIL_PATH).toBe('/trace-inspect/api/tool-detail')
   })
 })
 

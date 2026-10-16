@@ -908,4 +908,289 @@ export const trailCss = `
   .ttl-caret { transition: none; }
   .ttl-mdTableWrap::after { transition: none; }
 }
+
+/* ══ v0.5.0 (契约 §10.4.1) ═══════════════════════════════════════════════
+ * Image thumbnails over the session-authorized attachment route, the
+ * on-demand full-detail states, the merged-from note, and the P2 zoom
+ * overlay. Same rules as above: colors only as var(--dsw-*) (the hex
+ * after the comma is the native dark fallback, never a literal choice),
+ * radii from the native --dsw-radius-* scale, code from
+ * var(--ds-font-family-code). The overlay is plain position:fixed so it
+ * needs no host slot: .ttl-zoom is the fixed layer, .ttl-zoomBackdrop
+ * fills it, .ttl-zoomPanel is the flex column on top. */
+
+/* ── Image thumbnail (replaces the chip once bytes are authorized) ── */
+.ttl-imgThumbWrap {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 0;
+}
+.ttl-imgThumb {
+  box-sizing: border-box;
+  display: block;
+  max-width: 100%;
+  max-height: 140px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: var(--dsw-alias-bg-module-platform, #353638);
+  object-fit: contain;
+}
+
+/* ── On-demand full detail: loading / failed / loaded states ── */
+.ttl-detailLoad {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 11px;
+  line-height: 16px;
+}
+.ttl-detailRetry {
+  box-sizing: border-box;
+  flex: none;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--dsw-radius-xs, 4px);
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary, #4176e6);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ttl-detailRetry:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+}
+.ttl-detailRetry:disabled {
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  cursor: default;
+}
+/* F4: the content was merged from several results with no surfaceOp. */
+.ttl-detailMerged {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border: 1px dashed var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: var(--dsw-radius-xs, 4px);
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* ── Zoom overlay (fixed layer + backdrop + flex panel) ── */
+.ttl-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.ttl-zoomBackdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--dsw-alias-bg-mask-3, rgba(0, 0, 0, 0.48));
+}
+.ttl-zoomPanel {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, 92vw);
+  height: min(760px, 88vh);
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: var(--dsw-radius-lg, 16px);
+  background: var(--dsw-alias-bg-layer-2, #2c2c2e);
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  box-shadow: 0 4px 16px var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.24));
+}
+.ttl-zoomHead {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.06));
+}
+.ttl-zoomTitle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ttl-zoomTools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Header actions carry no class of their own — the cluster owns the chrome. */
+.ttl-zoomTools button {
+  box-sizing: border-box;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--dsw-radius-xs, 4px);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ttl-zoomTools button:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+.ttl-zoomSearch {
+  box-sizing: border-box;
+  flex: none;
+  width: 160px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: var(--dsw-radius-xs, 4px);
+  background: var(--dsw-alias-bg-module-platform, #353638);
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+.ttl-zoomSearch::placeholder { color: var(--dsw-alias-label-tertiary, #adb2b8); }
+.ttl-zoomSearch:focus {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary, #4176e6);
+}
+.ttl-zoomBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+/* Outline column: fixed 260px rail with its own scroll. */
+.ttl-zoomOutline {
+  box-sizing: border-box;
+  flex: none;
+  width: 260px;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 6px 4px 6px 6px;
+  border-right: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.06));
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2, #545557) transparent;
+}
+.ttl-zoomOutline::-webkit-scrollbar { width: 6px; }
+.ttl-zoomOutline::-webkit-scrollbar-thumb {
+  background: var(--dsw-alias-scrollbar-bg-l2, #545557);
+  border-radius: 3px;
+}
+.ttl-zoomOutlineRow {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: var(--dsw-radius-xs, 4px);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+.ttl-zoomOutlineRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+.ttl-zoomOutlineRow[aria-current="true"] {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-state-business-primary, #4176e6);
+}
+.ttl-zoomPane {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 8px 12px 8px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2, #545557) transparent;
+}
+.ttl-zoomTabs {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.06));
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2, #545557) transparent;
+}
+.ttl-zoomFoot {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 14px;
+  border-top: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.06));
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 11px;
+  line-height: 16px;
+}
+.ttl-zoomKbd {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  border-radius: var(--dsw-radius-xs, 4px);
+  background: var(--dsw-alias-bg-module-platform, #353638);
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo, Courier, "PingFang SC", "Microsoft YaHei", monospace);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+}
 `

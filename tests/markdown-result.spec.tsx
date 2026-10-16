@@ -3,13 +3,16 @@
  * Markdown through the host renderer, shell logs stay literal, a missing host
  * renderer degrades to raw text (never throws), the render cap offers "show
  * all", table overflow has its wrapper, and every §4.5 class ships in the CSS.
+ *
+ * F8 (契约 §11.3): a `read` result is an XML envelope of line-numbered lines;
+ * only a `.md`/`.markdown`/`.mdx` file body is unwrapped and rendered.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as React from 'react'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from '../src/client/markdown-result'
+import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown, unwrapFileResult } from '../src/client/markdown-result'
 import { markdownLabels } from '../src/client/markdown-labels'
 import { setPrimitivesForTest, loadPrimitives, type MarkdownLabels, type PrimitivesModule } from '../src/client/ui-primitives'
 import { trailCss } from '../src/client/styles'
@@ -37,6 +40,54 @@ function fakePrimitives(): PrimitivesModule {
       return <div data-testid="fake-provider">{props.children}</div>
     },
   }
+}
+
+/**
+ * A host renderer stand-in that models the one thing GFM needs for a table: a
+ * separator row shaped like a row, i.e. sitting at the start of its line. The
+ * real `MarkdownText` behaves the same way (and refuses raw HTML), which is why
+ * a line-numbered envelope could never produce a `<table>` (契约 §11.3 F8).
+ */
+const TABLE_SEPARATOR = /^\|?[\s:|-]*-{3,}[\s:|-]*\|[ \t]*$/m
+
+function tableAwarePrimitives(): PrimitivesModule {
+  return {
+    MarkdownText: (props) => {
+      captured.md.push({
+        text: props.text,
+        streaming: props.streaming === true,
+        variant: props.variant,
+        labels: props.labels,
+      })
+      return TABLE_SEPARATOR.test(props.text)
+        ? <table data-testid="fake-table"><tbody><tr><td>cell</td></tr></tbody></table>
+        : <div data-testid="fake-md">{props.text}</div>
+    },
+    MarkdownDelegateProvider: (props) => {
+      captured.openFile = props.openFile
+      return <div data-testid="fake-provider">{props.children}</div>
+    },
+  }
+}
+
+/** A wide-table Markdown body, the AC13 fixture shape. */
+const MD_FILE_BODY = [
+  '# AC13 宽表格 fixture',
+  '',
+  '| 模块 | 路径 | 说明 |',
+  '| --- | --- | --- |',
+  '| a | src/a.ts | 第一列 |',
+  '| b | src/b.ts | 第二列 |',
+  '',
+  '```ts',
+  'const a = 1',
+  '```',
+].join('\n')
+
+/** Build the exact DSH `read` envelope: `<lineNumber>: <text>` lines, then `</content>`. */
+function readEnvelope(path: string, type: string, body: string): string {
+  const numbered = body.split('\n').map((line, index) => `${index + 1}: ${line}`).join('\n')
+  return `<path>${path}</path>\n<type>${type}</type>\n<content>\n${numbered}\n</content>`
 }
 
 beforeEach(() => {
@@ -85,6 +136,82 @@ describe('looksLikeMarkdown', () => {
     expect(looksLikeMarkdown('Error: boom\n# not markdown')).toBe(false)
     expect(looksLikeMarkdown('Traceback (most recent call last):\n**bold**')).toBe(false)
     expect(looksLikeMarkdown('    at foo (bar.js:1)\n- list')).toBe(false)
+  })
+})
+
+describe('unwrapFileResult (契约 §11.3 F8)', () => {
+  it('parses the DSH read envelope and strips every line-number prefix', () => {
+    const envelope = readEnvelope('/tmp/ac13-wide-table.md', 'file', MD_FILE_BODY)
+    expect(unwrapFileResult(envelope)).toEqual({
+      path: '/tmp/ac13-wide-table.md',
+      type: 'file',
+      body: MD_FILE_BODY,
+    })
+  })
+
+  it('turns an empty numbered line (`12: `) into a real empty line', () => {
+    const envelope = '<path>/tmp/gaps.md</path>\n<type>file</type>\n<content>\n1: # T\n2: \n12: \n30: tail\n</content>'
+    expect(unwrapFileResult(envelope)).toEqual({
+      path: '/tmp/gaps.md',
+      type: 'file',
+      body: '# T\n\n\ntail',
+    })
+  })
+
+  it('drops the read tool footer (chrome, not file content)', () => {
+    const eof = '<path>/tmp/a.md</path>\n<type>file</type>\n<content>\n1: # T\n2: body\n(End of file - total 2 lines)\n</content>'
+    expect(unwrapFileResult(eof)).toEqual({ path: '/tmp/a.md', type: 'file', body: '# T\nbody' })
+    const windowed =
+      '<path>/tmp/a.md</path>\n<type>file</type>\n<content>\n1: # T\n2: body\n(Showing lines 1-2 of 576. Use offset=3 to continue.)\n</content>'
+    expect(unwrapFileResult(windowed)).toEqual({ path: '/tmp/a.md', type: 'file', body: '# T\nbody' })
+    // A footer-shaped line in the middle is real content and must survive.
+    const middle = '<path>/tmp/a.md</path>\n<type>file</type>\n<content>\n1: (End of file - total 2 lines)\n2: body\n</content>'
+    expect(unwrapFileResult(middle)?.body).toBe('(End of file - total 2 lines)\nbody')
+  })
+
+  it('returns null for anything that is not that envelope', () => {
+    expect(unwrapFileResult('')).toBeNull()
+    expect(unwrapFileResult('# Title')).toBeNull()
+    expect(unwrapFileResult('<path>/a.md</path>')).toBeNull()
+    // Missing `</content>`: a truncated result must not be half-parsed.
+    expect(unwrapFileResult('<path>/a.md</path>\n<type>file</type>\n<content>\n1: x')).toBeNull()
+    expect(unwrapFileResult('prose\n<content>\n1: x\n</content>')).toBeNull()
+    expect(unwrapFileResult('<path>/a.md</path>\n<type>file</type>\n<content>\n1: x\n</content>\nextra')).toBeNull()
+  })
+
+  it('keeps a non-file envelope parseable but reports its type', () => {
+    const envelope = '<path>/tmp/a.png</path>\n<type>image</type>\n<content>\nimage/png\n1440×860\n</content>'
+    expect(unwrapFileResult(envelope)).toEqual({
+      path: '/tmp/a.png',
+      type: 'image',
+      body: 'image/png\n1440×860',
+    })
+  })
+})
+
+describe('looksLikeMarkdown · read envelope (契约 §11.3 F8)', () => {
+  it('judges the unwrapped body, not the envelope, for a Markdown file', () => {
+    expect(looksLikeMarkdown(readEnvelope('/tmp/ac13-wide-table.md', 'file', MD_FILE_BODY))).toBe(true)
+    expect(looksLikeMarkdown(readEnvelope('/tmp/notes.markdown', 'file', '```\ncode fence\n```'))).toBe(true)
+    expect(looksLikeMarkdown(readEnvelope('/tmp/page.mdx', 'file', '# Title'))).toBe(true)
+  })
+
+  it('still answers false when the Markdown file body has no structure', () => {
+    expect(looksLikeMarkdown(readEnvelope('/tmp/notes.md', 'file', 'just prose\nnothing structural'))).toBe(false)
+  })
+
+  it('forces machine files to literal text even with inline Markdown in the body', () => {
+    expect(looksLikeMarkdown(readEnvelope('/tmp/a.ts', 'file', 'const a = `code`\n**not** prose'))).toBe(false)
+    expect(looksLikeMarkdown(readEnvelope('/tmp/a.json', 'file', '- looks like a list\n> and a quote'))).toBe(false)
+  })
+
+  it('forces non-file envelopes to literal text', () => {
+    expect(looksLikeMarkdown(readEnvelope('/tmp/a.png', 'image', '# not markdown\n| --- |'))).toBe(false)
+  })
+
+  it('leaves non-envelope text on the original rules', () => {
+    expect(looksLikeMarkdown('# Title\ntext')).toBe(true)
+    expect(looksLikeMarkdown('done')).toBe(false)
   })
 })
 
@@ -146,6 +273,24 @@ describe('MarkdownResult', () => {
     expect(captured.md.length).toBe(0)
   })
 
+  it('shows the unwrapped body — not the read envelope — when a .md file has no Markdown signals', () => {
+    // 契约 §11.4#5 (F-V6): the fallback must still drop the `<path>`/line-number
+    // chrome, otherwise a plain-prose `.md` reads worse than the raw log did.
+    const envelope =
+      '<path>/tmp/plain.md</path>\n<type>file</type>\n<content>\n1: just prose\n2: no signals here\n(End of file - total 2 lines)\n</content>'
+    render(<MarkdownResult text={envelope} labels={markdownLabels('en')} />)
+    expect(screen.getByTestId('ttl-md-raw').textContent).toBe('just prose\nno signals here')
+    expect(screen.queryByTestId('ttl-md')).toBeNull()
+    expect(captured.md.length).toBe(0)
+  })
+
+  it('keeps the untouched payload for a non-.md envelope in the fallback', () => {
+    const envelope = '<path>/tmp/a.ts</path>\n<type>file</type>\n<content>\n1: const a = 1\n</content>'
+    render(<MarkdownResult text={envelope} labels={markdownLabels('en')} />)
+    expect(screen.getByTestId('ttl-md-raw').textContent).toBe(envelope)
+    expect(captured.md.length).toBe(0)
+  })
+
   it('falls back to raw text plus a hint when the host renderer is missing', () => {
     setPrimitivesForTest(null)
     render(<MarkdownResult text={'# Title'} labels={markdownLabels('en')} />)
@@ -188,6 +333,52 @@ describe('MarkdownResult', () => {
   it('does not cap text under the render cap', () => {
     render(<MarkdownResult text={'# H\nshort'} labels={markdownLabels('en')} renderCap={1024} />)
     expect(screen.queryByTestId('ttl-md-truncated')).toBeNull()
+  })
+
+  it('renders the unwrapped .md body, so a real table can be produced', () => {
+    setPrimitivesForTest(tableAwarePrimitives())
+    const envelope = readEnvelope('/tmp/ac13-wide-table.md', 'file', MD_FILE_BODY)
+    // The envelope as-is can never become a table: its separator row is numbered.
+    expect(TABLE_SEPARATOR.test(envelope)).toBe(false)
+
+    render(<MarkdownResult text={envelope} labels={markdownLabels('en')} />)
+
+    expect(screen.getByTestId('ttl-md')).toBeTruthy()
+    expect(screen.getByTestId('fake-table')).toBeTruthy()
+    expect(screen.queryByTestId('ttl-md-raw')).toBeNull()
+    expect(captured.md.length).toBe(1)
+    expect(captured.md[0]!.text).toBe(MD_FILE_BODY)
+    expect(captured.md[0]!.text).not.toContain('<path>')
+    expect(captured.md[0]!.text).not.toContain('</content>')
+    expect(/^\d+: /m.test(captured.md[0]!.text)).toBe(false)
+  })
+
+  it('keeps a non-Markdown read result (`.ts`) as literal text', () => {
+    const envelope = readEnvelope('/tmp/a.ts', 'file', 'const a = `code`\n**not** prose')
+    render(<MarkdownResult text={envelope} labels={markdownLabels('en')} />)
+
+    expect(screen.getByTestId('ttl-md-raw').textContent).toBe(envelope)
+    expect(screen.queryByTestId('ttl-md')).toBeNull()
+    expect(captured.md.length).toBe(0)
+  })
+
+  it('caps and counts the unwrapped body, not the envelope', () => {
+    const body = `# H\n${'x'.repeat(40)}`
+    render(<MarkdownResult text={readEnvelope('/tmp/long.md', 'file', body)} labels={markdownLabels('en')} renderCap={10} />)
+
+    expect(captured.md[0]!.text).toBe(body.slice(0, 10))
+    expect(screen.getByTestId('ttl-md-truncated').querySelector('button')!.textContent)
+      .toBe(`Show all (${body.length})`)
+  })
+
+  it('degrades an unwrapped .md envelope to the untouched original when the renderer is missing', () => {
+    setPrimitivesForTest(null)
+    const envelope = readEnvelope('/tmp/ac13-wide-table.md', 'file', MD_FILE_BODY)
+    render(<MarkdownResult text={envelope} labels={markdownLabels('en')} />)
+
+    expect(screen.getByTestId('ttl-md-raw').textContent).toBe(envelope)
+    expect(screen.getByTestId('ttl-md-fallback').textContent)
+      .toBe('Markdown renderer unavailable — showing raw text')
   })
 })
 

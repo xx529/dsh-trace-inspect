@@ -29,6 +29,8 @@
 
 > 设计稿（左 `A-inline-expand` / 右 `A2-result-markdown`）：点击工具行**就地展开详情带**——`参数` 是可逐层折叠的 JSON 树（长字符串折叠成块、可单字段复制），`结果` 默认 Markdown 渲染、一键切「原文」，`原始` 保留 wire 原文；底部标注 `完整/已截断` 与 seq。
 >
+> v0.5.0 起详情带还支持：**会话授权图片缩略图**（真图，非占位）、**按需完整内容**（参数/结果被 32 KiB 上限截断时自动拉取完整版本）、**放大阅读浮层**（`⤢` / `⌘⇧O`：Esc 关闭、`↑↓` 切步、`⌘F` 搜索、`⌘C` 复制、导出 JSON）。
+>
 > ⚠️ 这两张是**设计稿，不是实机截图**；实机截图与像素级核对待补（折叠态视觉基线见上方真实截图）。
 
 ## 概览
@@ -40,9 +42,9 @@
 - **按用户轮次折叠轨迹** —— 会话被折叠成「输入 → 工具步骤 → 输出」的结构化轨迹，长会话一目了然；轮次内支持多级折叠与工具类型筛选 chips，只看你想看的部分。
 - **就地展开详情（v0.4.0 新增）** —— 点击工具行**就地展开详情带**，三个页签：
   - `参数`：完整工具参数（host 侧上限 32 KiB，不再是 512 字符截断）渲染成可逐层折叠的 JSON 树，长字符串折叠成块并可单字段复制；
-  - `结果`：工具结果文本按 **Markdown 渲染**（GFM + TeX，禁用 raw HTML / 不安全协议），可一键切「原文」；`read`/`web_fetch` 默认渲染、`bash`/`pwsh` 默认原文；图片块显示为占位 chip，失败结果显示错误名/码 + 原文；
+  - `结果`：工具结果文本按 **Markdown 渲染**（GFM + TeX，禁用 raw HTML / 不安全协议），可一键切「原文」；`read`/`web_fetch` 默认渲染、`bash`/`pwsh` 默认原文；`read` 的 `<path>/<type>/<content>` 信封会先解包（去掉行号与工具 footer）再渲染；图片块显示**会话授权缩略图**（`GET /trace-inspect/api/attachment`，仅当该会话确实引用过该附件才可读），加载失败回退占位 chip；失败结果显示错误名/码 + 原文；
   - `原始`：host 投影的原始参数文本（保留空白）。
-  详情带底部标注「完整/已截断」与 seq；被压缩插件替换过的结果会显示**替换后的摘要**并标注 `已被压缩替换（seq #N）`。
+  详情带底部标注「完整/已截断」与 seq；被压缩插件替换过的结果会显示**替换后的摘要**并标注 `已被压缩替换（seq #N）`；内容被 32 KiB 上限截断时自动按需拉取**完整内容**（`POST /trace-inspect/api/tool-detail`），并可用 `⤢` 打开放大阅读浮层。
 - **一键跳回原位** —— 点击轮次行 / 行尾 `↗` 按钮（工具行本身改为展开详情），自动加载历史并滚动到聊天视图 / 轨迹视图的对应行；0.2.0 走 client `uiConversation` 会话视图注册表（`anchorSeq` 节点匹配 + `loadOlder` 翻页），0.1.x 回退旧 session 快照，不依赖 DOM 文本与哈希类名。
 - **零 AI 依赖** —— 纯事件折叠，不调用 LLM：零 token、秒开、无失败态。
 - **只读零侵入** —— 不改动 DSH 核心：host 一个只读路由 + client 一个 tab，注册即用、卸载干净。
@@ -140,7 +142,7 @@ client（浏览器）  inject: ['sessions','uiConversation','betterSidebar']（�
 | 平台（回退兼容） | DSH 0.1.2-rc.1 / 0.1.1-rc.x（stable 线） |
 | 依赖 | dsh-better-sidebar（可选 peer，`>=0.17.0`；未装则 inert）、react（DSH client 种子注入） |
 | 构建 | TypeScript + esbuild，无运行时 npm 依赖 |
-| 测试 | vitest 272 用例（fold / folder / detail / wire / json-tree / markdown / jump / tab / host） |
+| 测试 | vitest 452 用例（fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + 两组独立对抗验收） |
 
 ## 开发
 

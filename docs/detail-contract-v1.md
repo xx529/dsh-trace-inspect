@@ -158,6 +158,7 @@ export interface TrailStep {
 4. **脏标记**：任何对已存在步骤对象的写入都必须 `markDirty(builder)`（`TrailFolder` 的 `frozen` 槽必须置空），否则已冻结轮次复用对象身份会导致 React 不重渲染。`foldTurns` 不需要（一次性折叠）。
 5. **水位线**：`push()` 对 `seq <= lastSeq` 的去重保持不变；replace 事件自身 seq 更大，**不得**因为「目标 seq 更小」而被丢弃（用 `seqIndex` 反查，不用水位线）。要有专项单测。
 6. **统计口径不变**：`stats.total` 计新增步骤数（孤儿占位计入）、`failed` 只计 `kind === 'error'` 步骤、`byTool` 对 `kind==='tool'` 计 name。
+   > 口径限定（T10 报告 F-V3）：「最终结果必须与到达顺序无关」**只在该 replace 的目标已经登记的前提下成立**（处理该 replace 时 `seqIndex` 已含目标 seq，或 `byCallId` 已含该 callId）。replace 早于其 `tool/call` 到达时该事件被忽略 —— 真实链路不可达：`TrailFolder.push` 有 seq 水位线、wire 分页按 seq 升序、replace 事件自身 seq 恒大于被替换 seq（§0 实测 182 替换 20/22）。
 7. `foldTurns`（一次性全量折叠）与 `TrailFolder` 必须**同步实现**同一套语义，二者对同一事件流的输出必须一致（用同一组 fixture 跑双实现对比测试）。
 8. 折叠/展开、`stepsCount`、`hasError`、`contextCount` 等既有口径不得回归。
 
@@ -344,6 +345,8 @@ export function markdownLabels(lang: Lang): MarkdownLabels   // 同一 lang 必�
 | 5 | 同一事件内多个 text 块用 `\n` 连接；跨事件 append 直接拼接（流式片段语义） |
 | 6 | image 块缺 `attachmentId` 直接跳过；`mediaType` 缺失降级为空串、`bytes` 缺省 0 |
 | 7 | replace 改写参数口径：`args` = 替换文本、`argsPreview = compact(替换文本)`、`argsTruncated = contentTruncated`、`argsBytes` = 替换文本长度 |
+
+> ⚠️ **本行已被 §11.2 覆盖（2026-10-17）**：`replace` 只改写 `result`，`args`/`argsPreview`/`argsBytes`/`argsTruncated` 保持 tool/call 原值。保留本行为历史记录。
 | 8 | 补了契约未明说的 markDirty 缺口：user/fallback 模式下被 replace 命中的**已关闭**轮次必须重新 materialize |
 | 9 | 内部共享一个 `ResultIndex`（`byCallId` + `seqIndex` + 按 seq 排序的分段表），`foldTurns` / `foldByUserBoundaries` / `TrailFolder` 三处同步，双实现逐前缀一致 |
 
@@ -376,3 +379,226 @@ export function markdownLabels(lang: Lang): MarkdownLabels   // 同一 lang 必�
 | F3【低】契约声称的 `.ttl-mdShowAll` 不存在 | 修正为本节 §9.4#4 的真实清单（3 个类） | 同上 |
 | F4【低/风险】无可见降级提示 | 记为 §9.5 已知局限 + CHANGELOG Known limitations | 同上 |
 
+
+---
+
+# 附：v0.5.0 契约补充（P2 + 图片缩略图 + 按需完整详情 + F4 提示）
+
+> 目标：把 v0.4.0 的「已知局限」与 v1.0 范围外的 P2 全部做完，并在**独立 profile 实例**上做浏览器级复核。
+> 本补充同样是**冻结接口**；文件归属见下表，禁止跨 scope 写入。
+
+## 10.1 文件归属（并行工作流不重叠）
+
+| 工作流 | 独占文件 |
+| --- | --- |
+| **T7 host-detail** | `src/index.ts`、`src/trail-model.ts`、`src/client/attachment-url.ts`(新)、`src/client/useTrail.ts`、`tests/attachment-route.spec.ts`(新)、`tests/tool-detail-route.spec.ts`(新)、`tests/attachment-url.spec.ts`(新)、`tests/trail-detail.spec.ts`、`tests/host.spec.ts` |
+| **T8 ui-styles** | `src/client/styles.ts`、`src/client/locales.ts`、`tests/detail-styles.spec.ts`(新) |
+| **T6 ui-zoom**（依赖 T7/T8 落地） | `src/client/ZoomOverlay.tsx`(新)、`src/client/TrailTab.tsx`、`tests/zoom-overlay.spec.tsx`(新)、`tests/trail-tab.spec.tsx` |
+
+## 10.2 已实测的平台事实（新增，禁止推翻）
+
+| 事实 | 证据 |
+| --- | --- |
+| host 附件服务契约：`ctx.get('attachments')`（可选访问，必须判 undefined）→ `readImage(ref: ImageAttachmentRef, signal?): Promise<{ref, data: Uint8Array}>`、`imageHostPath(ref): string \| undefined` | 本机 `cordis_inspect` host `Service.listService {service:'attachments'}`（`/Users/lzx/.dsh/profiles/desktop` 运行时） |
+| `ImageAttachmentRef = { attachmentId, mediaType, bytes, width, height, name?, originalDimensions? }`；`ImageMediaType = 'image/png'\|'image/jpeg'\|'image/webp'\|'image/gif'` | 同上（referencedTypes） |
+| 浏览器 `<img src>` 的 GET 能通过插件围栏：`isTrustedApiRequest` 只要求 loopback `Host`，`Origin` 缺省即放行，只拒绝 `sec-fetch-site: cross-site` | `src/index.ts:100-113` |
+| 平台自身的内置图片卡走「会话授权的 `loadImage`」，授权模型 = 「该会话的 `tool/result` 里存在引用该附件的 `image` 块」 | `/Users/lzx/.dsh/evidence/market/readmes.json`（imagegen 插件 README：`ctx.attachments.saveImage()` + 会话授权 `loadImage`；其自建图片路由也按同样授权） |
+
+## 10.3 T7 接口（冻结）
+
+### 10.3.1 `GET /trace-inspect/api/attachment`
+
+```
+GET /trace-inspect/api/attachment?sessionId=<id>&attachmentId=<sha256:...>
+  200 原始字节，content-type = 该 image 块的 mediaType，cache-control: private, max-age=300，
+      x-content-type-options: nosniff
+  400 sessionId/attachmentId 缺失或格式非法
+  403 围栏拒绝（复用 isTrustedApiRequest）
+  404 该 session 的事件里不存在引用该 attachmentId 的 image 块 / attachments 服务不可用 / readImage 校验失败
+  405 非 GET
+```
+- **授权**：仅当 `sessionId` 的事件流里存在 `image` 块（`content[].attachment.attachmentId === attachmentId`）时才读字节；不得只按 attachmentId 直读（防越权枚举）。
+- 事件读取复用 `/events` 同一条路径（live 快照优先、否则 sessionQuery）；授权结果按 session 缓存（LRU ≤ 16 个 session，TTL ≤ 10s），避免每张图重扫全日志。
+- 字节经 `ctx.get('attachments')?.readImage({attachmentId, mediaType, bytes, width, height, name})` 读取；服务不可用 → 404 `{error:'attachments-unavailable'}`；校验失败 → 404 `{error:'attachment-unavailable'}`。
+- 图片尺寸字段缺失时，`readImage` 需要 `width/height`：从事件的 image 块取；若缺失则用 `mediaType/bytes/name` 允许的形态尝试，仍失败即 404（不得抛未捕获异常）。
+
+### 10.3.2 `POST /trace-inspect/api/tool-detail`
+
+```
+POST /trace-inspect/api/tool-detail  { sessionId, seqs: number[] }     // seqs ≤ 32 条
+  200 { items: ToolDetailItem[] }       // 找不到的 seq 直接省略，不报错
+  400 sessionId 缺失 / seqs 非数组或超 32
+  403 / 404 / 405 / 413（与 /events 同语义）
+```
+```ts
+export interface ToolDetailItem {
+  /** 调用方请求的那个 seq（call seq 或任一所属 result seq 均可）；`arguments`/`content`
+   *  始终是整步内容。客户端只传 `TrailStep.seq`（= call seq）——见 T10 报告 F-V4。 */
+  seq: number
+  callId: string | null
+  name: string
+  arguments: string | null       // 完整、不 clipText
+  argsBytes: number
+  content: Array<{ type: 'text'; text: string } | { type: 'image'; attachment: AttachmentRefLike }> | null
+  contentBytes: number
+  isError: boolean
+  error: { name?: string; code?: string } | null
+}
+```
+- 「完整」= 不施加 `ARGS_CAP`/`RESULT_CAP`；但**仍受请求体上限与响应体积上限约束**：单次响应不超过 8 MiB，超出则对 `arguments`/`content` 文本按 4 MiB 截断并置 `truncated: true`（新增字段，见下）。
+```ts
+  truncated?: boolean            // 任一字段因 8 MiB 响应上限被二次截断
+```
+
+### 10.3.3 `src/client/attachment-url.ts`（T7 新建，T6 使用）
+
+```ts
+export interface AttachmentRefLike {
+  attachmentId: string
+  mediaType: string
+  bytes?: number
+  width?: number
+  height?: number
+  name?: string
+}
+/** URL of the session-authorized attachment route; null when the ref/sessionId is unusable. */
+export function attachmentUrl(sessionId: string | null | undefined, ref: AttachmentRefLike): string | null
+```
+实现：`/trace-inspect/api/attachment?sessionId=<enc>&attachmentId=<enc>`（`encodeURIComponent`）；`sessionId` 为空串/空白或 `attachmentId` 为空 → 返回 `null`。
+
+### 10.3.4 `src/client/useTrail.ts`（T7 扩展，T6 使用）
+
+```ts
+export type ToolDetailResult =
+  | { ok: true; items: ToolDetailItem[] }
+  | { ok: false; reason: 'http' | 'network' | 'unavailable' }
+
+/** Fetch untruncated tool details for one session. Never throws. */
+export function fetchToolDetail(sessionId: string, seqs: number[], signal?: AbortSignal): Promise<ToolDetailResult>
+```
+`ToolDetailItem` 类型从 `./tool-detail-types`? — 不新增文件：把 `ToolDetailItem` 定义在 `useTrail.ts` 并 `export`。
+
+### 10.3.5 `src/trail-model.ts`（T7 扩展）
+
+```ts
+export interface TrailResult {
+  /* …既有字段… */
+  /** 合并进本内容的 tool/result 事件数：append 递增、replace 重置为 1；≥2 表示事件未显式声明合并语义。 */
+  mergedFrom?: number
+}
+```
+语义：每个 append 结果使 `mergedFrom` +1；replace 把它重置为 1（replace 自身是一条事件）；首次挂 result 时为 1。UI 仅在 `mergedFrom > 1 && replacedBy === undefined` 时提示。
+
+## 10.4 T8 接口（冻结：新增类名与文案键）
+
+### 10.4.1 新增 CSS 类（`styles.ts`，全部 `ttl-` 前缀、只用 token）
+
+`.ttl-imgThumbWrap`、`.ttl-imgThumb`、`.ttl-detailLoad`、`.ttl-detailRetry`、`.ttl-detailMerged`、
+`.ttl-zoom`、`.ttl-zoomBackdrop`、`.ttl-zoomPanel`、`.ttl-zoomHead`、`.ttl-zoomTitle`、`.ttl-zoomTools`、`.ttl-zoomSearch`、`.ttl-zoomBody`、`.ttl-zoomOutline`、`.ttl-zoomOutlineRow`、`.ttl-zoomOutlineRow[aria-current="true"]`、`.ttl-zoomPane`、`.ttl-zoomTabs`、`.ttl-zoomFoot`、`.ttl-zoomKbd`
+
+尺寸基准：缩略图 `max-width:100%`、`max-height:140px`、圆角 `var(--dsw-radius-*)`；浮层 `position:fixed; inset:0; z-index:60`，面板 `width:min(1080px, 92vw)`、`height:min(760px, 88vh)`、`display:flex`；大纲列 `width:260px` 可滚动。
+
+### 10.4.2 新增 `Dict` 键（zh/en 都要）
+
+| key | zh | en | 类型 |
+| --- | --- | --- | --- |
+| `imageLoadFailed` | 图片加载失败，仅显示元数据 | Image failed to load — metadata only | string |
+| `detailLoading` | 载入完整内容… | Loading full content… | string |
+| `detailLoadFailed` | 完整内容加载失败，当前显示截断预览 | Failed to load full content — showing the truncated preview | string |
+| `detailRetry` | 重试 | Retry | string |
+| `detailLoadedFull` | 已载入完整内容 | Full content loaded | string |
+| `mergedNoSurfaceOp` | `该内容由 {n} 条结果合并，事件未声明 surfaceOp` | `Merged from {n} results — the events declared no surfaceOp` | `(n: number) => string` |
+| `zoomOpen` | 放大查看 | Open zoomed view | string |
+| `zoomTitle` | `{name} · 步骤详情` | `{name} · step details` | `(name: string) => string` |
+| `zoomClose` | 关闭 | Close | string |
+| `zoomSearch` | 搜索步骤 | Search steps | string |
+| `zoomNoMatch` | 无匹配步骤 | No matching step | string |
+| `zoomExport` | 导出 JSON | Export JSON | string |
+| `zoomHint` | `Esc 关闭 · ↑↓ 切步 · ⌘F 搜索` | `Esc close · ↑↓ step · ⌘F search` | string |
+
+## 10.5 T6 行为（冻结）
+
+1. **图片缩略图**：`result.images` 每项 → `attachmentUrl(sessionId, ref)`；非 null 渲染
+   `<div className="ttl-imgThumbWrap"><img data-testid="ttl-img-thumb" className="ttl-imgThumb" loading="lazy" src={url} alt={t('imageLabel')(name)} /></div>`，
+   下方保留 `imageMeta` 元数据行；`onError` → 隐藏 img、回退既有 `.ttl-imgChip`，并显示 `imageLoadFailed`（`.ttl-pillWarn`）。
+2. **按需完整详情**：步骤展开且（`step.argsTruncated === true` 或 `step.result?.truncated === true`）时，自动调用 `fetchToolDetail(sessionId, [step.seq])`（按 seq inflight 去重，最多重试 1 次由用户点击触发）。成功 → `参数`/`结果` 页改用返回的完整 `arguments`/`content`，页脚显示 `detailLoadedFull`；失败 → 保持 wire 预览 + `.ttl-detailLoad` 显示 `detailLoadFailed` + `ttl-detail-retry` 按钮（文案 `detailRetry`）。加载中显示 `detailLoading`。
+3. **F4 提示**：`result.mergedFrom > 1 && result.replacedBy === undefined` → `.ttl-detailMerged`（`role="note"`，testid `ttl-detail-merged`）显示 `mergedNoSurfaceOp(n)`。
+4. **放大浮层**：详情带页脚 `⤢` 按钮（testid `ttl-detail-zoom`，title `zoomOpen`）+ 步骤行聚焦时 `⌘⇧O`/`Ctrl+Shift+O` 打开；`React.createPortal(document.body)` 挂载（**不依赖未验证的 slot key**，`position:fixed` 由 `.ttl-zoom` 提供）；`Esc` 关闭；`↑/↓` 在当前轮次的步骤间切换；`⌘F`/`Ctrl+F` 聚焦搜索框；`⌘C`/`Ctrl+C` 复制当前页内容；`ttl-zoom-export` 导出当前步骤 JSON（Blob + `a.download`）。左栏大纲复用当前轮次步骤（testid `ttl-zoom-step`），右栏复用 `JsonTree`/`MarkdownResult`/`RawText`，页签与详情带一致（testid `ttl-zoom-tabs`）。`aria-modal="true"` + `role="dialog"` + 关闭后焦点回到触发行。
+5. 折叠态 DOM 与 v0.4.0 保持一致（只新增页脚按钮与条件渲染的浮层/提示）。
+
+## 10.6 版本与门禁
+
+- 版本：`0.5.0`（Lead 改 `package.json` / `CHANGELOG.md`）。
+- 交付门禁不变：`pnpm typecheck` / `pnpm test` / `pnpm build` / `pnpm check:lib`；`lib/` 必须随源码一起提交（先 `pnpm build` 再 commit）。
+- 浏览器级复核在**独立 profile 实例**（`trace-verify`，端口 19487，插件以 `link:` 装本仓库）上做，证据写进 `docs/verification-v1.md` §10。
+
+## 11. 浏览器级复核发现的收口（2026-10-17，独立 profile 实例 19487）
+
+> 复核方式：`dsh trace-verify --from-default-profile web --port 19487`（独立 profile，插件以 `link:` 装本仓库），Playwright 驱动真实 GUI，打开真实会话 `session-a29878e7…`（5 轮 / 177 步 / 6 个 `read_image`）与本仓库当前会话。
+
+### 11.1 已实测通过（证据见 `docs/verification-v1.md` §10）
+
+| 项 | 实测结果 |
+| --- | --- |
+| client 半注册 | better-sidebar 「+ 菜单」出现「轮次轨迹」tab；面板显示 5 轮 / chips（全部 177、失败 2、bash 131、read_image 6） |
+| 行内展开 | 点工具行展开 `region "write 详情"`，页签 参数/结果/原始，默认 结果；页脚 `完整 · seq #923 · 复制全部` |
+| JSON 树 | 3 行 + 1 个 `.ttl-strbox`（max-height 52px/overflow auto）+ 单字段复制；折叠 ↔ 展开 1→3→1→3；字体 11.5px/17px 等宽 |
+| 按工具默认视图 | `bash` → 默认原文（`ttl-md-raw`），且提供 渲染/原文 切换；切换后生效 |
+| 渲染/原文记忆 | 切换为原文 → 收起 → 重新展开，仍为原文（AC12） |
+| 错误结果 | `TeamError · TEAM_MEMBER_NOT_FOUND` + 原文可见，页脚 `完整 · seq #389`（AC14） |
+| 图片块 | `图片：A-inline-expand.png` + `image/png` + `1440×860 · 143 KB` 占位 chip（缩略图见 §10.5，v0.5.0 实现） |
+| 跳回定位 | 点轮次 1 的 `↗`：对话区自动加载更早并滚动，视口内可见节点内容与该步参数完全一致（top=247 ∈ 视口 76–900）（AC8） |
+| 键盘 | 行聚焦 `ArrowRight` 展开、`ArrowLeft` 收起、焦点留在行上（AC18） |
+| 折叠态度量 | `.ttl-row` height 24px / font-size 12px / line-height 18px（与 v0.3.1 基线一致；AC9 的 v0.3.1 并排比对见 §10） |
+
+### 11.2 【新发现 F7 / 已定口径】`surfaceOp.replace` 不得改写工具参数
+
+- **现象**（真实浏览器）：被 compaction 替换过的步骤，其**行预览**与「参数」页显示的都是 `[dsh-jev-compaction] Historical tool output pruned…`，原始命令（如 `{"command":"ls …"}`）在界面上完全看不到；而日志里该 `tool/call` 的 `arguments` **完好无损**（实测：本仓库会话 96 处 replace，对应 tool/call 参数仍原样投影）。
+- **原因**：T2 按契约旧文（§6.3.2「改写 args/result」）实现，把 replace 的内容同时写进了 `args`/`argsPreview`。
+- **新口径（Lead 裁定，覆盖 §6.3.2 与 §9.3#7）**：
+  - `replace` **只改写 `result`**（`text`/`images`/`truncated`/`replacedBy`/`replacedFrom`），
+  - **不得**改写 `args` / `argsPreview` / `argsBytes` / `argsTruncated` —— 工具参数是「调用事实」，压缩插件从不改写它；
+  - 行预览因此恢复为原始命令；「结果」页仍显示替换后的摘要 + `已被压缩替换（seq #N）`（AC3 的意图不变）。
+
+### 11.3 【新发现 F8 / 已定口径】`read` 结果的 XML 信封必须先解包再决定是否渲染 Markdown
+
+- **现象**（真实浏览器）：`read` 的结果形如
+  ```
+  <path>/tmp/ac13-wide-table.md</path>
+  <type>file</type>
+  <content>
+  1: # AC13 宽表格 fixture
+  ...
+  5: | 模块 | 路径 | … |
+  ```
+  当前 `looksLikeMarkdown` 命中了 `| --- |` → 走 `MarkdownText`，结果**整段退化成一段转义文本**（`&lt;path&gt;…` + 行号），比原文更难读；表格永远不可能渲染成 `<table>`，AC13 因此无法通过。
+- **新口径（Lead 裁定，覆盖 §9.3 的判定输入）**：
+  - 新增 `unwrapFileResult(text)`：识别上述信封，返回 `{ path, type, body }`，`body` 去掉 `^\d+: ?` 行号前缀；
+  - **仅当 `type === 'file'` 且 `path` 以 `.md`/`.markdown`/`.mdx` 结尾**时，`looksLikeMarkdown` 与 `MarkdownResult` 都以 **`body`** 为输入（渲染真实的文件 Markdown，含表格/代码围栏）；
+  - 其它类型（`.ts`/`.json`/`bash` 日志等）一律走等宽原文——保持「拿不准就按原文」的既有原则；
+  - 该改动完全落在 `src/client/markdown-result.tsx` 内（`looksLikeMarkdown` 语义自洽），`TrailTab.tsx` 无需改动。
+
+### 11.4 F8 落地裁定（Lead，T9 提出的 4 个待定项）
+
+| # | 问题 | 裁定 | 理由 |
+| --- | --- | --- | --- |
+| 1 | 信封存在但非 `file`+`.md` 时，是「一律原文」还是「回到原文再判 §5」 | **一律原文**（T9 实现即此） | §11.3 是权威口径；`.ts`/`.json` 正文里的 `* `、`|`、`#` 极易被误判成 Markdown 结构，误渲染的代价高于收益 |
+| 2 | 真实 `read` 结果在正文末尾还有一行工具 chrome（`(End of file - total N lines)` / `(Showing lines A-B of N. Use offset=X to continue.)`），是否剥离 | **剥离**（Lead 在集成期补，`READ_FOOTER` 常量 + 只剥离「最后一个非空行」） | 实测证据：本机 `read` 一个 576 行文件的信封内确实带 `(Showing lines 1-4 of 576. Use offset=5 to continue.)`。它是工具 chrome 而非文件内容，渲染成 Markdown 会多出一段游离文本。只剥离「最后一个非空行」可保证正文中间同形文本不被误删（有单测固化） |
+| 3 | `unwrapFileResult` 对 `<type>image</type>` 信封是否也返回对象 | **返回**（type='image'，由调用方拒绝渲染） | 保留 `type` 供判定；解析与渲染决策分离，便于将来接图片卡 |
+| 4 | `loadPrimitives()` 为 null 时，`.md` 信封回退显示原信封还是 body | **显示原信封**（保持既有回退行为 + `markdownFallback` 提示） | 渲染器缺失属宿主异常路径，此时「所见即 wire 原文」比再做一次文本变换更可解释、更可诊断 |
+| 5 | **（T10 报告 F-V6，Lead 裁定）** `.md` 信封但 body 不含任何 Markdown 信号时，非渲染回退显示原信封还是 body | **显示 body**（已实现） | 这正是 F8 要消除的噪声：带 `<path>`/行号/`(End of file…)` 的原信封比文件内容更难读。非 `.md` 信封维持裁定 1 的「一律原文」；渲染器缺失路径维持裁定 4（有 `markdownFallback` 提示可解释） |
+
+### 11.5 实机复核第二轮（v0.5.0 构建，2026-10-17）
+
+| 项 | 实测（独立 profile `trace-verify` / 端口 19487 / Playwright / 真实会话） |
+| --- | --- |
+| **附件图路由** | 授权 GET → `200 image/png 146710 bytes`（与事件里 `bytes:146710` 完全一致）、`x-content-type-options: nosniff`、`cache-control: private, max-age=300`；同 id 换 session → `404 {"error":"attachment-not-found"}`；伪造 id → 404；POST → 405 |
+| **图片缩略图（U7 闭环）** | 真机 `<img data-testid="ttl-img-thumb" loading="lazy" src="/trace-inspect/api/attachment?sessionId=…&attachmentId=sha256%3Aad4189…">`，**naturalWidth 1440 × naturalHeight 860**（真解码，与事件 `width/height` 一致）、`complete:true`、CSS `max-width:100% / max-height:140px / border-radius:8px`，元数据 chip 仍在下方 |
+| **按需完整详情（路由层）** | `write` 步 `argsBytes=44493`、wire 预览被裁到 `32769`，`POST /tool-detail` 返回 **44493 且 `truncated:false`**；`seqs` 越界 400、POST 缺参 400 语义与契约一致 |
+| **F7** | 被压缩替换的步骤：**24/24** 行预览恢复为原始 `{"command":…}`（此前全为 `[dsh-jev-compaction] …`）；「参数」页恢复为真正的 JSON 树（不再「无法解析」回退）；「结果」页仍显示替换摘要 + `已被压缩替换（seq #N）` |
+| **F8 / AC11 / AC13** | `.md` 的 read 结果渲染出**真 `<table>`（11 行 × 5 列）**+ 代码围栏（2 个按钮）；**无** `<path>` 信封泄漏、**无**行号泄漏、**无** `(End of file - total N lines)` footer 残留（footer 剥离在真实数据上生效）；`.ts`/非 md 信封一律原文 |
+| **超宽表格** | 3 行 × 3 列、含 620 字符不可断行 token：表格宽 **423px ≤ 面板 444px**，`panelNoBlowout: true`；`.ttl-mdTableWrap` 的 `overflow-x: auto` 就位（`scrollWidth === clientWidth`，即运行时渲染器把表格约束在容器内，**未触发**横向滚动——属渲染器行为，不是本插件缺口） |
+| **放大浮层** | `fixed` / `z-index:60` / 面板 1080×760 `display:flex`；`role="dialog"` + `aria-modal="true"` + `aria-label="read_image · 步骤详情"`（在 `.ttl-zoomPanel`），portal 挂 `BODY`；大纲 39 行且恰好 1 行 `aria-current="true"`；`↑↓` 切换（31 → 32）；搜索 `read_image` → 39 → **4** 行，无匹配 → **0** 行 + 「无匹配」提示，清空 → 39；导出触发 `URL.createObjectURL`；`Esc` → 浮层移除且**焦点回到触发行按钮**（`data-testid="ttl-step"`），底层详情带保持打开 |
+| **AC17 暗色主题** | 深色（body `rgb(21,21,23)`）下实测对比度：行文本 **15.03:1**、详情带 **15.03:1**、JSON key **7.36:1**、JSON string 15.03:1、pill **9.2:1**、chip **6.75:1**；行度量仍为 24px/12px/18px |
+| **懒加载（GUI 点击）** | **未复现**：本会话唯一未被 compaction 替换的截断步骤是 `write seq #169`（argsBytes 44,493），它位于面板每轮渲染窗口之外（面板每轮约渲染 90 步；点「加载更早」可扩窗，但无法在 DOM 层稳定定位该行）；另一条截断结果 `read seq #65` 已被压缩替换（`contentTruncated` 归零）。**替代证据**：路由层完整返回 44,493（上表）+ 组件层 34 例（成功换源/失败保留预览 + 单次重试/inflight 去重） |
+| **AC20（GUI 挂载）** | 中等会话（977 事件 / 177 步）面板即开即用无长任务；大会话（145 轮 / 18,358 事件）的 GUI 挂载未测，改以数据层硬数字代替（§10.4） |

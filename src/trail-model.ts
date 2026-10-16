@@ -76,6 +76,13 @@ export interface TrailResult {
   replacedBy?: number
   /** Start of the replaced range (= surfaceOp.startSeq). */
   replacedFrom?: number
+  /**
+   * tool/result events merged into this content: every append segment adds 1,
+   * a surfaceOp replace resets it to 1 (the replace is itself one event), and
+   * the first attach is 1. `> 1` with no `replacedBy` means the events never
+   * declared a merge intent (the v1.0 "both surfaceOp fields lost" gap, §9.5).
+   */
+  mergedFrom?: number
 }
 
 export interface TrailStep {
@@ -462,6 +469,7 @@ function rebuildResult(step: TrailStep, content: StepContent): void {
     text,
     truncated,
     isError,
+    mergedFrom: ordered.length,
     ...(images.length > 0 ? { images } : {}),
     ...(isError && top !== undefined && top.errorName !== undefined ? { errorName: top.errorName } : {}),
     ...(isError && top !== undefined && top.errorCode !== undefined ? { errorCode: top.errorCode } : {}),
@@ -634,10 +642,10 @@ class ResultIndex {
     }
     if (surfaceOp !== undefined && surfaceOp.op === 'replace') {
       state.replaces.set(seq, { seq, from: surfaceOp.startSeq, to: surfaceOp.endSeq })
-      step.args = bits.text
-      step.argsPreview = compact(bits.text)
-      step.argsTruncated = bits.truncated
-      step.argsBytes = bits.text.length
+      // F7 (contract §11.2): a compact-replace rewrites the RESULT only. The
+      // tool arguments are the call's own fact (the compaction plugin never
+      // touches tool/call), so args / argsPreview / argsBytes / argsTruncated
+      // keep the original call verbatim — the row preview stays the command.
     }
     state.segments.set(seq, segmentOf(seq, bits))
     rebuildResult(step, state)

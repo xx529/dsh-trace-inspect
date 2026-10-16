@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.5.0] - 2026-10-17
+
+**完成 v1.0 之外的剩余项**：会话授权图片缩略图、按需完整内容、P2 放大阅读浮层、`mergedFrom` 可见提示，以及两处在独立 profile 实机复核中发现的正确性修复（F7/F8）。
+
+### Fixed（实机复核发现，均有真实浏览器证据）
+
+- **F7 `surfaceOp.replace` 曾把工具参数一起改写**：被压缩替换的步骤，行预览与「参数」页都会显示 `[dsh-jev-compaction] …`，原始命令完全看不到（而日志里 `tool/call.arguments` 完好）。现在 `replace` **只改写 `result`**，`args`/`argsPreview`/`argsBytes`/`argsTruncated` 保持调用原值；「结果」页仍显示替换后的摘要 + `已被压缩替换（seq #N）`。契约 §6.3.2/§9.3#7 已标记被 §11.2 覆盖。
+- **F8 `read` 结果的 XML 信封曾被整段当 Markdown 渲染**：DSH `read` 返回 `<path>…</path><type>file</type><content>1: …</content>`，整段喂给渲染器会退化成一段转义文本（`&lt;path&gt;…`），表格/代码围栏永远渲染不出来。新增 `unwrapFileResult()`：**仅** `type=file` 且路径为 `.md`/`.markdown`/`.mdx` 时解包出行号剥离后的正文再渲染（并剥离末尾工具 chrome `(End of file - total N lines)` / `(Showing lines A-B of N. …)`）；其它类型一律走等宽原文。
+
+### Added
+
+- **图片缩略图（会话授权）**：新增 `GET /trace-inspect/api/attachment?sessionId&attachmentId`，**只有**当该会话的事件流里存在引用该 `attachmentId` 的 `image` 块时才读取字节（防越权枚举），字节经 host `attachments.readImage()` 取得；授权结果按会话 LRU（≤16，TTL 10s）缓存。client 侧 `<img>` 懒加载缩略图，失败回退占位 chip + `imageLoadFailed`。**不再只是占位 chip。**
+- **按需完整内容**：新增 `POST /trace-inspect/api/tool-detail`（`{sessionId, seqs[]}` ≤ 32，不施 `ARGS_CAP`/`RESULT_CAP`，响应 ≤ 8 MiB 并按 UTF-8 码点边界二次截断）。client 在展开「参数/结果被截断」的步骤时自动拉取完整内容（inflight 去重、失败保留预览 + 重试），页脚显示 `已载入完整内容`。
+- **P2 放大阅读浮层**（`src/client/ZoomOverlay.tsx`，`React.createPortal(document.body)`）：入口 = 详情页脚 `⤢` 或步骤行聚焦时 `⌘⇧O`/`Ctrl+Shift+O`；左侧当前轮次步骤大纲、右侧复用 JSON 树 / Markdown / 原文三页签；`Esc` 关闭、`↑/↓` 切步、`⌘F` 搜索、`⌘C` 复制、`⤢` 导出 JSON；`role="dialog"` + `aria-modal`，关闭后焦点回到触发行。
+- **`mergedFrom` 可见提示**：`TrailResult.mergedFrom` 记录合并进该步内容的 `tool/result` 事件数（append 递增、replace 重置为 1）；当 `>1` 且没有 `replacedBy` 时，详情带显示 `该内容由 N 条结果合并，事件未声明 surfaceOp` —— 把 F4（surfaceOp 全链路丢失时的静默脏拼接）变成**可见**提示，而不是只在文档里记一笔。
+- 新增文案键 13 个、CSS 类 20 个（i18n 与主题 token 齐全）。
+
+### Changed
+
+- 版本 `0.4.0` → `0.5.0`；`lib/` 随源码一并提交（构建逐字节可复现，CI 用 `pnpm check:lib` 防漂移）。
+- client bundle 现在除 `react` / `@deepseek-ai/dsh-client-ui-primitives` 外还 `require("react-dom")`（浮层用 `React.createPortal`）。三者都是宿主共享种子（`build.mjs` 的 `external`），**没有新增 npm 运行时依赖**；产物白名单断言同步为三个。
+- `ToolDetailItem.seq` 的 JSDoc 明确为「调用方请求的那个 seq（call seq 或任一 result seq），`arguments`/`content` 始终是整步内容」（T10 F-V4）；契约 §3.3「与到达顺序无关」限定为「replace 的目标已登记时」（T10 F-V3，真实链路不可达）。
+
+### Verification
+
+- 本地门禁：`pnpm typecheck` / `pnpm test`（**452 例 / 17 文件**）/ `pnpm build` / `pnpm check:lib` 全绿（提交后）。
+- **独立 profile 实例的浏览器级复核**（`trace-verify`，端口 19487，Playwright + 真实会话）：U1–U7 的实机项已关闭，证据与原始数值在 `docs/verification-v1.md` §10 与契约 §11.5。
+- 两组**独立**对抗验收（`tests/verify-detail.spec.ts` 70 例 + `tests/verify-v050.spec.tsx` 56 例），共 12 条发现全部处置（修复或明确记录为已知局限/未证实项）。
+
 ## [0.4.0] - 2026-10-17
 
 **详情增强版（P0+P1+P1.5）**：在侧栏内就地展开任一步查看完整参数、工具结果（Markdown 渲染）、图片与错误；同时把包名切到本仓库的独立身份 `dsh-trace-inspect`。

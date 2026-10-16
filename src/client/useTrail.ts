@@ -20,6 +20,7 @@
  * pull makes zero seq progress (stalled / looping transport).
  */
 import * as React from 'react'
+import type { AttachmentRefLike } from './attachment-url'
 import type { SessionEventLike } from '../trail-model'
 import { TrailFolder, type TrailStats, type TrailTurn } from '../trail-model'
 
@@ -83,6 +84,68 @@ export function fetchTrailEvents(sessionId: string, afterSeq: number, base?: str
 
 const EMPTY: TrailTurn[] = []
 const EMPTY_STATS: TrailStats = { total: 0, failed: 0, tools: [] }
+
+// ── On-demand full tool detail (contract §10.3.4) ────────────────────────
+
+/** One full (unclipped) content block of a tool result. */
+export type ToolDetailBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; attachment: AttachmentRefLike }
+
+/**
+ * The full detail of one tool step, as returned by POST
+ * /trace-inspect/api/tool-detail. `arguments` / `content` are the values the
+ * wire preview clipped (ARGS_CAP / RESULT_CAP); `truncated` marks a field the
+ * host clipped AGAIN to keep the whole response ≤ 8 MiB.
+ */
+export interface ToolDetailItem {
+  seq: number
+  callId: string | null
+  name: string
+  arguments: string | null
+  argsBytes: number
+  content: ToolDetailBlock[] | null
+  contentBytes: number
+  isError: boolean
+  error: { name?: string; code?: string } | null
+  truncated?: boolean
+}
+
+export type ToolDetailResult =
+  | { ok: true; items: ToolDetailItem[] }
+  | { ok: false; reason: 'http' | 'network' | 'unavailable' }
+
+/**
+ * Fetch untruncated tool details for one session. Never throws:
+ *   - `network`     the request itself failed (offline, aborted, DNS, …)
+ *   - `http`        the route answered a non-2xx status
+ *   - `unavailable` no fetch/window to call, or a 2xx body without `items`
+ */
+export async function fetchToolDetail(
+  sessionId: string,
+  seqs: number[],
+  signal?: AbortSignal,
+): Promise<ToolDetailResult> {
+  if (seqs.length === 0) return { ok: true, items: [] }
+  if (typeof fetch !== 'function' || typeof window === 'undefined') return { ok: false, reason: 'unavailable' }
+  try {
+    const url = new URL('/trace-inspect/api/tool-detail', window.location.origin)
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ sessionId, seqs }),
+      ...(signal !== undefined ? { signal } : {}),
+    })
+    if (!response.ok) return { ok: false, reason: 'http' }
+    const data = (await response.json()) as { items?: unknown }
+    if (data === null || typeof data !== 'object' || !Array.isArray(data.items)) {
+      return { ok: false, reason: 'unavailable' }
+    }
+    return { ok: true, items: data.items as ToolDetailItem[] }
+  } catch {
+    return { ok: false, reason: 'network' }
+  }
+}
 
 export function useTrail(
   sessionId: string,
