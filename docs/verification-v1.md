@@ -318,3 +318,57 @@ lib: f2e7600fc742 lib/index.js · f40c1c7cca67 lib/client.js · 8b695bd6d5ac lib
 - 只改了 `tests/verify-detail.spec.ts`（A8 语义翻转 + 边界补充）与本文档（新增本节）。
 - 按 Lead 的明确指示做过一次 `lib/client.js` 漂移注入（`printf '\n' >>`）作为反向证据，随后 `pnpm build` 复原并校验哈希逐字节一致（`f40c1c7cca670745a4bd0354afcfa8b880e67817` 前后相同）；`lib/` 是构建产物，不属于任何人的源文件。
 - 未修改 `docs/detail-contract-v1.md`、`CHANGELOG.md`、`scripts/check-lib.mjs`、`src/wire.ts` 等 Lead 的文件；N1–N4 只报告不修。
+
+## 9. 提交与安装后实机复核（Lead，2026-10-17）
+
+本节是 Lead 在**提交 + 推送 + 装进当前 profile** 之后补做的端到端复核，与上面 T5 的桌面验证互补（T5 验的是源码行为，这里验的是"真的装上了、真的在真实会话上跑出正确投影"）。
+
+### 9.1 提交与推送
+
+| 项 | 值 |
+| --- | --- |
+| 提交 | `8692d78 feat(detail): inspect any tool step in place — full params, Markdown results, images, errors (v0.4.0)`（43 个路径，含 `lib/` 4 个构建产物） |
+| 分支 / 标签 | `origin/main` = 8692d78；`v0.4.0` 注解标签已推送 |
+| 漂移门禁 | 提交前 `pnpm check:lib` **非 0**（`lib/ is not tracked`，证明不再是假绿）；提交后 `[check:lib] 4 committed lib/ files match a fresh build` → 0 |
+| 本地门禁 | `pnpm typecheck` 0 / `pnpm test` **272 passed (11 files)** / `pnpm build` + `bundle contract check ok` |
+
+### 9.2 装进当前 profile（desktop，DSH 0.2.0-rc.2）
+
+用 App 内置 CLI（`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh --version` → `0.2.0-rc.2`；**不是** PATH 里那个 0.1.2-alpha.2）：
+
+```
+$ ".../runtime/cli/bin/dsh" plugin --profile desktop add github:xx529/dsh-trace-inspect
++ dsh-trace-inspect github:xx529/dsh-trace-inspect
+Packages: +1 -32   Done in 7.5s
+```
+
+| 证据 | 值 |
+| --- | --- |
+| profile 依赖 | `dsh-trace-inspect: github:xx529/dsh-trace-inspect` |
+| profile bundles | 末尾新增 `dsh-trace-inspect` |
+| 安装的包 | `dsh-trace-inspect@0.4.0`，`main: lib/index.js`，`lib/` 来自 git 树（**未执行任何构建脚本**，验证了「提交 lib/」这一发行决策） |
+| cordis 加载 | `plugin_manager list_plugins` → `include:trace-inspect` / `moduleName: dsh-trace-inspect` / `enabled: true` / `fiberPhase: "active"` |
+| 产物一致性 | 安装包 `lib/client.js` 的 sha256 `cedb5a7f…` 与仓库提交产物**逐字节相同**（保证装的就是验过的） |
+
+### 9.3 真实会话上的主机路由端到端（装好之后）
+
+对当前会话（`sessionId = 79345631-22b6-4a5d-b01d-a946804ef2df`，工作区即本仓库）直接打新路由：
+
+```
+$ curl -s -X POST http://127.0.0.1:19387/trace-inspect/api/events \
+    -H 'content-type: application/json' -d '{"sessionId":"…","afterSeq":0}'
+http=200 bytes=755817     → 753 events, hasMore=false（755 KB < 2 MiB 页预算）
+```
+
+| 观察 | 实测值 | 意义 |
+| --- | --- | --- |
+| `tool/call` 带 `argsBytes`/`argsTruncated` | 144 / 167 条；含 `turn`/`step` | 新契约字段真的在线上响应里 |
+| **被截断的参数** | `write`：`argsBytes=44493`，下发 `len(arguments)=32769`（**旧版只给 512**） | 用户最初痛点在真实数据上被修掉 |
+| `tool/result` 带 `content` | 240 / 240（旧版 **0**） | 结果不再被整体丢弃 |
+| 结果被裁剪 | 1 条（`contentTruncated`），最大 `contentBytes=44078` | RESULT_CAP 生效 |
+| `surfaceOp` 透传 | 362 条：`append` 266、`replace` **96** | 真实压缩替换链路已被真实数据覆盖（不只是构造用例） |
+| 图片块 | 0 | 本会话无图片结果，图片路径仍只有单测证据（U7/§9.5） |
+
+### 9.4 仍未在实机验证的（与 §5 一致，不重复算通过）
+
+客户端 tab 的**可视**验证：client 半在页面加载时注册，插件是本次会话运行期间才装的，所以需要用户在 GUI 里硬刷新（Cmd/Ctrl+Shift+R）后打开 better-sidebar 的 **+ 菜单 → 轮次轨迹** 才能看到新的展开交互；本报告没有做浏览器内的像素/交互复核（U1–U5 仍然成立）。
