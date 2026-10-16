@@ -740,3 +740,61 @@ v0.4.0 的 `.ttl-stepWrap` 子节点 = `button.ttl-row`（内含 `ttl-caret` / `
 | `CHANGELOG.md` | `64ee40b1a597ea3bd5afceca8f6bef135d8f53dc5472e791197330f35183896f` |
 
 > §12 的结论仅对本表指纹对应的代码成立；`pnpm build` 之后再改 `src/` 会使 `lib/*` 指纹变化，需重新核对。
+
+## 13. v0.5.0 发布、CI 与当前 profile 安装复核（Lead，2026-10-17）
+
+### 13.1 提交与推送
+
+| 项 | 值 |
+| --- | --- |
+| 提交 | `99ea52b feat(v0.5.0): image thumbnails, on-demand full detail, zoomed reading view, F7/F8 fixes`（31 个路径，7,799 insertions / 301 deletions，含 `lib/` 4 个构建产物） |
+| 分支 / 标签 | `origin/main` = `99ea52b`；注解标签 `v0.5.0` → `99ea52b` |
+| 推送过程 | 第一次 `git push origin main` 遇到一次瞬时错误 `Error in the HTTP2 framing layer`（标签推送成功、main 未推）；重试后 `947b307..99ea52b main -> main` 成功 |
+
+### 13.2 提交后门禁（本地）
+
+```
+pnpm typecheck                → 0
+pnpm test                     → 452 passed (17 files)
+pnpm build                    → build ok + bundle contract check ok
+pnpm check:lib                → [check:lib] 4 committed lib/ files match a fresh build   (exit 0)
+```
+
+> F-V2（T10 提出）在提交前必然非 0，提交后为 0 —— 与 `scripts/check-lib.mjs` 的语义一致（该门禁检查的是「已提交且与构建一致」）。
+
+### 13.3 GitHub Actions（AC19 的 CI 部分）
+
+| 项 | 值 |
+| --- | --- |
+| 现象 | v0.4.0 与 v0.5.0 两次 `git push origin main` **都没有**产生任何 run（`gh api .../actions/runs → total_count 0`），但 `gh workflow list` 显示 CI 处于 active、`.github/workflows/ci.yml` 已在 main 上且内容与本地一致 |
+| 处置 | 给 `ci.yml` 增加 `workflow_dispatch` 并随 v0.5.0 提交；`gh workflow run CI --ref main` |
+| 结果 | run **38981619283** → `✓ completed success`（30s），全部步骤真实执行并成功：`Install dependencies` → `Typecheck` → `Test` → `Build` → **`Verify lib/ is up to date`** |
+| 证据 | `gh run view --job=117243564739` 步骤清单全 `✓` |
+| 仍未解释 | 为何 push 事件不触发 run（Actions 对 push 的触发在 GitHub 侧未生效）；由于手动 dispatch 可跑且步骤全绿，本轮按「CI 可跑且绿」记录，并把 `workflow_dispatch` 留在工作流里以便重跑 |
+
+### 13.4 当前 profile（desktop）安装复核
+
+```
+$ dsh plugin --profile desktop remove dsh-trace-inspect
+$ dsh plugin --profile desktop add github:xx529/dsh-trace-inspect     # → Packages: +1 -32, Done in 7.8s
+```
+
+| 检查 | 实测 |
+| --- | --- |
+| 安装版本 | `dsh-trace-inspect@0.5.0`（`node_modules/dsh-trace-inspect/package.json`），`dsh-better-sidebar@0.26.1` 未受影响 |
+| 产物一致性 | 安装包的 `lib/index.js` = `ce5bab2e…`、`lib/client.js` = `c7f2e47c…`，与本仓库提交的构建产物 **sha256 逐字节相同** |
+| 新功能标记 | 安装包 client 含 `ttl-zoom`×45；host 含 `TOOL_DETAIL_PATH` / `ATTACHMENT_PATH` 常量与 `path: …_PATH` 的注册调用 |
+| cordis 条目 | `plugin_manager list_plugins` → `include:trace-inspect` / `moduleName: dsh-trace-inspect` / `enabled: true` / `fiberPhase: "active"` |
+| profile 清单 | `dependencies.dsh-trace-inspect = github:xx529/dsh-trace-inspect`；`dsh.profile.bundles` 末尾含 `dsh-trace-inspect` |
+| 运行中实例的路由 | `POST /trace-inspect/api/events` → **200**（851,501 bytes）；但 `POST /trace-inspect/api/tool-detail` → **405**、`GET /trace-inspect/api/attachment` → **404** ⇒ **运行中的 desktop host 仍是 v0.4.0 的模块** |
+
+**结论与用户需要做的两步**（README「重启与启用」已写）：
+
+1. **完整重启 DSH**（host 改动不会热重载）→ 之后 `/tool-detail`、`/attachment` 两条新路由才会在桌面版生效；
+2. **硬刷新页面**（Cmd/Ctrl+Shift+R）→ client 半（缩略图 / 按需完整内容 / 放大浮层）才会注册。
+
+> 本轮没有替用户重启桌面 App（会中断当前会话与 GUI）；v0.5.0 的**功能行为**已在独立 profile 实例上完成实机验证（§10、§11.5），桌面 profile 的**安装正确性**由「产物逐字节相同 + cordis active + 路由注册在产物中」三项证据闭环。
+
+### 13.5 与 §12.6 指纹的关系
+
+T10 的 §12.6 记的是 **07:12 时点**的指纹。其后 Lead 又改了两处并重建：`src/client/markdown-result.tsx`（§11.4#5 的 F-V6 修复，06:38）与 `src/index.ts`（`ToolDetailItem.seq` JSDoc，06:53，注释不影响产物），最终 `lib/client.js` 由 `e6b82bc4…` 变为 `c7f2e47c…`、`lib/index.js` 保持 `ce5bab2e…`。**§12 的结论以「改后复验」为准**：T10 已按新 revision 重跑 56/56 与全量 452/452，并平移校正了行号引用；本轮最终提交后的门禁再次全绿（§13.2）。改 `src/` 后必须重跑 `pnpm build && pnpm test` 并按新指纹复核。
