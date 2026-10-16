@@ -1,16 +1,22 @@
 /**
- * trail-tab.spec.tsx — panel rendering coverage (≈7 cases): empty state,
- * turn rendering + counts, chips with counts and failed filter, follow
- * toggle, error + retry, tool-group expansion, preview pane.
+ * trail-tab.spec.tsx — panel rendering coverage: empty state, turn rendering +
+ * counts, chips with counts and failed filter, follow toggle, error + retry,
+ * tool-group expansion, preview pane, plus the v0.4.0 inline step detail
+ * (AC8 click-to-expand vs ↗ locate, AC12 remembered render/raw view, AC14
+ * error name/code + raw text, AC18 arrow-key disclosure, filter pruning).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as React from 'react'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { TrailTab } from '../src/client/TrailTab'
 import { MAX_PULL_PAGES } from '../src/client/useTrail'
+import { setPrimitivesForTest, type PrimitivesModule } from '../src/client/ui-primitives'
 import type { SessionEventLike } from '../src/trail-model'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  setPrimitivesForTest(undefined)
+})
 
 interface Ev {
   type: string
@@ -33,6 +39,10 @@ const toolCall = (seq: number, name: string, args = '', callId = `c${seq}`): Ev 
   ...(args.length > 0 ? { arguments: args } : {}),
   callId,
 })
+const toolResult = (seq: number, callId: string, text: string): Ev => ev('tool/result', seq, {
+  callId,
+  content: [{ type: 'text', text }],
+})
 
 const oneTurn = (): Ev[] => [
   user(1, 'deploy the service'),
@@ -47,10 +57,43 @@ const twoTurns = (): Ev[] => [
   user(6, 'rollback'),
   turnStart(7, 2),
   toolCall(8, 'bash', 'kubectl rollout undo'),
-  ev('tool/result', 9, { callId: 'c8', error: { name: 'CommandError', code: 'E1' } }),
+  ev('tool/result', 9, {
+    callId: 'c8',
+    error: { name: 'CommandError', code: 'E1' },
+    content: [{ type: 'text', text: 'rollback failed: E1' }],
+  }),
   assistant(10, 'rollback failed'),
   turnEnd(11, 2),
 ]
+
+/** One `read` step whose result is prose-shaped Markdown (rendered by default). */
+const readTurn = (): Ev[] => [
+  user(1, 'read the doc'),
+  turnStart(2, 1),
+  toolCall(3, 'read', '{"path":"README.md"}'),
+  toolResult(4, 'c3', '# Title\n\n- item'),
+  turnEnd(5, 1),
+]
+
+/** Three tool steps so a filter can hide an expanded one. */
+const threeSteps = (): Ev[] => [
+  user(1, 'run tests'),
+  turnStart(2, 1),
+  toolCall(3, 'bash', 'npm test'),
+  toolCall(4, 'bash', 'npm lint'),
+  toolCall(5, 'read', 'package.json'),
+  toolResult(6, 'c5', '# pkg\n\n- name'),
+  assistant(7, 'all green'),
+  turnEnd(8, 1),
+]
+
+function fakePrimitives(): PrimitivesModule {
+  return {
+    MarkdownText: (props) => <div data-testid="fake-md">{props.text}</div>,
+    MarkdownDelegateProvider: (props) => <div>{props.children}</div>,
+  }
+}
+
 
 const renderTab = (events: SessionEventLike[], failFirst = false) => {
   let calls = 0
@@ -64,7 +107,7 @@ const renderTab = (events: SessionEventLike[], failFirst = false) => {
       ctx={{ get: () => undefined }}
       scope={{ sessionId: 's1' }}
       visible
-      tab={{ id: 'turn-outline' }}
+      tab={{ id: 'trace-inspect' }}
       fetchEventsOverride={fetchEventsOverride}
     />,
   )
@@ -174,12 +217,143 @@ describe('TrailTab', () => {
     expect(screen.getAllByTestId('ttl-item-output').length).toBeGreaterThan(0)
   })
 
-  it('clicking a step without a sessions service reports a locate failure', async () => {
+  it('clicking a step row expands its inline detail band instead of jumping (AC8)', async () => {
     renderTab(oneTurn())
     const step = await screen.findByTestId('ttl-step')
+    expect(step.getAttribute('aria-expanded')).toBe('false')
+    // Collapsed row: the wrap holds the row + the locate affordance only.
+    const wrap = step.parentElement as HTMLElement
+    expect(wrap.getAttribute('data-testid')).toBe('ttl-step-wrap')
+    expect(wrap.querySelector('[data-testid="ttl-detail"]')).toBeNull()
     fireEvent.click(step)
+    const detail = await screen.findByTestId('ttl-detail')
+    expect(step.getAttribute('aria-expanded')).toBe('true')
+    // aria-controls really points at the mounted band.
+    expect(document.getElementById(step.getAttribute('aria-controls') as string)).toBe(detail)
+    expect(detail.getAttribute('role')).toBe('region')
+    expect(detail.getAttribute('aria-label')).toBe('bash details')
+    // The row click performs NO locate: no status bar appears.
+    expect(screen.queryByTestId('ttl-statusbar')).toBeNull()
+    // Clicking the row again collapses it.
+    fireEvent.click(step)
+    expect(screen.queryByTestId('ttl-detail')).toBeNull()
+  })
+
+  it('the row-end ↗ still locates the step in the conversation (AC8)', async () => {
+    renderTab(oneTurn())
+    const jump = await screen.findByTestId('ttl-step-jump')
+    expect(screen.queryByTestId('ttl-detail')).toBeNull()
+    fireEvent.click(jump)
     const bar = await screen.findByTestId('ttl-statusbar')
     expect(bar.textContent).toContain('Could not locate that message')
+    // Locating never opens the band.
+    expect(screen.queryByTestId('ttl-detail')).toBeNull()
+  })
+
+  it('plain click keeps one band open; Alt+click opens several (AC8)', async () => {
+    renderTab(threeSteps())
+    const steps = await screen.findAllByTestId('ttl-step')
+    expect(steps.length).toBe(3)
+    fireEvent.click(steps[0])
+    expect(await screen.findAllByTestId('ttl-detail')).toHaveLength(1)
+    fireEvent.click(steps[1])
+    expect(screen.getAllByTestId('ttl-detail')).toHaveLength(1)
+    expect(screen.getAllByTestId('ttl-step-wrap')[1].getAttribute('data-open')).toBe('true')
+    fireEvent.click(steps[0], { altKey: true })
+    expect(screen.getAllByTestId('ttl-detail')).toHaveLength(2)
+  })
+
+  it('ArrowRight expands and ArrowLeft collapses the step (AC18)', async () => {
+    renderTab(oneTurn())
+    const step = await screen.findByTestId('ttl-step')
+    fireEvent.keyDown(step, { key: 'ArrowRight' })
+    expect(await screen.findByTestId('ttl-detail')).toBeTruthy()
+    expect(step.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.keyDown(step, { key: 'ArrowLeft' })
+    expect(screen.queryByTestId('ttl-detail')).toBeNull()
+    expect(step.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('remembers the rendered/raw view per step across collapse (AC12)', async () => {
+    setPrimitivesForTest(fakePrimitives())
+    renderTab(readTurn())
+    const step = await screen.findByTestId('ttl-step')
+    fireEvent.click(step)
+    // read → rendered by default.
+    expect(await screen.findByTestId('ttl-md')).toBeTruthy()
+    const toggle = screen.getByTestId('ttl-view-toggle')
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(toggle)
+    expect(screen.queryByTestId('ttl-md')).toBeNull()
+    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('# Title')
+    // Collapse + reopen: the switched view is remembered, not re-seeded.
+    fireEvent.click(step)
+    expect(screen.queryByTestId('ttl-detail')).toBeNull()
+    fireEvent.click(step)
+    await waitFor(() => { expect(screen.getByTestId('ttl-view-toggle').getAttribute('aria-pressed')).toBe('false') })
+    expect(screen.queryByTestId('ttl-md')).toBeNull()
+    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('# Title')
+  })
+
+  it('an error step shows errorName · errorCode plus the raw text (AC14)', async () => {
+    renderTab(twoTurns())
+    await screen.findByText('2 turns')
+    const steps = await screen.findAllByTestId('ttl-step')
+    const errorStep = steps.find((el) => el.getAttribute('data-step-kind') === 'error') as HTMLElement
+    expect(errorStep).toBeTruthy()
+    // The error row leads with the red dot.
+    expect(errorStep.querySelector('.ttl-dot-red')).toBeTruthy()
+    fireEvent.click(errorStep)
+    const block = await screen.findByTestId('ttl-error-block')
+    expect(screen.getByTestId('ttl-error-name').textContent).toBe('CommandError · E1')
+    expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
+  })
+
+  it('an orphan result renders a placeholder row with the orphan hint', async () => {
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      toolResult(3, 'zz-unknown', 'orphan output'),
+      turnEnd(4, 1),
+    ])
+    const step = await screen.findByTestId('ttl-step')
+    expect(step.textContent).toContain('tool')
+    fireEvent.click(step)
+    expect(await screen.findByTestId('ttl-detail-orphan')).toBeTruthy()
+    expect(screen.getByTestId('ttl-detail-pill')).toBeTruthy()
+  })
+
+  it('the params tab renders the JSON tree, else raw text with the hint', async () => {
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"cmd":"ls"}', 'c3'),
+      toolCall(4, 'bash', 'not json at all', 'c4'),
+      turnEnd(5, 1),
+    ])
+    const steps = await screen.findAllByTestId('ttl-step')
+    fireEvent.click(steps[0])
+    // A step without a result opens on 参数 by default.
+    expect(screen.getByTestId('ttl-dtab-params').getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
+    expect(await screen.findByTestId('ttl-json')).toBeTruthy()
+    // Unparseable arguments degrade to the raw text plus the hint.
+    fireEvent.click(steps[1])
+    expect(screen.getAllByTestId('ttl-detail')).toHaveLength(1)
+    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
+    expect(await screen.findByTestId('ttl-detail-unparsable')).toBeTruthy()
+    expect(screen.getByTestId('ttl-md-raw').textContent).toBe('not json at all')
+  })
+
+  it('a filter that hides an expanded step drops its detail band', async () => {
+    renderTab(threeSteps())
+    const steps = await screen.findAllByTestId('ttl-step')
+    const readStep = steps.find((el) => el.textContent?.includes('read')) as HTMLElement
+    expect(readStep).toBeTruthy()
+    fireEvent.click(readStep)
+    expect(await screen.findAllByTestId('ttl-detail')).toHaveLength(1)
+    fireEvent.click(screen.getByTestId('ttl-chip-bash'))
+    await waitFor(() => { expect(screen.queryByTestId('ttl-detail')).toBeNull() })
   })
 
   it('collapsing the latest turn does NOT expand the earlier turns', async () => {
@@ -219,7 +393,7 @@ describe('TrailTab', () => {
         ctx={{ get: () => undefined }}
         scope={{ sessionId: 's1' }}
         visible
-        tab={{ id: 'turn-outline' }}
+        tab={{ id: 'trace-inspect' }}
         fetchEventsOverride={fetchEventsOverride}
       />,
     )
@@ -244,7 +418,7 @@ describe('TrailTab', () => {
         ctx={{ get: () => undefined }}
         scope={{ sessionId: 's1' }}
         visible
-        tab={{ id: 'turn-outline' }}
+        tab={{ id: 'trace-inspect' }}
         fetchEventsOverride={fetchEventsOverride}
       />,
     )
@@ -270,7 +444,7 @@ describe('TrailTab', () => {
         ctx={{ get: () => undefined }}
         scope={{ sessionId: 's1' }}
         visible
-        tab={{ id: 'turn-outline' }}
+        tab={{ id: 'trace-inspect' }}
         fetchEventsOverride={fetchEventsOverride}
       />,
     )

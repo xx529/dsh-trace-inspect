@@ -1,5 +1,5 @@
 /**
- * dsh-turn-outline build: host half (plain ESM, cordis {inject, apply}) and
+ * dsh-trace-inspect build: host half (plain ESM, cordis {inject, apply}) and
  * client half (a `window.__ModuleLoader__.load({id, factory})` lazy-CJS
  * bundle, mirroring the format every DSH web client plugin ships).
  *
@@ -40,7 +40,7 @@ await build({
 
 // ── Client half: __ModuleLoader__ lazy-CJS bundle ────────────────────────
 const banner = `window.__ModuleLoader__.load({
-  id: 'dsh-turn-outline',
+  id: 'dsh-trace-inspect',
   factory: (require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -61,7 +61,10 @@ await build({
   jsx: 'transform',
   jsxFactory: 'React.createElement',
   jsxFragment: 'React.Fragment',
-  external: ['react', 'react-dom'],
+  // ui-primitives is a host-injected shared package: keep it a runtime
+  // `require` so the guarded loader in src/client/ui-primitives.ts can
+  // degrade to raw text if the host ever stops providing it.
+  external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'],
   banner: { js: banner },
   footer: { js: footer },
 })
@@ -72,11 +75,20 @@ console.log('build ok → lib/index.js + lib/client.js')
 const client = readFileSync(resolve(outdir, 'client.js'), 'utf8')
 const failures = []
 if (!client.includes('window.__ModuleLoader__.load(')) failures.push('missing __ModuleLoader__.load wrapper')
-if (!client.includes("id: 'dsh-turn-outline'")) failures.push('missing bundle id registration')
+if (!client.includes("id: 'dsh-trace-inspect'")) failures.push('missing bundle id registration')
 if (!client.includes('require("react")')) failures.push('missing react external require')
+// The guarded ui-primitives loader only has to survive into the bundle when
+// the Markdown detail view is actually wired in; checking it unconditionally
+// would fail intermediate (UI-disabled) builds for no reason. The probe uses
+// the MarkdownResult test id (a literal in markdown-result.tsx, absent from
+// the stylesheet), not a `ttl-md` CSS class name.
+if (client.includes('ttl-md-raw') && !client.includes('@deepseek-ai/dsh-client-ui-primitives')) {
+  failures.push('markdown detail view is bundled but the guarded ui-primitives require is missing')
+}
 if (!client.includes('exports.apply') && !client.includes('apply:')) failures.push('missing apply export')
 const host = readFileSync(resolve(outdir, 'index.js'), 'utf8')
 if (!host.includes('webServer') || !host.includes('sessionQuery')) failures.push('host inject missing')
+if (!host.includes('/trace-inspect/api/events')) failures.push('host route missing')
 if (failures.length > 0) {
   console.error('bundle contract check FAILED:\n  - ' + failures.join('\n  - '))
   process.exit(1)

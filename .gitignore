@@ -1,5 +1,13 @@
 node_modules/
-lib/
 *.tgz
 .DS_Store
 dist/
+
+# `lib/` is intentionally COMMITTED: the documented install path is
+# `dsh plugin --profile desktop add github:xx529/dsh-trace-inspect`, and a
+# git-sourced plugin gets no build step unless it ships a `prepare` script
+# (which pnpm may skip under its dependency build-script gate). Shipping the
+# built halves keeps that install path working offline and deterministic.
+# CI re-builds and runs `pnpm check:lib` (scripts/check-lib.mjs), which asserts
+# lib/ is tracked AND identical to the fresh build — so the committed output
+# cannot drift from src/.

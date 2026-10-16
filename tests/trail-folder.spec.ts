@@ -141,6 +141,32 @@ describe('TrailFolder ≡ foldTurns (batch reference)', () => {
       toolError(5, 'c3'), assistant(6, 'stray'),
     ])
   })
+
+  it('detail fixtures: successful results, merged appends and a replace stay batch-equal', () => {
+    const result = (seq: number, callId: string, value: string): Ev => ev('tool/result', seq, {
+      callId,
+      content: [{ type: 'text', text: value }],
+      message: { source: { callId }, isError: false },
+    })
+    assertIncrementalEqualsBatch([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      result(4, 'c3', 'OLD'),
+      result(5, 'c3', ' more'),
+      turnEnd(6, 1),
+      user(7, 'y'), turnStart(8, 2),
+      toolCall(9, 'read', 'a.ts', 'c9'),
+      result(10, 'c9', 'file'),
+      // A compact-replace of turn 1's result, while turn 2 is open.
+      ev('tool/result', 11, {
+        callId: 'c3',
+        content: [{ type: 'text', text: 'PRUNED' }],
+        surfaceOp: { op: 'replace', startSeq: 4, endSeq: 4 },
+        sourceEventSeqs: [4],
+      }),
+      turnEnd(12, 2),
+    ])
+  })
 })
 
 describe('TrailFolder identity reuse', () => {

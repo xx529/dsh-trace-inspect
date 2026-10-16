@@ -1,9 +1,10 @@
 /**
- * Host half of dsh-turn-outline: one incremental, read-only route that serves
+ * Host half of dsh-trace-inspect: one incremental, read-only route that serves
  * session events for the trail panel, behind a browser-trust fence.
  *
- *   POST /turn-outline/api/events  { sessionId, afterSeq }
- *     → 200 { events, hasMore }   (one PAGE_SIZE page, ascending seq)
+ *   POST /trace-inspect/api/events  { sessionId, afterSeq }
+ *     → 200 { events, hasMore }   (one PAGE_SIZE page, ascending seq,
+ *                                  truncated early at PAGE_BUDGET_BYTES)
  *     → 400 bad request / missing sessionId
  *     → 403 fence rejection
  *     → 404 session-not-found
@@ -42,7 +43,7 @@ import type {
   SessionEventLike,
   TrailEventsRequest,
 } from './context-types'
-import { MAX_BODY_BYTES, PAGE_SIZE, projectEvent } from './wire'
+import { MAX_BODY_BYTES, PAGE_BUDGET_BYTES, PAGE_SIZE, projectEvent } from './wire'
 
 export const inject = ['webServer', 'sessionQuery', 'sessions']
 
@@ -56,7 +57,7 @@ interface CacheEntry {
 }
 const trailCache = new Map<string, CacheEntry>()
 const CACHE_MAX_ENTRIES = 64
-const CACHE_MAX_BYTES = 32 * 1024 * 1024
+const CACHE_MAX_BYTES = 64 * 1024 * 1024
 let cacheBytes = 0
 
 /**
@@ -200,7 +201,15 @@ function liveSessionOf(ctx: HostCtx, sessionId: string): LiveSessionLike | undef
   }
 }
 
-/** Slice one ascending page after afterSeq; `project` trims the wire fields. */
+/**
+ * Slice one ascending page after afterSeq; `project` trims the wire fields.
+ *
+ * A page also stops early at PAGE_BUDGET_BYTES so one hot session cannot make
+ * a single response arbitrarily large. The first event of a page is always
+ * delivered (even when it alone exceeds the budget) — otherwise a payload
+ * larger than the budget would stall the client's `hasMore` drain forever.
+ * `hasMore` keeps its meaning: the last delivered event is not the last one.
+ */
 function respondPage(
   res: HttpResponseLike,
   events: ReadonlyArray<SessionEventLike>,
@@ -208,10 +217,18 @@ function respondPage(
   project: boolean,
 ): void {
   const lo = upperBound(events, afterSeq)
-  const end = Math.min(events.length, lo + PAGE_SIZE)
+  const hardEnd = Math.min(events.length, lo + PAGE_SIZE)
   const tail: SessionEventLike[] = []
-  for (let i = lo; i < end; i += 1) tail.push(project ? projectEvent(events[i]) : events[i])
-  sendJson(res, 200, { events: tail, hasMore: end < events.length })
+  let bytes = 0
+  let i = lo
+  for (; i < hardEnd; i += 1) {
+    const projected = project ? projectEvent(events[i]) : events[i]
+    const size = Buffer.byteLength(JSON.stringify(projected))
+    if (tail.length > 0 && bytes + size > PAGE_BUDGET_BYTES) break
+    bytes += size
+    tail.push(projected)
+  }
+  sendJson(res, 200, { events: tail, hasMore: i < events.length })
 }
 
 /** Insert/refresh one cache entry, then evict past the entry/byte budgets. */
@@ -241,7 +258,7 @@ function cacheStore(
 export function apply(ctx: HostCtx): void {
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
-    path: '/turn-outline/api/events',
+    path: '/trace-inspect/api/events',
     handler: async (rawReq, rawRes) => {
       const req = rawReq as HttpRequestLike
       const res = rawRes as HttpResponseLike

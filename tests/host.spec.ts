@@ -4,7 +4,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { apply, isTrustedApiRequest, PROBE_TTL_MS } from '../src/index'
-import { PAGE_SIZE } from '../src/wire'
+import { PAGE_BUDGET_BYTES, PAGE_SIZE } from '../src/wire'
 import type { HostCtx, HttpHeadersLike, HttpRequestLike, HttpResponseLike, SessionEventLike } from '../src/context-types'
 
 const events = (): SessionEventLike[] => [
@@ -46,7 +46,7 @@ function fakeReq(overrides: ReqOverrides = {}): HttpRequestLike {
   return {
     method: overrides.method ?? 'POST',
     headers: overrides.headers ?? { host: '127.0.0.1:43120' },
-    url: '/turn-outline/api/events',
+    url: '/trace-inspect/api/events',
     async *[Symbol.asyncIterator]() {
       yield Buffer.from(body, 'utf8')
     },
@@ -238,7 +238,7 @@ describe('live fast path', () => {
 })
 
 describe('wire projection', () => {
-  it('drops tool/result content, keeps error fields and call ids', async () => {
+  it('reshapes tool/result content into ordered blocks, keeps error fields and call ids', async () => {
     const events: SessionEventLike[] = [
       {
         type: 'tool/result',
@@ -258,13 +258,20 @@ describe('wire projection', () => {
     expect(sent.seq).toBe(7)
     expect(sent.data?.error).toEqual({ name: 'TimeoutError', code: 'ETIMEDOUT' })
     expect(sent.data?.callId).toBe('c7')
-    expect(JSON.stringify(sent.data?.message ?? {})).not.toContain('xxxx')
+    // The bulky payload is re-shaped (clipped to RESULT_CAP); the raw
+    // message.content array is never forwarded verbatim.
+    const blocks = sent.data?.content as Array<{ type: string; text: string }>
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].text.length).toBe(32769)
+    expect(sent.data?.contentBytes).toBe(50_000)
+    expect(sent.data?.contentTruncated).toBe(true)
+    expect((sent.data?.message as { content?: unknown } | undefined)?.content).toBeUndefined()
   })
 
-  it('clips text and arguments to the wire caps', async () => {
+  it('clips text to TEXT_CAP and arguments to ARGS_CAP', async () => {
     const events: SessionEventLike[] = [
       { type: 'user/message', seq: 1, data: { content: 'u'.repeat(9000) } },
-      { type: 'tool/call', seq: 2, data: { name: 'read', arguments: 'a'.repeat(9000), callId: 'c2' } },
+      { type: 'tool/call', seq: 2, data: { name: 'read', arguments: 'a'.repeat(40_000), callId: 'c2' } },
     ]
     const ctx = fakeCtx()
     ;(ctx as HostCtx & { sessions?: unknown }).sessions = { get: () => ({ events }) }
@@ -272,7 +279,9 @@ describe('wire projection', () => {
     const { body } = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 's', afterSeq: 0 }) }))
     const eventsOut = (body as { events: SessionEventLike[] }).events
     expect((eventsOut[0].data?.content as string).length).toBeLessThanOrEqual(2049)
-    expect((eventsOut[1].data?.arguments as string).length).toBeLessThanOrEqual(513)
+    expect((eventsOut[1].data?.arguments as string).length).toBe(32769)
+    expect(eventsOut[1].data?.argsBytes).toBe(40_000)
+    expect(eventsOut[1].data?.argsTruncated).toBe(true)
   })
 
   it('keeps only text blocks in projected content arrays', async () => {
@@ -319,6 +328,76 @@ describe('pagination', () => {
   })
 })
 
+describe('page byte budget (AC4)', () => {
+  /** A tool/result whose projected text block is RESULT_CAP characters. */
+  const heavyEvent = (seq: number): SessionEventLike => ({
+    type: 'tool/result',
+    seq,
+    data: {
+      callId: `c${seq}`,
+      message: { content: [{ type: 'text', text: 'x'.repeat(32768) }], source: { callId: `c${seq}` } },
+    },
+  })
+
+  const liveCtx = (events: SessionEventLike[]): HostCtx & { captured: Handler[] } => {
+    const ctx = fakeCtx()
+    ;(ctx as HostCtx & { sessions?: unknown }).sessions = { get: () => ({ events }) }
+    return ctx
+  }
+
+  it('cuts a page at PAGE_BUDGET_BYTES, keeps at least one event and reports hasMore', async () => {
+    const events = Array.from({ length: 200 }, (_, i) => heavyEvent(i + 1))
+    const ctx = liveCtx(events)
+    apply(ctx)
+    const first = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'budget-1', afterSeq: 0 }) }))
+    const firstBody = first.body as { events: SessionEventLike[]; hasMore: boolean }
+    // The budget bites long before PAGE_SIZE...
+    expect(firstBody.events.length).toBeGreaterThanOrEqual(1)
+    expect(firstBody.events.length).toBeLessThan(200)
+    // ...and the drain is advertised correctly.
+    expect(firstBody.hasMore).toBe(true)
+    // Every event but the last one fit inside the budget (the loop always
+    // admits at least one event per page).
+    const settled = Buffer.byteLength(JSON.stringify(firstBody.events.slice(0, -1)))
+    expect(settled).toBeLessThanOrEqual(PAGE_BUDGET_BYTES)
+    // A single page stays close to the budget (it may overshoot by ≤ one event).
+    const pageBytes = Buffer.byteLength(JSON.stringify(firstBody.events))
+    expect(pageBytes).toBeLessThanOrEqual(PAGE_BUDGET_BYTES + Buffer.byteLength(JSON.stringify(firstBody.events[firstBody.events.length - 1])))
+    // The next page resumes exactly after the last delivered seq — no gap.
+    const lastSeq = firstBody.events[firstBody.events.length - 1].seq
+    const second = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'budget-1', afterSeq: lastSeq }) }))
+    const secondBody = second.body as { events: SessionEventLike[]; hasMore: boolean }
+    expect(secondBody.events[0].seq).toBe(lastSeq + 1)
+    expect(secondBody.events.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('still delivers an event that alone exceeds the page budget (no stall)', async () => {
+    // ~2.6 MiB of projected text in ONE event: bigger than the page budget.
+    const huge: SessionEventLike = {
+      type: 'tool/result',
+      seq: 1,
+      data: {
+        callId: 'huge',
+        message: { content: Array.from({ length: 80 }, () => ({ type: 'text', text: 'y'.repeat(32768) })) },
+      },
+    }
+    const events: SessionEventLike[] = [huge, { type: 'turn/end', seq: 2, data: { turn: 0 } }]
+    const ctx = liveCtx(events)
+    apply(ctx)
+    const first = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'budget-2', afterSeq: 0 }) }))
+    const firstBody = first.body as { events: SessionEventLike[]; hasMore: boolean }
+    expect(firstBody.events).toHaveLength(1)
+    expect(firstBody.events[0].seq).toBe(1)
+    expect(Buffer.byteLength(JSON.stringify(firstBody.events[0]))).toBeGreaterThan(PAGE_BUDGET_BYTES)
+    expect(firstBody.hasMore).toBe(true)
+    // The drain completes on the next pull instead of looping forever.
+    const second = await run(ctx, fakeReq({ body: JSON.stringify({ sessionId: 'budget-2', afterSeq: 1 }) }))
+    const secondBody = second.body as { events: SessionEventLike[]; hasMore: boolean }
+    expect(secondBody.events.map((event) => event.seq)).toEqual([2])
+    expect(secondBody.hasMore).toBe(false)
+  })
+})
+
 describe('request guards', () => {
   it('413 for an oversized body (content-length pre-check)', async () => {
     const ctx = fakeCtx()
@@ -327,7 +406,7 @@ describe('request guards', () => {
     const req = {
       method: 'POST',
       headers: { host: '127.0.0.1:43120', 'content-length': String(1024 * 1024) },
-      url: '/turn-outline/api/events',
+      url: '/trace-inspect/api/events',
       async *[Symbol.asyncIterator]() {
         yield Buffer.from('x'.repeat(1024 * 1024), 'utf8')
       },
@@ -344,7 +423,7 @@ describe('request guards', () => {
     const req = {
       method: 'POST',
       headers: { host: '127.0.0.1:43120' },
-      url: '/turn-outline/api/events',
+      url: '/trace-inspect/api/events',
       async *[Symbol.asyncIterator]() {
         for (let i = 0; i < 10; i += 1) yield Buffer.from(big.slice(i * 7 * 1024, (i + 1) * 7 * 1024), 'utf8')
       },

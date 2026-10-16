@@ -1,5 +1,5 @@
 /**
- * Structured host context / wire types for dsh-turn-outline.
+ * Structured host context / wire types for dsh-trace-inspect.
  * Deliberately structural: the plugin never value-imports DSH internals,
  * so it stays compatible across DSH releases (rc and alpha alike).
  */
@@ -77,13 +77,13 @@ export interface HttpResponseLike {
   end(body?: string | Buffer): void
 }
 
-/** The wire body of POST /turn-outline/api/events. */
+/** The wire body of POST /trace-inspect/api/events. */
 export interface TrailEventsRequest {
   sessionId?: unknown
   afterSeq?: unknown
 }
 
-/** The wire response of POST /turn-outline/api/events. */
+/** The wire response of POST /trace-inspect/api/events. */
 export interface TrailEventsResponse {
   events: SessionEventLike[]
   /** More pages remain; the client re-pulls with the last delivered seq. */

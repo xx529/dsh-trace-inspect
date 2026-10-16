@@ -1,5 +1,5 @@
 /**
- * trail-model.ts — pure event → turn folding for dsh-turn-outline.
+ * trail-model.ts — pure event → turn folding for dsh-trace-inspect.
  *
  * Framework-agnostic (no React / DOM / Node): a single foldTurns() maps a
  * session event stream onto per-user-turn summaries:
@@ -8,7 +8,11 @@
  *                     turn identity — stable under parallel steps / steering).
  *   input           = first `user/message` with source.kind === 'user'.
  *   context rows    = `steering` / `context` user messages (kept as grey rows).
- *   tool steps      = `tool/call` (+ `tool/result` error rows).
+ *   tool steps      = `tool/call` (+ `tool/result` error rows); every
+ *                     `tool/result` is folded onto its step as TrailResult
+ *                     content (append merges by seq / surfaceOp replace).
+ *   orphan results  = `tool/result` with no matching `tool/call` → placeholder
+ *                     row (`orphan: true`) instead of being dropped.
  *   tool groups     = consecutive tool/call steps (>=2) merged, broken by an
  *                     assistant output, an error, a compaction, a user
  *                     message or a turn end.
@@ -29,6 +33,15 @@ export interface SessionEventLike {
   seq: number
   time?: number
   data?: Record<string, unknown> | null
+  /**
+   * Surface bookkeeping, forwarded verbatim on the EVENT (not inside `data`)
+   * by the host projection — the same place real session logs put it
+   * (session.v4.jsonl.zstd seq 182/183). `{op:'replace',startSeq,endSeq}` or
+   * the `'append'` tag.
+   */
+  surfaceOp?: unknown
+  /** Seqs the surface operation refers to (host pass-through, unused by the fold). */
+  sourceEventSeqs?: number[]
 }
 
 export type TurnItem =
@@ -37,13 +50,49 @@ export type TurnItem =
   | { kind: 'output'; seq: number; text: string; preview: string }
   | { kind: 'compaction'; seq: number; preview: string }
 
+/** One image block of a tool result (no URL is fetched; the UI renders a chip). */
+export interface TrailResultImage {
+  attachmentId: string
+  mediaType: string
+  bytes: number
+  width?: number
+  height?: number
+  name?: string
+}
+
+/** The folded result content of one tool step. */
+export interface TrailResult {
+  /** Seq of the tool/result event producing/appending this content (a replace switches it to the replace event's seq). */
+  seq: number
+  kind: 'text' | 'image' | 'mixed' | 'error'
+  /** Final text: append segments merged by seq (or the replace content once replaced). */
+  text: string
+  images?: TrailResultImage[]
+  truncated: boolean
+  isError: boolean
+  errorName?: string
+  errorCode?: string
+  /** Seq of the replace event that covered this content (debug + UI hint). */
+  replacedBy?: number
+  /** Start of the replaced range (= surfaceOp.startSeq). */
+  replacedFrom?: number
+}
+
 export interface TrailStep {
   kind: 'tool' | 'error'
   seq: number
   name: string
   argsPreview: string
+  /** Full arguments as delivered by the wire (may still be ARGS_CAP-clipped). */
+  args?: string
+  argsTruncated?: boolean
+  argsBytes?: number
   callId: string | null
   error: string
+  errorCode?: string
+  result?: TrailResult
+  /** No matching tool/call was found for this result (orphan placeholder row). */
+  orphan?: boolean
 }
 
 export interface TrailTurn {
@@ -193,6 +242,409 @@ function appendItem(builder: Builder, item: TurnItem): void {
   }
 }
 
+// ── tool/result content model (segment table) ────────────────────────────
+//
+// A step's result content is kept as a small "segment table" keyed by the seq
+// of the tool/result event that produced it, plus the replace marks seen for
+// that step. The public TrailResult is rebuilt from the table in ascending seq
+// order, so the outcome never depends on the order events are consumed in: a
+// replace may be consumed before, or after, the append it covers.
+//
+// Verified against a real session log (session-8b8489a4…/session.v4.jsonl.zstd
+// seq 182/183): a surface compact-replace carries its text in
+// `data.message.content[].text`, its `surfaceOp.startSeq/endSeq` point at the
+// replaced `tool/result` seq (20/22), NOT at the `tool/call` seq. The seqIndex
+// therefore registers both the tool/call seq and every tool/result seq.
+
+interface StepRef {
+  builder: Builder
+  step: TrailStep
+}
+
+/** One content contribution of a tool/result event. */
+interface Segment {
+  seq: number
+  text: string
+  images: TrailResultImage[]
+  truncated: boolean
+  isError: boolean
+  errorName?: string
+  errorCode?: string
+}
+
+/** A surfaceOp replace mark: seq is the replacing event, [from,to] selected the steps. */
+interface ReplaceMark {
+  seq: number
+  from: number
+  to: number
+}
+
+interface StepContent {
+  segments: Map<number, Segment>
+  replaces: Map<number, ReplaceMark>
+}
+
+type SurfaceOp = { op: 'append' } | { op: 'replace'; startSeq: number; endSeq: number }
+
+interface ContentBits {
+  text: string
+  images: TrailResultImage[]
+  truncated: boolean
+  isError: boolean
+  errorName?: string
+  errorCode?: string
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+/** tool/result content value: wire `data.content`, else the raw `data.message.content`. */
+function rawResultContent(data: Record<string, unknown>): unknown {
+  const direct = data.content
+  if (typeof direct === 'string' || Array.isArray(direct)) return direct
+  const message = record(data.message)
+  if (message !== null) {
+    const nested = message.content
+    if (typeof nested === 'string' || Array.isArray(nested)) return nested
+  }
+  return undefined
+}
+
+/** Merge the text blocks of one content value, in order (empty blocks skipped). */
+function resultText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  const parts: string[] = []
+  for (const block of content) {
+    const b = record(block)
+    if (b === null || b.type !== 'text' || typeof b.text !== 'string' || b.text.length === 0) continue
+    parts.push(b.text)
+  }
+  return parts.join('\n')
+}
+
+function resultImages(content: unknown): TrailResultImage[] {
+  if (!Array.isArray(content)) return []
+  const out: TrailResultImage[] = []
+  for (const block of content) {
+    const b = record(block)
+    if (b === null || b.type !== 'image') continue
+    const attachment = record(b.attachment)
+    if (attachment === null) continue
+    if (typeof attachment.attachmentId !== 'string' || attachment.attachmentId.length === 0) continue
+    const image: TrailResultImage = {
+      attachmentId: attachment.attachmentId,
+      mediaType: typeof attachment.mediaType === 'string' ? attachment.mediaType : '',
+      bytes: typeof attachment.bytes === 'number' && Number.isFinite(attachment.bytes) ? attachment.bytes : 0,
+    }
+    if (typeof attachment.width === 'number') image.width = attachment.width
+    if (typeof attachment.height === 'number') image.height = attachment.height
+    if (typeof attachment.name === 'string') image.name = attachment.name
+    out.push(image)
+  }
+  return out
+}
+
+/** Content + error flags delivered by one tool/result projection. */
+function resultContentOf(data: Record<string, unknown>): ContentBits {
+  const content = rawResultContent(data)
+  const message = record(data.message)
+  const isError = data.isError === true || (message !== null && message.isError === true)
+  return {
+    text: resultText(content),
+    images: resultImages(content),
+    truncated: data.contentTruncated === true,
+    isError,
+  }
+}
+
+/**
+ * surfaceOp pass-through shape; anything non-conforming is treated as an
+ * append. The host projects `surfaceOp` onto the EVENT (`event.surfaceOp`);
+ * `data.surfaceOp` is accepted too so raw/replayed logs fold identically.
+ */
+function parseSurfaceOp(raw: unknown): SurfaceOp {
+  if (raw === 'append') return { op: 'append' }
+  const op = record(raw)
+  if (op !== null) {
+    if (
+      op.op === 'replace'
+      && typeof op.startSeq === 'number' && Number.isFinite(op.startSeq)
+      && typeof op.endSeq === 'number' && Number.isFinite(op.endSeq)
+    ) {
+      return { op: 'replace', startSeq: op.startSeq, endSeq: op.endSeq }
+    }
+    if (op.op === 'append') return { op: 'append' }
+  }
+  return { op: 'append' }
+}
+
+/** Prefer the event-level surfaceOp (host projection), fall back to data. */
+function surfaceOpOf(eventSurfaceOp: unknown, data: Record<string, unknown>): SurfaceOp {
+  return parseSurfaceOp(eventSurfaceOp !== undefined ? eventSurfaceOp : data.surfaceOp)
+}
+
+function segmentOf(seq: number, bits: ContentBits): Segment {
+  return {
+    seq,
+    text: bits.text,
+    images: bits.images,
+    truncated: bits.truncated,
+    isError: bits.isError,
+    ...(bits.errorName !== undefined ? { errorName: bits.errorName } : {}),
+    ...(bits.errorCode !== undefined ? { errorCode: bits.errorCode } : {}),
+  }
+}
+
+/**
+ * Rebuild `step.result` from its segment table, in ascending seq order:
+ * append segments merge; a replace mark rewrites the WHOLE content of its step
+ * — every segment produced before the replace (seq < mark.seq) is dropped and
+ * the replacement segment survives. Order-independent by construction (marks
+ * and segments are sorted by seq, so a replace consumed before the append it
+ * covers rebuilds identically).
+ */
+function rebuildResult(step: TrailStep, content: StepContent): void {
+  const entries: Array<{ seq: number; seg?: Segment; rep?: ReplaceMark }> = []
+  for (const seg of content.segments.values()) entries.push({ seq: seg.seq, seg })
+  for (const rep of content.replaces.values()) entries.push({ seq: rep.seq, rep })
+  // A replace event contributes both a mark and its replacement segment at the
+  // same seq: apply the segment first, then the mark.
+  entries.sort((a, b) => (a.seq - b.seq) || ((a.seg !== undefined ? 0 : 1) - (b.seg !== undefined ? 0 : 1)))
+
+  const live = new Map<number, Segment>()
+  let replacedBy: number | undefined
+  let replacedFrom: number | undefined
+  for (const entry of entries) {
+    if (entry.seg !== undefined) {
+      live.set(entry.seg.seq, entry.seg)
+      continue
+    }
+    const rep = entry.rep as ReplaceMark
+    for (const key of [...live.keys()]) {
+      if (key < rep.seq) live.delete(key)
+    }
+    if (replacedBy === undefined || rep.seq > replacedBy) {
+      replacedBy = rep.seq
+      replacedFrom = rep.from
+    }
+  }
+
+  const ordered = [...live.values()].sort((a, b) => a.seq - b.seq)
+  const text = ordered.map((seg) => seg.text).join('')
+  const images: TrailResultImage[] = []
+  const seen = new Set<string>()
+  for (const seg of ordered) {
+    for (const image of seg.images) {
+      if (seen.has(image.attachmentId)) continue
+      seen.add(image.attachmentId)
+      images.push(image)
+    }
+  }
+  const top = ordered.length > 0 ? ordered[ordered.length - 1] : undefined
+  const isError = top !== undefined && top.isError
+  const truncated = ordered.some((seg) => seg.truncated)
+  let seq = step.seq
+  for (const key of content.segments.keys()) {
+    if (key > seq) seq = key
+  }
+  const kind: TrailResult['kind'] = isError
+    ? 'error'
+    : text.length > 0 && images.length > 0
+      ? 'mixed'
+      : text.length === 0 && images.length > 0
+        ? 'image'
+        : 'text'
+  const result: TrailResult = {
+    seq,
+    kind,
+    text,
+    truncated,
+    isError,
+    ...(images.length > 0 ? { images } : {}),
+    ...(isError && top !== undefined && top.errorName !== undefined ? { errorName: top.errorName } : {}),
+    ...(isError && top !== undefined && top.errorCode !== undefined ? { errorCode: top.errorCode } : {}),
+    ...(replacedBy !== undefined ? { replacedBy } : {}),
+    ...(replacedFrom !== undefined ? { replacedFrom } : {}),
+  }
+  step.result = result
+}
+
+/**
+ * Shared tool/call + tool/result application for both fold implementations:
+ * foldTurns passes no-op callbacks, TrailFolder wires addStep/markDirty so the
+ * incremental snapshot stays identical to the batch fold while reusing the
+ * frozen turn objects (every write to an existing step nulls its frozen slot).
+ */
+class ResultIndex {
+  private readonly byCallId = new Map<string, StepRef>()
+  private readonly seqIndex = new Map<number, StepRef>()
+  private contents = new WeakMap<TrailStep, StepContent>()
+
+  constructor(
+    private readonly addStep: (builder: Builder, step: TrailStep) => void,
+    private readonly markDirty: (builder: Builder) => void,
+  ) {}
+
+  /** Drop every registration (used when the folder flips from user mode). */
+  reset(): void {
+    this.byCallId.clear()
+    this.seqIndex.clear()
+    this.contents = new WeakMap<TrailStep, StepContent>()
+  }
+
+  /** Register an already-built step under callId and seq. */
+  register(callId: string | null, seq: number, ref: StepRef): void {
+    if (callId !== null) this.byCallId.set(callId, ref)
+    this.seqIndex.set(seq, ref)
+  }
+
+  /** tool/call → build the step (full args) and register callId + seq. */
+  applyToolCall(builder: Builder, data: Record<string, unknown>, seq: number): void {
+    const name = typeof data.name === 'string' && data.name.length > 0 ? data.name : 'tool'
+    const args = typeof data.arguments === 'string' && data.arguments.length > 0 ? data.arguments : ''
+    const callId = toolCallIdOf(data)
+    const step: TrailStep = {
+      kind: 'tool',
+      seq,
+      name,
+      argsPreview: compact(args),
+      args,
+      argsTruncated: data.argsTruncated === true,
+      argsBytes: typeof data.argsBytes === 'number' && Number.isFinite(data.argsBytes) ? data.argsBytes : args.length,
+      callId,
+      error: '',
+    }
+    this.addStep(builder, step)
+    this.register(callId, seq, { builder, step })
+  }
+
+  /** tool/result → error rows keep v0.3.1 behavior; success results merge by surfaceOp. */
+  applyToolResult(
+    current: Builder | null,
+    data: Record<string, unknown>,
+    seq: number,
+    eventSurfaceOp?: unknown,
+  ): void {
+    const callId = toolCallIdOf(data)
+    const error = record(data.error)
+
+    if (error !== null) {
+      if (current === null) return
+      const errorName = typeof error.name === 'string' && error.name.length > 0 ? error.name : 'tool'
+      const errorCode = typeof error.code === 'string' && error.code.length > 0 ? error.code : undefined
+      const detail = errorCode !== undefined ? ` · ${errorCode}` : ''
+      const step: TrailStep = {
+        kind: 'error',
+        seq,
+        name: errorName,
+        argsPreview: '',
+        args: '',
+        argsTruncated: false,
+        argsBytes: 0,
+        callId,
+        error: compact(`${errorName}${detail}`),
+        ...(errorCode !== undefined ? { errorCode } : {}),
+      }
+      this.addStep(current, step)
+      const bits: ContentBits = {
+        ...resultContentOf(data),
+        isError: true,
+        errorName,
+        ...(errorCode !== undefined ? { errorCode } : {}),
+      }
+      this.applyContent(current, step, seq, bits)
+      // The error row owns the result seq; an existing tool step keeps callId.
+      this.seqIndex.set(seq, { builder: current, step })
+      if (callId !== null && !this.byCallId.has(callId)) this.byCallId.set(callId, { builder: current, step })
+      return
+    }
+
+    // A surface replace is resolved through seqIndex, NOT through the open
+    // turn: in real logs the compact-replace of turn N's result arrives while
+    // turn N+1 is running (session.v4.jsonl.zstd seq 182/183 replaces seq
+    // 20/22 of turn 1 after turn 1 ended), so it must apply with `current`
+    // null as well — that is exactly the frozen-slot case markDirty covers.
+    const surfaceOp = surfaceOpOf(eventSurfaceOp, data)
+    const bits = resultContentOf(data)
+
+    if (surfaceOp.op === 'replace') {
+      const targets: StepRef[] = []
+      const seen = new Set<TrailStep>()
+      for (const [key, ref] of this.seqIndex) {
+        if (key < surfaceOp.startSeq || key > surfaceOp.endSeq) continue
+        if (seen.has(ref.step)) continue
+        seen.add(ref.step)
+        targets.push(ref)
+      }
+      if (targets.length === 0 && callId !== null) {
+        const hit = this.byCallId.get(callId)
+        if (hit !== undefined) targets.push(hit)
+      }
+      // Unresolvable replace (truncated window): ignored, never orphaned.
+      if (targets.length === 0) return
+      for (const target of targets) {
+        this.applyContent(target.builder, target.step, seq, bits, surfaceOp)
+        this.seqIndex.set(seq, target)
+        if (callId !== null && !this.byCallId.has(callId)) this.byCallId.set(callId, target)
+      }
+      return
+    }
+
+    // v0.3.1 keeps dropping non-replace results that arrive with no open turn.
+    if (current === null) return
+
+    const hit = callId !== null ? this.byCallId.get(callId) : undefined
+    if (hit !== undefined) {
+      this.applyContent(hit.builder, hit.step, seq, bits)
+      this.seqIndex.set(seq, hit)
+      return
+    }
+
+    // Orphan result: no matching tool/call — still a placeholder row.
+    const step: TrailStep = {
+      kind: 'tool',
+      seq,
+      name: 'tool',
+      argsPreview: '',
+      args: '',
+      argsTruncated: false,
+      argsBytes: 0,
+      callId,
+      error: '',
+      orphan: true,
+    }
+    this.addStep(current, step)
+    this.applyContent(current, step, seq, bits)
+    this.register(callId, seq, { builder: current, step })
+  }
+
+  private applyContent(
+    builder: Builder,
+    step: TrailStep,
+    seq: number,
+    bits: ContentBits,
+    surfaceOp?: SurfaceOp,
+  ): void {
+    let state = this.contents.get(step)
+    if (state === undefined) {
+      state = { segments: new Map<number, Segment>(), replaces: new Map<number, ReplaceMark>() }
+      this.contents.set(step, state)
+    }
+    if (surfaceOp !== undefined && surfaceOp.op === 'replace') {
+      state.replaces.set(seq, { seq, from: surfaceOp.startSeq, to: surfaceOp.endSeq })
+      step.args = bits.text
+      step.argsPreview = compact(bits.text)
+      step.argsTruncated = bits.truncated
+      step.argsBytes = bits.text.length
+    }
+    state.segments.set(seq, segmentOf(seq, bits))
+    rebuildResult(step, state)
+    this.markDirty(builder)
+  }
+}
+
 function finishBuilder(builder: Builder, index: number, boundarySeq: number): TrailTurn {
   const anchorSeq = builder.inputSeq !== null ? builder.inputSeq : boundarySeq
   const status: TrailTurn['status'] = builder.hasError
@@ -245,6 +697,10 @@ export function foldTurns(events: readonly SessionEventLike[]): TrailTurn[] {
   const order: number[] = []
   const pendingUser: Array<{ seq: number; text: string }> = []
   let current: Builder | null = null
+  const results = new ResultIndex(
+    (builder, step) => { appendItem(builder, { kind: 'tool', step }) },
+    () => {},
+  )
 
   const builderOf = (turn: number): Builder => {
     let builder = index.get(turn)
@@ -327,37 +783,11 @@ export function foldTurns(events: readonly SessionEventLike[]): TrailTurn[] {
       }
       case 'tool/call': {
         if (current === null) break
-        const name = typeof data.name === 'string' && data.name.length > 0 ? data.name : 'tool'
-        const args = typeof data.arguments === 'string' && data.arguments.length > 0 ? data.arguments : ''
-        const step: TrailStep = {
-          kind: 'tool',
-          seq,
-          name,
-          argsPreview: compact(args),
-          callId: toolCallIdOf(data),
-          error: '',
-        }
-        appendItem(current, { kind: 'tool', step })
+        results.applyToolCall(current, data, seq)
         break
       }
       case 'tool/result': {
-        const error = (data.error !== null && typeof data.error === 'object' ? data.error : null) as {
-          name?: unknown
-          code?: unknown
-        } | null
-        if (error === null) break
-        if (current === null) break
-        const name = typeof error.name === 'string' && error.name.length > 0 ? error.name : 'tool'
-        const detail = typeof error.code === 'string' && error.code.length > 0 ? ` · ${error.code}` : ''
-        const step: TrailStep = {
-          kind: 'error',
-          seq,
-          name,
-          argsPreview: '',
-          callId: toolCallIdOf(data),
-          error: compact(`${name}${detail}`),
-        }
-        appendItem(current, { kind: 'tool', step })
+        results.applyToolResult(current, data, seq, event.surfaceOp)
         break
       }
       case 'compaction/summary': {
@@ -397,6 +827,10 @@ export function foldByUserBoundaries(events: readonly SessionEventLike[]): Trail
   const out: TrailTurn[] = []
   let builder: Builder | null = null
   let counter = 0
+  const results = new ResultIndex(
+    (target, step) => { appendItem(target, { kind: 'tool', step }) },
+    () => {},
+  )
 
   const close = (): void => {
     if (builder === null) return
@@ -437,38 +871,11 @@ export function foldByUserBoundaries(events: readonly SessionEventLike[]): Trail
       continue
     }
     if (event.type === 'tool/call') {
-      const name = typeof data.name === 'string' && data.name.length > 0 ? data.name : 'tool'
-      const args = typeof data.arguments === 'string' && data.arguments.length > 0 ? data.arguments : ''
-      const step: TrailStep = {
-        kind: 'tool',
-        seq,
-        name,
-        argsPreview: compact(args),
-        callId: toolCallIdOf(data),
-        error: '',
-      }
-      // appendItem records the step once (in items AND steps); a redundant
-      // direct steps.push here would double-count stepsCount.
-      appendItem(builder, { kind: 'tool', step })
+      results.applyToolCall(builder, data, seq)
       continue
     }
     if (event.type === 'tool/result') {
-      const error = (data.error !== null && typeof data.error === 'object' ? data.error : null) as {
-        name?: unknown
-        code?: unknown
-      } | null
-      if (error === null) continue
-      const name = typeof error.name === 'string' && error.name.length > 0 ? error.name : 'tool'
-      const detail = typeof error.code === 'string' && error.code.length > 0 ? ` · ${error.code}` : ''
-      const step: TrailStep = {
-        kind: 'error',
-        seq,
-        name,
-        argsPreview: '',
-        callId: toolCallIdOf(data),
-        error: compact(`${name}${detail}`),
-      }
-      appendItem(builder, { kind: 'tool', step })
+      results.applyToolResult(builder, data, seq, event.surfaceOp)
       continue
     }
   }
@@ -520,6 +927,8 @@ export class TrailFolder {
 
   // user-mode state
   private readonly userClosed: TrailTurn[] = []
+  /** Builders of the closed user-mode turns, so a late write can re-materialize. */
+  private readonly userClosedBuilders: Builder[] = []
   private userActive: Builder | null = null
   private userActiveTurn: TrailTurn | null = null
   private userCounter = 0
@@ -528,6 +937,17 @@ export class TrailFolder {
   private total = 0
   private failed = 0
   private readonly byTool = new Map<string, number>()
+
+  /**
+   * Shared tool/call + tool/result application. addStep keeps the incremental
+   * stats in sync with a batch re-fold; markDirty nulls the frozen slot of the
+   * owning turn, so a replace that rewrites an already-frozen step forces React
+   * to re-render the reused turn object.
+   */
+  private readonly results = new ResultIndex(
+    (builder, step) => { this.addStep(builder, { kind: 'tool', step }) },
+    (builder) => { this.markDirty(builder) },
+  )
 
   /** Highest event seq consumed so far (duplicates / re-pages are skipped). */
   get latestSeq(): number {
@@ -543,27 +963,27 @@ export class TrailFolder {
     this.lastSeq = seq
 
     if (this.mode === 'turn') {
-      this.applyTurnEvent(event.type, data, seq, time)
+      this.applyTurnEvent(event.type, data, seq, time, event.surfaceOp)
       return
     }
     if (this.mode === 'user') {
       if (event.type === 'turn/start' && typeof data.turn === 'number') {
         this.flipToTurnMode()
-        this.applyTurnEvent(event.type, data, seq, time)
+        this.applyTurnEvent(event.type, data, seq, time, event.surfaceOp)
       } else {
-        this.applyUserEvent(event.type, data, seq, time)
+        this.applyUserEvent(event.type, data, seq, time, event.surfaceOp)
       }
       return
     }
     // mode 'unknown': commit on the first mode-discriminating event.
     if (event.type === 'turn/start' && typeof data.turn === 'number') {
       this.mode = 'turn'
-      this.applyTurnEvent(event.type, data, seq, time)
+      this.applyTurnEvent(event.type, data, seq, time, event.surfaceOp)
       return
     }
     if (event.type === 'user/message' && sourceKindOf(event, data) === 'user') {
       this.mode = 'user'
-      this.applyUserEvent(event.type, data, seq, time)
+      this.applyUserEvent(event.type, data, seq, time, event.surfaceOp)
       return
     }
     // No boundary yet: both fold modes would drop this event (no open turn).
@@ -630,6 +1050,13 @@ export class TrailFolder {
 
   private markDirty(builder: Builder): void {
     if (this.mode === 'user') {
+      // A closed user-mode turn was materialized once and is reused by
+      // snapshot(); re-materialize it so a late replace is visible to React.
+      const closedAt = this.userClosedBuilders.indexOf(builder)
+      if (closedAt >= 0) {
+        this.userClosed[closedAt] = finishUserTurn(builder, closedAt)
+        return
+      }
       if (builder === this.userActive) this.userActiveTurn = null
       return
     }
@@ -654,7 +1081,13 @@ export class TrailFolder {
     return materialized
   }
 
-  private applyTurnEvent(type: string, data: Record<string, unknown>, seq: number, time?: number): void {
+  private applyTurnEvent(
+    type: string,
+    data: Record<string, unknown>,
+    seq: number,
+    time?: number,
+    surfaceOp?: unknown,
+  ): void {
     switch (type) {
       case 'turn/start': {
         const raw = data.turn
@@ -724,37 +1157,11 @@ export class TrailFolder {
       }
       case 'tool/call': {
         if (this.current === null) break
-        const name = typeof data.name === 'string' && data.name.length > 0 ? data.name : 'tool'
-        const args = typeof data.arguments === 'string' && data.arguments.length > 0 ? data.arguments : ''
-        const step: TrailStep = {
-          kind: 'tool',
-          seq,
-          name,
-          argsPreview: compact(args),
-          callId: toolCallIdOf(data),
-          error: '',
-        }
-        this.addStep(this.current, { kind: 'tool', step })
+        this.results.applyToolCall(this.current, data, seq)
         break
       }
       case 'tool/result': {
-        const error = (data.error !== null && typeof data.error === 'object' ? data.error : null) as {
-          name?: unknown
-          code?: unknown
-        } | null
-        if (error === null) break
-        if (this.current === null) break
-        const name = typeof error.name === 'string' && error.name.length > 0 ? error.name : 'tool'
-        const detail = typeof error.code === 'string' && error.code.length > 0 ? ` · ${error.code}` : ''
-        const step: TrailStep = {
-          kind: 'error',
-          seq,
-          name,
-          argsPreview: '',
-          callId: toolCallIdOf(data),
-          error: compact(`${name}${detail}`),
-        }
-        this.addStep(this.current, { kind: 'tool', step })
+        this.results.applyToolResult(this.current, data, seq, surfaceOp)
         break
       }
       case 'compaction/summary': {
@@ -777,12 +1184,19 @@ export class TrailFolder {
   private closeUserTurn(): void {
     if (this.userActive === null) return
     this.userClosed.push(finishUserTurn(this.userActive, this.userCounter))
+    this.userClosedBuilders.push(this.userActive)
     this.userCounter += 1
     this.userActive = null
     this.userActiveTurn = null
   }
 
-  private applyUserEvent(type: string, data: Record<string, unknown>, seq: number, time?: number): void {
+  private applyUserEvent(
+    type: string,
+    data: Record<string, unknown>,
+    seq: number,
+    time?: number,
+    surfaceOp?: unknown,
+  ): void {
     if (type === 'user/message') {
       const kind = sourceKindOf({ type, seq, data }, data)
       if (kind !== 'user') return
@@ -811,36 +1225,11 @@ export class TrailFolder {
       return
     }
     if (type === 'tool/call') {
-      const name = typeof data.name === 'string' && data.name.length > 0 ? data.name : 'tool'
-      const args = typeof data.arguments === 'string' && data.arguments.length > 0 ? data.arguments : ''
-      const step: TrailStep = {
-        kind: 'tool',
-        seq,
-        name,
-        argsPreview: compact(args),
-        callId: toolCallIdOf(data),
-        error: '',
-      }
-      this.addStep(this.userActive, { kind: 'tool', step })
+      this.results.applyToolCall(this.userActive, data, seq)
       return
     }
     if (type === 'tool/result') {
-      const error = (data.error !== null && typeof data.error === 'object' ? data.error : null) as {
-        name?: unknown
-        code?: unknown
-      } | null
-      if (error === null) return
-      const name = typeof error.name === 'string' && error.name.length > 0 ? error.name : 'tool'
-      const detail = typeof error.code === 'string' && error.code.length > 0 ? ` · ${error.code}` : ''
-      const step: TrailStep = {
-        kind: 'error',
-        seq,
-        name,
-        argsPreview: '',
-        callId: toolCallIdOf(data),
-        error: compact(`${name}${detail}`),
-      }
-      this.addStep(this.userActive, { kind: 'tool', step })
+      this.results.applyToolResult(this.userActive, data, seq, surfaceOp)
       return
     }
     // compaction & anything else: foldByUserBoundaries ignores them.
@@ -869,6 +1258,7 @@ export class TrailFolder {
       pending.push({ seq: this.userActive.inputSeq, text: this.userActive.input })
     }
     this.userClosed.length = 0
+    this.userClosedBuilders.length = 0
     this.userActive = null
     this.userActiveTurn = null
     this.userCounter = 0
@@ -877,6 +1267,7 @@ export class TrailFolder {
     this.total = 0
     this.failed = 0
     this.byTool.clear()
+    this.results.reset()
     this.mode = 'turn'
   }
 }

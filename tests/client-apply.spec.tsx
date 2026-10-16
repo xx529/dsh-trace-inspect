@@ -2,7 +2,7 @@
  * client-apply.spec.tsx — registration entry coverage: `apply()` must stay
  * inert without a usable `betterSidebar` service (optional peer — absent,
  * null, or missing/broken `registerTab`), and must register exactly one
- * `turn-outline` tab descriptor when the service is present.
+ * `trace-inspect` tab descriptor when the service is present.
  *
  * The inert path is the plugin's no-better-sidebar contract: no throw, no
  * error bar, no tab. Locking it here so a refactor cannot silently drop the
@@ -65,7 +65,7 @@ describe('client apply — registration entry', () => {
     expect(() => apply(ctx)).not.toThrow()
   })
 
-  it('registers exactly one turn-outline tab when the service is present', () => {
+  it('registers exactly one trace-inspect tab when the service is present', () => {
     const registerTab = vi.fn((descriptor: unknown) => () => {})
     const { ctx, disposables } = makeCtx('service', registerTab)
     expect(() => apply(ctx)).not.toThrow()
@@ -78,12 +78,16 @@ describe('client apply — registration entry', () => {
       description: () => string
       component: unknown
     }
-    expect(descriptor.id).toBe('turn-outline')
+    expect(descriptor.id).toBe('trace-inspect')
     expect(descriptor.single).toBe(true)
     expect(typeof descriptor.title).toBe('function')
+    // The user-visible title stays 「轮次轨迹」/「Turn Outline」 (契约 §1).
+    expect(['轮次轨迹', 'Turn Outline']).toContain(descriptor.title())
     // 0.2.0 native + menu: the guide page renders the descriptor's description.
     expect(typeof descriptor.description).toBe('function')
     expect(typeof descriptor.component).toBe('function')
+    // The injected stylesheet carries the renamed dataset (契约 §1).
+    expect(document.head.querySelector('style[data-plugin="dsh-trace-inspect"]')).toBeTruthy()
     // cordis contract: the registerTab disposer is the effect cleanup.
     expect(disposables.length).toBeGreaterThan(0)
     expect(typeof disposables[disposables.length - 1]).toBe('function')

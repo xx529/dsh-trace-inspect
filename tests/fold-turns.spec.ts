@@ -212,6 +212,31 @@ describe('foldTurns — tool steps', () => {
     ])
     expect(turns[0].items.map((item) => item.kind)).toEqual(['input', 'output'])
   })
+
+  it('a successful tool/result attaches its content to the tool step', () => {
+    const turns = foldTurns([
+      user(1, 'x'), turnStart(2, 1),
+      toolCall(3, 'bash', 'pwd', 'c3'),
+      ev('tool/result', 4, { callId: 'c3', content: [{ type: 'text', text: 'ok' }] }),
+      turnEnd(5, 1),
+    ])
+    const steps = stepsOf(turns[0])
+    expect(steps).toHaveLength(1)
+    expect(steps[0].result?.text).toBe('ok')
+    expect(steps[0].result?.isError).toBe(false)
+  })
+
+  it('a tool/result with no matching call becomes an orphan placeholder', () => {
+    const turns = foldTurns([
+      user(1, 'x'), turnStart(2, 1),
+      ev('tool/result', 3, { callId: 'missing', content: [{ type: 'text', text: 'body' }] }),
+      turnEnd(4, 1),
+    ])
+    expect(turns[0].stepsCount).toBe(1)
+    const step = stepsOf(turns[0])[0]
+    expect(step.orphan).toBe(true)
+    expect(step.result?.text).toBe('body')
+  })
 })
 
 describe('foldTurns — pending and status', () => {

@@ -1,7 +1,11 @@
 name: CI
 
-# Minimal pre-publish gate for dsh-turn-outline: typecheck → test → build.
+# Pre-publish gate for dsh-trace-inspect: typecheck → test → build.
 # Runs on every push / pull request against main.
+#
+# `lib/` is committed (the `github:` install path has no build step), so the
+# build step is followed by a drift check: the committed output must equal a
+# fresh build of src/.
 
 on:
   push:
@@ -38,3 +42,8 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # `lib/` is committed so a `github:` install needs no build step; this
+      # step proves the committed halves still match src/.
+      - name: Verify lib/ is up to date
+        run: pnpm check:lib

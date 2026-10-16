@@ -1,21 +1,30 @@
 name: Release
 
-# Publishes `dsh-turn-outline` to npm via npm Trusted Publishing (OIDC) —
+# Publishes `dsh-trace-inspect` to npm via npm Trusted Publishing (OIDC) —
 # no NPM_TOKEN secret required, provenance is attached to the tarball.
+#
+# ⚠️ THIS FORK DOES NOT PUBLISH TO NPM: the plugin is distributed from GitHub
+# (`npx @deepseek-ai/dsh plugin --profile desktop add github:xx529/dsh-trace-inspect`),
+# and no trusted publisher is configured for the `dsh-trace-inspect` package.
+# The publish steps below are therefore gated on `github.repository` so that
+# cutting a GitHub Release here only runs the build/verify half and can never
+# fail on an npm publish. Restore publishing by configuring a trusted
+# publisher for this owner/repo and updating the guard below.
 #
 # Trigger: a GitHub Release is published (tag vX.Y.Z). The tag MUST match
 # package.json `version`; the workflow verifies this before publishing.
 #
-# Dist-tag policy: a PRERELEASE version (e.g. 0.3.0-alpha.0) publishes under
+# Dist-tag policy: a PRERELEASE version (e.g. 0.4.0-alpha.0) publishes under
 # the npm `alpha` dist-tag so the `latest` install target keeps pointing at
 # the last stable cut; stable versions publish as `latest`.
 #
-# One-time npm-side setup (manual, on npmjs.com):
-#   1. package `dsh-turn-outline` -> Settings -> Publishing access
+# One-time npm-side setup (manual, on npmjs.com), for whichever owner/repo is
+# listed in the guard below:
+#   1. package `dsh-trace-inspect` -> Settings -> Publishing access
 #      -> Trusted Publishers -> "Add Trusted Publisher".
 #   2. Provider: GitHub Actions
-#      Organization or user: Andor-Z
-#      Repository:           dsh-turn-outline
+#      Organization or user: <owner>
+#      Repository:           <repo>
 #      Workflow filename:    release.yml
 #      Environment:          (blank)
 #   3. Save. Do NOT add an NPM_TOKEN secret — Trusted Publishing replaces it.
@@ -38,6 +47,10 @@ permissions:
 concurrency:
   group: npm-release
   cancel-in-progress: false
+
+env:
+  # Only this repository is allowed to reach the npm publish steps.
+  NPM_PUBLISHER_REPOSITORY: Andor-Z/dsh-turn-outline
 
 jobs:
   publish:
@@ -82,11 +95,11 @@ jobs:
         run: pnpm build
 
       - name: Dry-run publish (validation only)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        if: github.repository == env.NPM_PUBLISHER_REPOSITORY && github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         run: pnpm publish --dry-run --no-git-checks
 
       - name: Publish to npm
-        if: github.event_name == 'release' || github.event.inputs.dry_run != 'true'
+        if: github.repository == env.NPM_PUBLISHER_REPOSITORY && (github.event_name == 'release' || github.event.inputs.dry_run != 'true')
         run: |
           TAG=$(node -p "require('./package.json').version.includes('-') ? 'alpha' : 'latest'")
           echo "publishing to npm dist-tag: ${TAG}"

@@ -1,5 +1,5 @@
 /**
- * Client half of dsh-turn-outline: register the 「轮次轨迹」tab with
+ * Client half of dsh-trace-inspect: register the 「轮次轨迹」tab with
  * dsh-better-sidebar (optional peer — inert without it) and inject the
  * token-driven stylesheet once.
  *
@@ -63,7 +63,7 @@ export function apply(ctx: {
   effect<T>(fn: () => T): T
 }): void {
   const style = document.createElement('style')
-  style.dataset.plugin = 'dsh-turn-outline'
+  style.dataset.plugin = 'dsh-trace-inspect'
   style.textContent = trailCss
   document.head.appendChild(style)
   // cordis ctx.effect(fn) RUNS fn to register and treats its RETURN VALUE as
@@ -83,7 +83,7 @@ export function apply(ctx: {
   }
 
   ctx.effect(() => (betterSidebar as { registerTab(descriptor: unknown): () => void }).registerTab({
-    id: 'turn-outline',
+    id: 'trace-inspect',
     title: () => (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh')
       ? '轮次轨迹'
       : 'Turn Outline'),

@@ -63,9 +63,9 @@ export interface TrailState {
 /** Cap on drained pages per pull (each page ≤ PAGE_SIZE events). */
 export const MAX_PULL_PAGES = 64
 
-/** Default transport: POST the /turn-outline/api/events route. */
+/** Default transport: POST the /trace-inspect/api/events route. */
 export function fetchTrailEvents(sessionId: string, afterSeq: number, base?: string): Promise<FetchEventsResult> {
-  const url = new URL('/turn-outline/api/events', base ?? window.location.origin)
+  const url = new URL('/trace-inspect/api/events', base ?? window.location.origin)
   return fetch(url.toString(), {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },

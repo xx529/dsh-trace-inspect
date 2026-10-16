@@ -1,3 +1,9 @@
 autoInstallPeers: false
 allowBuilds:
   esbuild: true
+
+# The root `prepare` script (needed so `github:` installs build lib/) makes
+# pnpm's pre-run deps check re-run an install in the middle of `pnpm test` /
+# `pnpm typecheck`. That nesting is noise for contributors and for CI's
+# explicit install step — the lockfile check stays explicit.
+verifyDepsBeforeRun: false

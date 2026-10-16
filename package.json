@@ -1,7 +1,7 @@
 {
-  "name": "dsh-turn-outline",
-  "version": "0.3.1",
-  "description": "Turn-outline sidebar tab for dsh-better-sidebar: fold a session into user turns (input + tool steps + output) with structured jump-back into the conversation | DSH 轮次轨迹侧边栏：按用户轮次折叠会话（输入+工具步骤+输出），一键定位回对话原位",
+  "name": "dsh-trace-inspect",
+  "version": "0.4.0",
+  "description": "Trace-inspector sidebar tab for dsh-better-sidebar: fold a session into user turns and expand any tool step in place — full arguments (JSON tree), tool results rendered as Markdown with a raw fallback, images and errors — while keeping jump-back into the conversation | DSH 轮次轨迹侧边栏（详情增强版）：按轮次折叠会话，可就地展开任一步查看完整参数（JSON 树）、结果（Markdown 渲染/原文）、图片与错误，并保留一键定位回对话原位",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -13,6 +13,7 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
     "LICENSE"
   ],
   "scripts": {
@@ -20,7 +21,8 @@
     "prepack": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "pack": "pnpm pack"
+    "pack": "pnpm pack",
+    "check:lib": "node scripts/check-lib.mjs"
   },
   "dsh": {
     "bundle": {
@@ -62,13 +64,16 @@
   "packageManager": "pnpm@11.8.0",
   "license": "MIT",
   "author": "Andor <zyfsta@outlook.com>",
-  "homepage": "https://github.com/Andor-Z/dsh-turn-outline",
+  "contributors": [
+    "xx529 (https://github.com/xx529)"
+  ],
+  "homepage": "https://github.com/xx529/dsh-trace-inspect",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Andor-Z/dsh-turn-outline.git"
+    "url": "git+https://github.com/xx529/dsh-trace-inspect.git"
   },
   "bugs": {
-    "url": "https://github.com/Andor-Z/dsh-turn-outline/issues"
+    "url": "https://github.com/xx529/dsh-trace-inspect/issues"
   },
   "keywords": [
     "dsh",
@@ -78,9 +83,11 @@
     "cordis",
     "webui",
     "better-sidebar",
+    "trace-inspect",
     "turn-outline",
     "trajectory",
     "outline",
+    "inspector",
     "sidebar"
   ]
 }

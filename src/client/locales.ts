@@ -53,6 +53,37 @@ export interface Dict {
   stepsLabel: string
   filterCollapse: string
   showEarlierSteps: (n: number) => string
+  // ── v0.4.0 inline detail（契约 §4.6） ──────────────────────
+  detailParams: string
+  detailResult: string
+  detailRaw: string
+  detailRender: string
+  detailSource: string
+  detailAria: (name: string) => string
+  copyField: string
+  copyDetail: string
+  copiedDone: string
+  expandLabel: string
+  collapseLabel: string
+  locateInChat: string
+  fullPill: string
+  truncatedPill: string
+  showAllLines: (arg: string) => string
+  jsonTooLarge: string
+  resultEmpty: string
+  resultUnparsable: string
+  resultReplaced: (n: number) => string
+  imageLabel: (name: string) => string
+  imageMeta: (w: number, h: number, size: string) => string
+  orphanResult: string
+  markdownFallback: string
+  loadMore: string
+  // Additive to the §4.6 table: fence-toolbar chrome consumed by
+  // markdown-labels.ts, so no user-visible string is hardcoded there.
+  codeLabel: string
+  wrapLabel: string
+  unwrapLabel: string
+  footnotes: string
 }
 
 const zh: Dict = {
@@ -96,6 +127,34 @@ const zh: Dict = {
   stepsLabel: '工具步骤数',
   filterCollapse: '收起',
   showEarlierSteps: (n) => `显示更早 ${n} 条`,
+  detailParams: '参数',
+  detailResult: '结果',
+  detailRaw: '原始',
+  detailRender: '渲染',
+  detailSource: '原文',
+  detailAria: (name) => `${name} 详情`,
+  copyField: '复制',
+  copyDetail: '复制全部',
+  copiedDone: '已复制',
+  expandLabel: '展开',
+  collapseLabel: '收起',
+  locateInChat: '在对话中定位',
+  fullPill: '完整',
+  truncatedPill: '已截断',
+  showAllLines: (arg) => `展开全部（${arg}）`,
+  jsonTooLarge: '对象过大，已折叠',
+  resultEmpty: '该调用没有返回内容',
+  resultUnparsable: '结果无法解析，已按原文显示',
+  resultReplaced: (n) => `已被压缩替换（seq #${n}）`,
+  imageLabel: (name) => `图片：${name}`,
+  imageMeta: (w, h, size) => `${w}×${h} · ${size}`,
+  orphanResult: '未匹配到调用（孤立结果）',
+  markdownFallback: '未找到 Markdown 渲染器，已按原文显示',
+  loadMore: '载入更多',
+  codeLabel: '代码',
+  wrapLabel: '自动换行',
+  unwrapLabel: '不换行',
+  footnotes: '脚注',
 }
 
 const en: Dict = {
@@ -139,6 +198,34 @@ const en: Dict = {
   stepsLabel: 'tool steps',
   filterCollapse: 'Collapse',
   showEarlierSteps: (n) => `Show ${n} earlier`,
+  detailParams: 'Params',
+  detailResult: 'Result',
+  detailRaw: 'Raw',
+  detailRender: 'Rendered',
+  detailSource: 'Source',
+  detailAria: (name) => `${name} details`,
+  copyField: 'Copy',
+  copyDetail: 'Copy all',
+  copiedDone: 'Copied',
+  expandLabel: 'Expand',
+  collapseLabel: 'Collapse',
+  locateInChat: 'Locate in chat',
+  fullPill: 'Full',
+  truncatedPill: 'Truncated',
+  showAllLines: (arg) => `Show all (${arg})`,
+  jsonTooLarge: 'Object too large, collapsed',
+  resultEmpty: 'This call returned no content',
+  resultUnparsable: 'Could not parse the result — showing raw text',
+  resultReplaced: (n) => `Replaced by compaction (seq #${n})`,
+  imageLabel: (name) => `Image: ${name}`,
+  imageMeta: (w, h, size) => `${w}×${h} · ${size}`,
+  orphanResult: 'No matching call (orphan result)',
+  markdownFallback: 'Markdown renderer unavailable — showing raw text',
+  loadMore: 'Load more',
+  codeLabel: 'Code',
+  wrapLabel: 'Wrap',
+  unwrapLabel: 'No wrap',
+  footnotes: 'Footnotes',
 }
 
 const dicts: Record<Lang, Dict> = { zh, en }
