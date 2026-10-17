@@ -94,6 +94,7 @@ function descriptorOf(registerTab: ReturnType<typeof vi.fn>): Descriptor {
 const ZH_TITLE = '轮次轨迹'
 const EN_TITLE = 'Turn Outline'
 const ZH_DESCRIPTION = '按用户轮次折叠会话轨迹，一键定位回对话原位'
+const EN_DESCRIPTION = 'Fold the session into per-turn steps and jump back to any of them'
 
 afterEach(() => {
   setHostLocale(null)
@@ -145,54 +146,58 @@ describe('client apply — registration entry', () => {
   })
 })
 
-describe('client apply — tab name follows the host UI locale', () => {
-  it('uses the DSH locale service even when navigator.language is en-US', () => {
+describe('client apply — tab name is fixed, panel language follows the host locale', () => {
+  it('always shows the Chinese product name, even when the host locale is English', () => {
+    // Owner requirement (2026-10-17): the sidebar name is FIXED to 「轮次轨迹」.
+    // DSH's UI language follows the OS/browser locale and Electron reports
+    // en-US, so a locale-driven name kept rendering "Turn Outline".
+    const locale = localeService('en-US')
+    const registerTab = vi.fn(() => () => {})
+    apply(makeCtx('service', registerTab, locale).ctx)
+    expect(descriptorOf(registerTab).title()).toBe(ZH_TITLE)
+  })
+
+  it('uses the DSH locale service for the panel language even when navigator.language is en-US', () => {
     // jsdom's navigator.language is en-US — the Electron situation that made a
-    // Chinese UI show "Turn Outline". The host locale service must win.
+    // Chinese UI render English labels. The host locale service must win.
     expect(typeof navigator !== 'undefined' && navigator.language).toBe('en-US')
     const locale = localeService('zh')
     const registerTab = vi.fn(() => () => {})
-    const { ctx } = makeCtx('service', registerTab, locale)
-    apply(ctx)
+    apply(makeCtx('service', registerTab, locale).ctx)
     const descriptor = descriptorOf(registerTab)
     expect(descriptor.title()).toBe(ZH_TITLE)
     expect(descriptor.description()).toBe(ZH_DESCRIPTION)
+    expect(detectLang()).toBe('zh')
   })
 
-  it('lets the host locale override a Chinese navigator.language in the other direction too', () => {
+  it('lets the host locale override and follows a live switch in the description', () => {
     const locale = localeService('en-US')
     const registerTab = vi.fn(() => () => {})
-    const { ctx } = makeCtx('service', registerTab, locale)
-    apply(ctx)
-    expect(descriptorOf(registerTab).title()).toBe(EN_TITLE)
+    apply(makeCtx('service', registerTab, locale).ctx)
+    const descriptor = descriptorOf(registerTab)
+    expect(descriptor.title()).toBe(ZH_TITLE)
+    expect(descriptor.description()).toBe(EN_DESCRIPTION)
+    expect(detectLang()).toBe('en')
+    locale.set('zh')
+    expect(descriptor.description()).toBe(ZH_DESCRIPTION)
+    expect(detectLang()).toBe('zh')
+    expect(descriptor.title()).toBe(ZH_TITLE)
   })
 
   it('normalizes region-tagged locale ids (zh-CN)', () => {
     const locale = localeService('zh-CN')
     const registerTab = vi.fn(() => () => {})
-    const { ctx } = makeCtx('service', registerTab, locale)
-    apply(ctx)
-    expect(descriptorOf(registerTab).title()).toBe(ZH_TITLE)
-  })
-
-  it('follows a live locale switch through the service subscription', () => {
-    const locale = localeService('en')
-    const registerTab = vi.fn(() => () => {})
-    const { ctx } = makeCtx('service', registerTab, locale)
-    apply(ctx)
-    const descriptor = descriptorOf(registerTab)
-    expect(descriptor.title()).toBe(EN_TITLE)
-    locale.set('zh')
-    expect(descriptor.title()).toBe(ZH_TITLE)
+    apply(makeCtx('service', registerTab, locale).ctx)
+    expect(descriptorOf(registerTab).description()).toBe(ZH_DESCRIPTION)
     expect(detectLang()).toBe('zh')
   })
 
   it('falls back to html[lang] when the host locale service is absent', () => {
     document.documentElement.lang = 'zh-CN'
     const registerTab = vi.fn(() => () => {})
-    const { ctx } = makeCtx('service', registerTab)
-    apply(ctx)
-    expect(descriptorOf(registerTab).title()).toBe(ZH_TITLE)
+    apply(makeCtx('service', registerTab).ctx)
+    expect(descriptorOf(registerTab).description()).toBe(ZH_DESCRIPTION)
+    expect(detectLang()).toBe('zh')
   })
 
   it('survives a locale service that throws or is malformed', () => {
@@ -205,6 +210,6 @@ describe('client apply — tab name follows the host UI locale', () => {
     const registerTab = vi.fn(() => () => {})
     const { ctx } = makeCtx('service', registerTab, broken)
     expect(() => apply(ctx)).not.toThrow()
-    expect([ZH_TITLE, EN_TITLE]).toContain(descriptorOf(registerTab).title())
+    expect(descriptorOf(registerTab).title()).toBe(ZH_TITLE)
   })
 })

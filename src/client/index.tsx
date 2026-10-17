@@ -54,6 +54,15 @@ function routeIcon(size: number): React.ReactNode {
 export const inject = ['sessions', 'uiConversation', 'betterSidebar']
 
 /**
+ * The sidebar tab's visible name — fixed Chinese product name, deliberately NOT
+ * localized (owner's requirement, 2026-10-17): DSH's UI language follows the
+ * OS/browser locale and Electron reports `en-US`, so a localized name kept
+ * showing "Turn Outline" instead of the Chinese name the user expects.
+ * Matches `zh.tabTitle` in `locales.ts`.
+ */
+const TAB_TITLE = '轮次轨迹'
+
+/**
  * Make the panel follow DSH's own UI language.
  *
  * `navigator.language` is NOT the app language inside Electron (it reports the
@@ -111,10 +120,12 @@ export function apply(ctx: {
 
   ctx.effect(() => (betterSidebar as { registerTab(descriptor: unknown): () => void }).registerTab({
     id: 'trace-inspect',
-    // Both strings go through the dictionary so the sidebar chrome matches the
-    // app language (see `followHostLocale`); the getters are re-evaluated on
-    // every render, so a live locale switch is picked up too.
-    title: () => t(detectLang(), 'tabTitle') as string,
+    // The tab's visible name is FIXED to the Chinese product name at the
+    // owner's explicit request (2026-10-17). DSH's own UI language follows the
+    // OS/browser locale and Electron reports `en-US`, so a locale-driven name
+    // kept showing "Turn Outline" for this Chinese-first plugin. Everything
+    // else in the panel (description, labels) still follows the host locale.
+    title: () => TAB_TITLE,
     description: () => t(detectLang(), 'tabDescription') as string,
     icon: (size: number) => routeIcon(size),
     order: 46,

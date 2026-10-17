@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2] - 2026-10-17
+
+### Fixed
+
+- **侧栏 tab 名称固定为「轮次轨迹」**，不再随界面语言变化。DSH 的界面语言跟随系统/浏览器 locale（Electron 下是 `en-US`），所以 v0.5.1 的「跟随 DSH locale」在桌面客户端里仍会渲染成 "Turn Outline"。按所有者要求，tab 名固定为中文产品名；**面板内其它文案**（含 better-sidebar 引导页的 `description`）继续跟随 DSH 界面语言，v0.5.1 的 locale 服务修复保留。
+- 回归测试同步：en-US 宿主下 `title()` 仍是「轮次轨迹」；`description` / `detectLang()` 的 locale 链路（`locale=zh` + `navigator.language=en-US`、反向、`zh-CN` 归一化、实时切换、`html[lang]` 回退、服务抛错）单独覆盖。
+
 ## [0.5.1] - 2026-10-17
 
 ### Fixed
