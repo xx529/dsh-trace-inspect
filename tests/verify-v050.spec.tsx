@@ -1233,7 +1233,7 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
     expect(row.children).toHaveLength(4)
     expect([...row.children].map((child) => child.className)).toEqual([
       'ttl-caret',
-      'ttl-rowDot ttl-dot-success',
+      'ttl-rowIcon ttl-icon-success', // v0.6.0: bash draws the terminal glyph
       'ttl-rowName ttl-rowNameMono',
       'ttl-rowArgs',
     ])

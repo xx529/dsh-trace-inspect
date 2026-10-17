@@ -247,7 +247,7 @@ describe('ZoomOverlay', () => {
 
     fireEvent.click(screen.getByTestId('ttl-zoom-tab-params'))
     // Valid JSON arguments → the JSON tree.
-    expect(screen.getByTestId('ttl-zoom-body-params').querySelector('.ttl-json')).toBeTruthy()
+    expect(screen.getByTestId('ttl-zoom-body-params').querySelector('[data-testid="ttl-json-pretty"]')).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('ttl-zoom-tab-result'))
     expect(screen.getByTestId('ttl-zoom-body-result').textContent).toContain('total 0')

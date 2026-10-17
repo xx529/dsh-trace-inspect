@@ -24,7 +24,8 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import type { TrailResultImage, TrailStep } from '../trail-model'
 import { attachmentUrl } from './attachment-url'
-import { JsonTree, parseJsonLoose } from './json-tree'
+import { parseJsonLoose } from './json-tree'
+import { JsonPretty } from './json-pretty'
 import { t, type Lang } from './locales'
 import { markdownLabels } from './markdown-labels'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
@@ -194,6 +195,8 @@ export interface ZoomOverlayProps {
   steps: readonly TrailStep[]
   /** Step selected when the overlay opens. */
   initialSeq: number
+  /** Pane to show first (the detail band passes its active tab). */
+  initialTab?: DetailTab
   sessionId: string
   lang: Lang
   onClose: () => void
@@ -237,10 +240,12 @@ function exportPayloadOf(step: TrailStep): Record<string, unknown> {
  * search, ⌘C/Ctrl+C copy the pane, plus an export-JSON action.
  */
 export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
-  const { steps, initialSeq, sessionId, lang, onClose } = props
+  const { steps, initialSeq, initialTab, sessionId, lang, onClose } = props
   const initial: TrailStep | null = steps.find((step) => step.seq === initialSeq) ?? steps[0] ?? null
   const [selectedSeq, setSelectedSeq] = React.useState(initialSeq)
-  const [tab, setTab] = React.useState<DetailTab>(initial !== null && initial.result !== undefined ? 'result' : 'params')
+  const [tab, setTab] = React.useState<DetailTab>(
+    initialTab ?? (initial !== null && initial.result !== undefined ? 'result' : 'params'),
+  )
   const [views, setViews] = React.useState<ReadonlyMap<number, ResultView>>(() => new Map<number, ResultView>())
   const [query, setQuery] = React.useState('')
   const [copied, setCopied] = React.useState(false)
@@ -353,7 +358,7 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
     if (tab === 'params') {
       const args = current.args ?? ''
       const parsed = parseJsonLoose(args)
-      if (parsed.ok) return <JsonTree value={parsed.value} />
+      if (parsed.ok) return <JsonPretty value={parsed.value} />
       return (
         <>
           <RawText text={args} />

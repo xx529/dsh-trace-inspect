@@ -123,6 +123,10 @@ export interface Dict {
   detailLoadedFull: string
   mergedNoSurfaceOp: (n: number) => string
   zoomOpen: string
+  /** Opens the centered viewer from a pane (v0.6.0). */
+  viewInCenter: string
+  /** Hint that the pane itself can be clicked to open the centered viewer. */
+  clickToViewFull: string
   zoomTitle: (name: string) => string
   zoomClose: string
   zoomSearch: string
@@ -208,6 +212,8 @@ const zh: Dict = {
   detailLoadedFull: '已载入完整内容',
   mergedNoSurfaceOp: (n) => `该内容由 ${n} 条结果合并，事件未声明 surfaceOp`,
   zoomOpen: '放大查看',
+  viewInCenter: '在中央查看',
+  clickToViewFull: '点击查看全文',
   zoomTitle: (name) => `${name} · 步骤详情`,
   zoomClose: '关闭',
   zoomSearch: '搜索步骤',
@@ -293,6 +299,8 @@ const en: Dict = {
   detailLoadedFull: 'Full content loaded',
   mergedNoSurfaceOp: (n) => `Merged from ${n} results — the events declared no surfaceOp`,
   zoomOpen: 'Open zoomed view',
+  viewInCenter: 'View centered',
+  clickToViewFull: 'Click to view full text',
   zoomTitle: (name) => `${name} · step details`,
   zoomClose: 'Close',
   zoomSearch: 'Search steps',

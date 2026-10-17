@@ -309,8 +309,10 @@ describe('TrailTab', () => {
     const steps = await screen.findAllByTestId('ttl-step')
     expect(steps).toHaveLength(3)
     expect(steps[0].getAttribute('data-step-kind')).toBe('tool')
-    // Each row leads with its semantic category dot (green bash / amber edit).
-    expect(steps[0].querySelector('.ttl-rowDot')).toBeTruthy()
+    // Each row leads with its semantic glyph: v0.6.0 draws a per-tool icon
+    // (terminal/file/search/plug) and only unknown tools keep the legacy dot.
+    expect(steps[0].querySelector('.ttl-rowIcon')).toBeTruthy()
+    expect(steps[0].querySelector('.ttl-rowArgs')?.textContent).toBe('npm test')
     // Assistant messages render as output rows in the same row anatomy.
     expect(screen.getAllByTestId('ttl-item-output').length).toBeGreaterThan(0)
   })
@@ -434,7 +436,8 @@ describe('TrailTab', () => {
     // A step without a result opens on 参数 by default.
     expect(screen.getByTestId('ttl-dtab-params').getAttribute('aria-selected')).toBe('true')
     fireEvent.click(screen.getByTestId('ttl-dtab-params'))
-    expect(await screen.findByTestId('ttl-json')).toBeTruthy()
+    expect(await screen.findByTestId('ttl-json-pretty')).toBeTruthy()
+    expect(screen.getByTestId('ttl-json-pretty').textContent).toContain('"cmd": "ls"')
     // Unparseable arguments degrade to the raw text plus the hint.
     fireEvent.click(steps[1])
     expect(screen.getAllByTestId('ttl-detail')).toHaveLength(1)
@@ -603,7 +606,7 @@ describe('TrailTab', () => {
     // (the wire value was `{"path":"big.md"}` — the `full` key proves the swap).
     fireEvent.click(screen.getByTestId('ttl-dtab-params'))
     const params = screen.getByTestId('ttl-detail-body-params')
-    expect(params.querySelector('.ttl-json')).toBeTruthy()
+    expect(params.querySelector('[data-testid="ttl-json-pretty"]')).toBeTruthy()
     expect(params.textContent).toContain('full')
 
     expect(detail).toHaveBeenCalledTimes(1)
@@ -729,5 +732,68 @@ describe('TrailTab', () => {
     expect(screen.getByTestId('ttl-zoom-title').textContent).toContain('read')
     // The row itself never expanded (⌘⇧O is not a disclosure key).
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
+  })
+})
+
+// ── v0.6.0: output rows expand, and the centered viewer is reachable ──────
+describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
+  const markdownTurn = (): Ev[] => [
+    user(1, 'read the readme'),
+    turnStart(2, 1),
+    toolCall(3, 'read', '{"file_path":"/Users/me/project/README.md"}', 'c3'),
+    toolResult(4, 'c3', '# Title\n\nSome **bold** text'),
+    turnEnd(5, 1),
+  ]
+
+  it('clicking an output row reveals the full text inline; ↗ keeps the locate action', async () => {
+    const long = `first line\n${'detail '.repeat(300)}`
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      assistant(3, long),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-output')
+    expect(screen.queryByTestId('ttl-output-body')).toBeNull()
+    fireEvent.click(row)
+    const body = await screen.findByTestId('ttl-output-body')
+    expect(body.textContent).toContain('detail detail')
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(row)
+    expect(screen.queryByTestId('ttl-output-body')).toBeNull()
+    // The locate affordance moved to its own sibling button.
+    expect(screen.getByTestId('ttl-output-jump')).toBeTruthy()
+  })
+
+  it('the toolbar opens the centered viewer on the tab that is active', async () => {
+    renderTab(oneTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    // No result → the params pane is the default.
+    expect(screen.getByTestId('ttl-dtab-params').getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(screen.getByTestId('ttl-detail-view-center'))
+    expect(await screen.findByTestId('ttl-zoom')).toBeTruthy()
+    expect(screen.getByTestId('ttl-zoom-tab-params').getAttribute('aria-selected')).toBe('true')
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByTestId('ttl-zoom')).toBeNull()
+  })
+
+  it('clicking the pane opens the viewer, but a control inside the pane does not', async () => {
+    renderTab(markdownTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    // Markdown result → the 结果 pane offers the 渲染/原文 switch.
+    fireEvent.click(await screen.findByTestId('ttl-view-toggle'))
+    expect(screen.queryByTestId('ttl-zoom')).toBeNull() // a control click must not open the viewer
+    fireEvent.click(screen.getByTestId('ttl-pane-clickable'))
+    expect(await screen.findByTestId('ttl-zoom')).toBeTruthy()
+    expect(screen.getByTestId('ttl-zoom-tab-result').getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('renders the tool summary instead of the raw argument JSON', async () => {
+    renderTab(markdownTurn())
+    const row = await screen.findByTestId('ttl-step')
+    expect(row.querySelector('.ttl-rowName')?.textContent).toBe('read')
+    expect(row.querySelector('.ttl-rowArgs')?.textContent).toBe('README.md')
+    expect(row.querySelector('.ttl-rowIcon')).toBeTruthy()
+    expect(row.getAttribute('title')).toBe('{"file_path":"/Users/me/project/README.md"}')
   })
 })

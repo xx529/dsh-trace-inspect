@@ -602,3 +602,45 @@ export interface TrailResult {
 | **AC17 暗色主题** | 深色（body `rgb(21,21,23)`）下实测对比度：行文本 **15.03:1**、详情带 **15.03:1**、JSON key **7.36:1**、JSON string 15.03:1、pill **9.2:1**、chip **6.75:1**；行度量仍为 24px/12px/18px |
 | **懒加载（GUI 点击）** | **未复现**：本会话唯一未被 compaction 替换的截断步骤是 `write seq #169`（argsBytes 44,493），它位于面板每轮渲染窗口之外（面板每轮约渲染 90 步；点「加载更早」可扩窗，但无法在 DOM 层稳定定位该行）；另一条截断结果 `read seq #65` 已被压缩替换（`contentTruncated` 归零）。**替代证据**：路由层完整返回 44,493（上表）+ 组件层 34 例（成功换源/失败保留预览 + 单次重试/inflight 去重） |
 | **AC20（GUI 挂载）** | 中等会话（977 事件 / 177 步）面板即开即用无长任务；大会话（145 轮 / 18,358 事件）的 GUI 挂载未测，改以数据层硬数字代替（§10.4） |
+
+---
+
+## 12. v0.6.0 详情面板可读性重做（使用反馈驱动）
+
+> 依据：用户对实机截图的四条反馈。核心接口仍以本契约为准；以下为新增/变更的 UI 契约。
+
+### 12.1 折叠行 = 语义摘要 + 图标（`src/client/tool-summary.ts`）
+
+| 工具 | label | detail | 图标 |
+| --- | --- | --- | --- |
+| `bash` / `bash_output` / `shell` | 工具名 | `description`；缺失时取 `command` 首行；再缺失取 args 预览 | `terminal` |
+| `read` / `read_image` | 工具名 | `file_path`（或 `path`）的 **basename** | `file-read` |
+| `write` / `append` | 工具名 | 同上 | `file-write` |
+| `edit` | 工具名 | 同上 | `file-edit` |
+| `glob` / `grep` / `search` | 工具名 | `pattern`（或 `query`） | `search` |
+| `ls` / `list_directory` / `list_dir` | 工具名 | `path` | `folder` |
+| `mcp__<server>__<tool>`（也容忍 `mcp_<server>_<tool>`） | `mcp:<server>` | `<tool> {…}`（无参数时只显示 tool） | `mcp` |
+| 其它 | 工具名 | 已知字段（description/command/file_path/path/pattern/query/url/prompt）否则 args 预览 | `generic`（保留原语义色点） |
+
+- detail 压平空白并裁剪到 120 字符；**行 tooltip 仍是原始 args 预览**（`title`），信息不丢失。
+- 错误行（`kind === 'error'`）仍是「工具/错误名 + 错误文本 + 红点」。
+
+### 12.2 参数页 = 格式化 JSON，默认全展开（`src/client/json-pretty.tsx`）
+
+- `JSON.stringify(value, null, 2)` 的语法着色 `<pre>`（复用 `.ttl-jsonKey/Str/Num/Bool/Null` token），**没有折叠节点**。
+- 超过 `cap`（默认 200,000 字符）时只渲染前 `cap` 字符并给「+N」增量展开按钮。
+- 行内详情带与放大浮层共用；JSON 不可解析时仍回退等宽原文 + 提示（§11.3 不变）。
+
+### 12.3 中央查看器入口（复用 §10.5.4 的浮层）
+
+| 入口 | 行为 |
+| --- | --- |
+| 详情带右上角「⤢ 在中央查看」 | 以**当前页签**打开浮层（新增 `initialTab`） |
+| 点击参数/结果/原始面板空白处 | 同上；**点击落在按钮/链接/输入框上，或存在文本选区时不触发** |
+| 页脚 ⤢ / 行聚焦 ⌘⇧O | 行为不变 |
+
+### 12.4 输出行可展开全文
+
+- 折叠态：2 行预览（不变）。
+- 点击输出行 → 行下方就地展开完整消息（`looksLikeMarkdown` 时用 `MarkdownResult` 渲染，否则等宽原文），再次点击收起。
+- 定位回对话原位改为行尾 `↗`（与工具行一致），不再占用行点击。

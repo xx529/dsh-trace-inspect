@@ -39,7 +39,10 @@ import {
   type ToolDetailResult,
 } from './useTrail'
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
-import { JsonTree, parseJsonLoose } from './json-tree'
+import { parseJsonLoose } from './json-tree'
+import { JsonPretty } from './json-pretty'
+import { summarizeToolCall, type ToolIconKind, type ToolTone } from './tool-summary'
+import { ToolIcon } from './tool-icon'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
 import { markdownLabels } from './markdown-labels'
 import {
@@ -177,8 +180,8 @@ interface StepDetailProps {
   onSetView: (seq: number, view: ResultView) => void
   /** Load (or join) the on-demand full detail of this step (§10.5.2). */
   onLoadDetail: (seq: number) => Promise<ToolDetailResult>
-  /** Open the full-size overlay for this step (契约 §10.5.4). */
-  onZoom: (step: TrailStep, trigger: HTMLElement | null) => void
+  /** Open the centered viewer for this step on a given pane (契约 §10.5.4). */
+  onZoom: (step: TrailStep, trigger: HTMLElement | null, tab?: DetailTab) => void
 }
 
 /**
@@ -250,7 +253,7 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
 
   const renderParams = (): React.ReactElement => (
     fullParsed.ok
-      ? <JsonTree value={fullParsed.value} />
+      ? <JsonPretty value={fullParsed.value} />
       : (
         <>
           <RawText text={fullArgs} />
@@ -359,10 +362,20 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
     setCopied(true)
   }
 
-  const openZoom = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    const wrap = event.currentTarget.closest('.ttl-stepWrap')
+  /** Open the centered viewer on `which` pane (footer ⤢ / pane click / toolbar). */
+  const openZoomFor = (which: DetailTab, element: HTMLElement): void => {
+    const wrap = element.closest('.ttl-stepWrap')
     const row = wrap !== null ? wrap.querySelector('[data-testid="ttl-step"]') : null
-    onZoom(step, row instanceof HTMLElement ? row : null)
+    onZoom(step, row instanceof HTMLElement ? row : null, which)
+  }
+
+  /** A click inside the pane opens the wide viewer — unless it hit a control. */
+  const openZoomFromPane = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const target = event.target as HTMLElement | null
+    if (target !== null && typeof target.closest === 'function'
+      && target.closest('button, a, input, textarea, select') !== null) return
+    if (typeof window !== 'undefined' && (window.getSelection?.()?.toString() ?? '').length > 0) return
+    openZoomFor(tab, event.currentTarget)
   }
 
   return (
@@ -378,11 +391,22 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
         {tabButton('result', t(lang, 'detailResult') as string)}
         {tabButton('raw', t(lang, 'detailRaw') as string)}
       </div>
+      <div className="ttl-detailTools">
+        <button
+          type="button"
+          className="ttl-dtab"
+          data-testid="ttl-detail-view-center"
+          title={t(lang, 'clickToViewFull') as string}
+          onClick={(event) => { openZoomFor(tab, event.currentTarget) }}
+        >{`⤢ ${t(lang, 'viewInCenter') as string}`}</button>
+      </div>
       <div className="ttl-detailBody" data-testid={`ttl-detail-body-${tab}`}>
         {loadStrip()}
-        {tab === 'params' ? renderParams() : null}
-        {tab === 'result' ? renderResult() : null}
-        {tab === 'raw' ? <RawText text={args} /> : null}
+        <div className="ttl-clickablePane" data-testid="ttl-pane-clickable" onClick={openZoomFromPane} title={t(lang, 'clickToViewFull') as string}>
+          {tab === 'params' ? renderParams() : null}
+          {tab === 'result' ? renderResult() : null}
+          {tab === 'raw' ? <RawText text={args} /> : null}
+        </div>
       </div>
       <div className="ttl-detailFoot" data-testid="ttl-detail-foot">
         <span
@@ -405,7 +429,7 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
           data-testid="ttl-detail-zoom"
           title={t(lang, 'zoomOpen') as string}
           aria-label={t(lang, 'zoomOpen') as string}
-          onClick={openZoom}
+          onClick={(event) => { openZoomFor(tab, event.currentTarget) }}
         >⤢</button>
         {result?.replacedBy !== undefined
           ? (
@@ -435,7 +459,7 @@ interface StepRowProps {
   onStepClose: (step: TrailStep) => void
   onSetView: (seq: number, view: ResultView) => void
   onLoadDetail: (seq: number) => Promise<ToolDetailResult>
-  onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null) => void
+  onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null, tab?: DetailTab) => void
 }
 
 /**
@@ -454,12 +478,16 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
     step, turn, open, view, lang, sessionId,
     onJump, onToggleStep, onStepOpen, onStepClose, onSetView, onLoadDetail, onZoom,
   } = props
-  const text = step.kind === 'error' ? step.error : step.argsPreview
-  const tone = step.kind === 'error' || step.result?.isError === true ? 'red' : toolDotClass(step.name)
+  const summary = React.useMemo(
+    () => summarizeToolCall(step.name, step.args, step.argsPreview, lang),
+    [step.name, step.args, step.argsPreview, lang],
+  )
+  const tone: ToolTone = step.kind === 'error' || step.result?.isError === true ? 'red' : toolDotClass(step.name)
+  const text = step.kind === 'error' ? step.error : summary.detail
   const detailId = `ttl-detail-${step.kind}-${step.seq}`
   /** Keep the band's memo effective: a stable handler per (row, turn). */
   const openZoomForStep = React.useCallback(
-    (target: TrailStep, trigger: HTMLElement | null) => { onZoom(target, turn, trigger) },
+    (target: TrailStep, trigger: HTMLElement | null, tab?: DetailTab) => { onZoom(target, turn, trigger, tab) },
     [onZoom, turn],
   )
   return (
@@ -471,7 +499,7 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
         data-step-kind={step.kind}
         aria-expanded={open}
         aria-controls={detailId}
-        title={text}
+        title={step.kind === 'error' ? step.error : (step.argsPreview.length > 0 ? step.argsPreview : text)}
         onClick={(event) => { onToggleStep(step, event.altKey) }}
         onKeyDown={(event) => {
           if (event.key === 'ArrowRight') {
@@ -487,8 +515,8 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
         }}
       >
         <span className={`ttl-caret${open ? ' ttl-caretOpen' : ''}`} aria-hidden="true" />
-        <span className={`ttl-rowDot ttl-dot-${tone}`} aria-hidden="true" />
-        <span className="ttl-rowName ttl-rowNameMono">{step.name}</span>
+        <ToolIcon kind={step.kind === 'error' ? 'generic' : summary.icon} tone={tone} />
+        <span className="ttl-rowName ttl-rowNameMono">{summary.label}</span>
         <span className="ttl-rowArgs">{text}</span>
       </button>
       <button
@@ -537,7 +565,7 @@ interface TurnRowProps {
   onStepClose: (step: TrailStep) => void
   onSetView: (seq: number, view: ResultView) => void
   onLoadDetail: (seq: number) => Promise<ToolDetailResult>
-  onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null) => void
+  onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null, tab?: DetailTab) => void
 }
 
 const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactElement {
@@ -558,6 +586,15 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     if (item.kind === 'input') return false
     return !isToolFilter
   })
+  const [openOutputs, setOpenOutputs] = React.useState<ReadonlySet<string>>(() => new Set<string>())
+  const toggleOutput = React.useCallback((key: string): void => {
+    setOpenOutputs((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
   const turnTag = (t(lang, 'turnPrefix') as (n: number) => string)(turn.turn ?? index + 1)
   const preview = turn.inputPreview
   const hasError = turn.hasError
@@ -610,19 +647,41 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     if (item.kind === 'tool') return renderStep(item.step, key)
     if (item.kind === 'input') return null // shown as the body's first row
     if (item.kind === 'output') {
+      // v0.6.0: clicking the output row reveals the FULL message inline (the
+      // row itself stays a 2-line clamp); ↗ keeps the locate-in-conversation
+      // action that used to live on the row click.
+      const open = openOutputs.has(key)
       return (
-        <button
-          type="button"
-          key={key}
-          className="ttl-row"
-          data-testid="ttl-item-output"
-          title={clipTitle(item.text)}
-          onClick={() => { onJump(targetFor(item), turn) }}
-        >
-          {dot('violet')}
-          {name(t(lang, 'output') as string, false)}
-          <span className="ttl-rowText ttl-rowText2">{item.text}</span>
-        </button>
+        <div className="ttl-outputWrap" key={key} data-open={open ? 'true' : undefined} data-testid="ttl-output-wrap">
+          <button
+            type="button"
+            className="ttl-row"
+            data-testid="ttl-item-output"
+            aria-expanded={open}
+            title={clipTitle(item.text)}
+            onClick={() => { toggleOutput(key) }}
+          >
+            {dot('violet')}
+            {name(t(lang, 'output') as string, false)}
+            <span className="ttl-rowText ttl-rowText2">{item.text}</span>
+          </button>
+          <button
+            type="button"
+            className="ttl-jump"
+            data-testid="ttl-output-jump"
+            title={t(lang, 'locateInChat') as string}
+            onClick={() => { onJump(targetFor(item), turn) }}
+          >↗</button>
+          {open
+            ? (
+              <div className="ttl-outputBody" data-testid="ttl-output-body">
+                {looksLikeMarkdown(item.text)
+                  ? <MarkdownResult text={item.text} labels={markdownLabels(lang)} />
+                  : <RawText text={item.text} />}
+              </div>
+            )
+            : null}
+        </div>
       )
     }
     return (
@@ -891,13 +950,18 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
 
   // ── Zoom overlay (v0.5.0, 契约 §10.5.4) ────────────────────────────────
   /** The open overlay: which turn it was opened from and which step it shows. */
-  const [zoom, setZoom] = React.useState<{ turnId: string; seq: number } | null>(null)
+  const [zoom, setZoom] = React.useState<{ turnId: string; seq: number; tab?: DetailTab } | null>(null)
   /** The row to focus again once the dialog closes (契约: 焦点回到触发行). */
   const zoomReturnRef = React.useRef<HTMLElement | null>(null)
 
-  const openZoom = React.useCallback((step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null): void => {
+  const openZoom = React.useCallback((
+    step: TrailStep,
+    turn: TrailTurn,
+    trigger: HTMLElement | null,
+    tab?: DetailTab,
+  ): void => {
     zoomReturnRef.current = trigger ?? (typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null)
-    setZoom({ turnId: turnByIdentity(turn), seq: step.seq })
+    setZoom({ turnId: turnByIdentity(turn), seq: step.seq, tab })
   }, [])
 
   const closeZoom = React.useCallback((): void => { setZoom(null) }, [])
@@ -1167,6 +1231,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
           <ZoomOverlay
             steps={zoomSteps}
             initialSeq={zoom.seq}
+            initialTab={zoom.tab}
             sessionId={sessionId}
             lang={lang}
             onClose={closeZoom}

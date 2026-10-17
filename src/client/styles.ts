@@ -1193,4 +1193,64 @@ export const trailCss = `
   line-height: 14px;
   white-space: nowrap;
 }
+
+/* ── v0.6.0: semantic tool glyphs, pretty JSON, centered-viewer affordances ── */
+.ttl-rowIcon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+  margin-right: 1px;
+}
+.ttl-icon-success { color: var(--dsw-alias-state-success-primary, #22c55e); }
+.ttl-icon-warn { color: var(--dsw-alias-state-warn-primary, #f59e0b); }
+.ttl-icon-neutral { color: var(--dsw-alias-label-tertiary, #adb2b8); }
+.ttl-icon-blue { color: var(--dsw-alias-state-business-primary, #4176e6); }
+.ttl-icon-violet { color: var(--dsw-alias-brand-primary-new-colorprimary-new-color, #5686fe); }
+.ttl-icon-red { color: var(--dsw-alias-state-error-primary, #f25a5a); }
+.ttl-detailTools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  padding: 1px 0 3px;
+}
+.ttl-clickablePane { cursor: zoom-in; }
+.ttl-jsonPrettyWrap { position: relative; }
+.ttl-jsonPretty {
+  margin: 0;
+  padding: 2px 0 6px;
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, Menlo, monospace);
+  font-size: 11.5px;
+  line-height: 17px;
+  white-space: pre;
+  overflow: auto;
+  max-height: 420px;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  tab-size: 2;
+}
+.ttl-jsonMore {
+  position: sticky;
+  bottom: 0;
+  align-self: flex-start;
+}
+.ttl-outputWrap { display: block; position: relative; }
+.ttl-outputBody {
+  margin: 2px 0 4px 15px;
+  padding: 4px 8px 6px;
+  border-left: 1px solid var(--dsw-alias-separator-secondary, rgba(255, 255, 255, 0.12));
+}
+.ttl-outputBody .ttl-md { padding: 2px 4px; }
+.ttl-outputToggle {
+  font-size: 10px;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  background: none;
+  border: none;
+  padding: 0 0 2px;
+  cursor: pointer;
+}
+.ttl-outputToggle:hover { color: var(--dsw-alias-label-primary, #f9fafb); }
 `

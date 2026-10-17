@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.6.0] - 2026-10-17
+
+**详情面板可读性重做**（按使用反馈的四条）。
+
+### Changed / Added
+
+- **工具行改成语义摘要 + 图标**：不再直接打印裁剪后的参数 JSON。
+  - `bash` → `bash <description>`（没有 description 时取命令行首行）；
+  - `read` / `write` / `edit` → `read package.json` 这样的文件名（完整路径保留在悬停 tooltip）；
+  - `glob` / `grep` → 显示 pattern；`ls` 等目录类 → 显示路径；
+  - `mcp__<server>__<tool>` → `mcp:<server> <tool> {…}`；
+  - 每行前置 13px 内联图标（terminal / file-read / file-write / file-edit / search / folder / plug），未知工具仍用原来的语义色点；
+  - 纯函数在 `src/client/tool-summary.ts`，11 个单测覆盖映射与边界（长文本裁剪、非 JSON 参数、Windows 路径、mcp 两种拼写）。
+- **参数页改为格式化 JSON，且默认全展开**：`src/client/json-pretty.tsx` 用语法着色的 `<pre>` 渲染完整文档，不再需要逐层点开 `{3}`；超大文档（默认 20 万字符）才出现「+N」增量展开。行内详情带与放大浮层共用。
+- **长内容可在页面中央查看**：详情带右上角新增「⤢ 在中央查看」；**点击参数/结果/原始面板空白处**也会在页面中央打开查看器（点面板内的按钮/有文本选区时不触发），并落在当前页签（浮层新增 `initialTab`）。查看器沿用居中浮层（1080×760、role=dialog、Esc、↑↓、⌘F、⌘C、导出 JSON）。
+- **输出（assistant 消息）可点开看全文**：折叠态仍是 2 行预览，点击就地展开完整内容（Markdown 照常渲染），再点收起；定位回原位的动作移到行尾 `↗`，与工具行一致。
+
+### Verification
+
+- `pnpm typecheck` 0 / `pnpm test` **478 例 / 19 文件** / `pnpm build` + bundle 契约自检。
+- 新增：`tests/tool-summary.spec.ts`（11）、`tests/json-pretty.spec.tsx`（4）、`tests/trail-tab.spec.tsx` +4 个交互用例；旧标记断言同步（`ttl-json` → `ttl-json-pretty`、行首 dot → 图标）。
+
 ## [0.5.2] - 2026-10-17
 
 ### Fixed

@@ -1204,7 +1204,8 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     expect(row.className).toBe('ttl-row')
     expect(row.getAttribute('data-step-kind')).toBe('tool')
     expect(row.querySelector('.ttl-caret')).not.toBeNull()
-    expect(row.querySelector('.ttl-rowDot')).not.toBeNull()
+    // v0.6.0: known tools draw a per-tool icon; unknown tools keep the dot.
+    expect(row.querySelector('.ttl-rowDot, .ttl-rowIcon')).not.toBeNull()
     expect(row.querySelector('.ttl-rowName.ttl-rowNameMono')?.textContent).toBe('bash')
     expect(row.querySelector('.ttl-rowArgs')?.textContent).toBe('npm test')
     expect(row.children.length).toBe(4)
@@ -1250,7 +1251,7 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     fireEvent.click(screen.getByTestId('ttl-step'))
     expect(screen.getByTestId('ttl-detail-body-result')).toBeTruthy()
     fireEvent.click(screen.getByTestId('ttl-dtab-params'))
-    expect(screen.getByTestId('ttl-json')).toBeTruthy() // {"path":"a.md"} 可解析 → JSON 树
+    expect(screen.getByTestId('ttl-json-pretty')).toBeTruthy() // {"path":"a.md"} 可解析 → 格式化 JSON
 
     cleanup()
     await mount([
