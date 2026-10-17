@@ -813,3 +813,16 @@ T10 的 §12.6 记的是 **07:12 时点**的指纹。其后 Lead 又改了两处
 | 发布 | `v0.5.1`（a582194）、`v0.5.2`（447a407）已推送；`pnpm test` **458 例 / 17 文件**全绿；desktop profile 已装 **0.5.2**（客户端产物含 `TAB_TITLE`） |
 
 > 客户端改动只需**硬刷新页面**（Cmd/Ctrl+Shift+R），不需要重启 App；host 半未改动。
+
+## 14. v0.6.0 详情面板可读性（实机复核，2026-10-17）
+
+依据用户对实机截图的四条反馈实现，并在独立 profile 实例（19487，Playwright + 真实会话 `session-a29878e7…`，157 个工具行）上逐条核对：
+
+| 反馈 | 实现 | 实机证据 |
+| --- | --- | --- |
+| ① 长参数需要「页面中央弹出查看」 | 详情带右上角「⤢ 在中央查看」+ 点击参数/结果/原始面板空白处打开居中浮层（浮层新增 `initialTab`） | 工具栏点击 → `ttl-zoom` 出现、`ttl-zoom-tab-params` 选中、浮层内含 pretty JSON；Esc 关闭后计数归零；**点面板空白处同样打开**（`paneOpened: 1`）；点面板内的按钮不会误开 |
+| ② 内置 tool 行改成语义表达 + 图标 | `src/client/tool-summary.ts` + `tool-icon.tsx` | 10/10 采样行：`bash Inspect DSH config and plugins`…（description）、`write design.md`、`edit README.md`、`read_image A2-result-markdown.png`、`mcp:playwright browser_run_code_unsafe {…}`；行首均为 13px 图标（DOM：caret 8px + icon 13px + name 30px + args 486px） |
+| ③ 点击输出要展开全部 | 输出行点击就地展开（Markdown 渲染），`↗` 单独负责定位 | `ttl-output-body` 出现、正文 1,779 字符；`ttl-output-jump` 存在 |
+| ④ 参数用格式化 JSON 且全展开 | `src/client/json-pretty.tsx` | 行内参数页 `.ttl-jsonKey` 着色、**0 个折叠节点**（`.ttl-jsonToggle` 计数 0），完整文档一次性渲染 |
+
+交付：`v0.6.0`（`1d59876`，tag `v0.6.0`）；`pnpm test` **478 例 / 19 文件**；desktop profile 已装 0.6.0，`lib/client.js` 与仓库构建 **sha256 相同**（`facb37bc…`）。客户端改动 → 硬刷新页面即可生效。
