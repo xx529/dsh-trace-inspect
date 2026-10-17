@@ -798,3 +798,18 @@ $ dsh plugin --profile desktop add github:xx529/dsh-trace-inspect     # → Pack
 ### 13.5 与 §12.6 指纹的关系
 
 T10 的 §12.6 记的是 **07:12 时点**的指纹。其后 Lead 又改了两处并重建：`src/client/markdown-result.tsx`（§11.4#5 的 F-V6 修复，06:38）与 `src/index.ts`（`ToolDetailItem.seq` JSDoc，06:53，注释不影响产物），最终 `lib/client.js` 由 `e6b82bc4…` 变为 `c7f2e47c…`、`lib/index.js` 保持 `ce5bab2e…`。**§12 的结论以「改后复验」为准**：T10 已按新 revision 重跑 56/56 与全量 452/452，并平移校正了行号引用；本轮最终提交后的门禁再次全绿（§13.2）。改 `src/` 后必须重跑 `pnpm build && pnpm test` 并按新指纹复核。
+
+### 13.6 v0.5.1 / v0.5.2：侧栏 tab 名称语言修复（2026-10-17 13:4x）
+
+用户反馈：「侧面栏显示的名称还是 turn outline，要改成轮次轨迹」。排查与修复过程（都有实测）：
+
+| 步骤 | 事实 |
+| --- | --- |
+| 根因 1 | tab 标题只读 `navigator.language`；Electron 里它回报 Chromium 默认的 **`en-US`**，与 DSH 界面语言无关 |
+| 根因 2 | DSH 的界面语言本身跟随 **OS/浏览器 locale**：用 Playwright 建 `locale: 'en-US'` 的上下文打开 19487，`navigator.language=en-US`、`html[lang]=en`，**整个界面变成英文**（New Session / Plugins / Settings）——所以「跟随界面语言」在桌面客户端里仍会得到 "Turn Outline" |
+| v0.5.1 | 改为跟随 DSH 官方 client `locale` 服务（`getLocale().active` + `subscribe`，`html[lang]`/`navigator.language` 仅回退）；面板内文案与 description 一并修正；+6 回归用例 |
+| v0.5.2 | 按用户明确要求，tab 名**固定为「轮次轨迹」**（不随语言变化）；面板内其它文案仍跟随界面语言（v0.5.1 的 locale 链路保留并继续被测试覆盖） |
+| 实机验证 | 在 `locale=en-US` 的新浏览器上下文（`uiIsEnglish: true`）打开 19487：DOM 中 `轮次轨迹` 恰好 1 处、`Turn Outline` **0 处**；截图 `/tmp/tabname-en-us-052.png` |
+| 发布 | `v0.5.1`（a582194）、`v0.5.2`（447a407）已推送；`pnpm test` **458 例 / 17 文件**全绿；desktop profile 已装 **0.5.2**（客户端产物含 `TAB_TITLE`） |
+
+> 客户端改动只需**硬刷新页面**（Cmd/Ctrl+Shift+R），不需要重启 App；host 半未改动。
