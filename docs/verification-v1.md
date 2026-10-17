@@ -826,3 +826,21 @@ T10 的 §12.6 记的是 **07:12 时点**的指纹。其后 Lead 又改了两处
 | ④ 参数用格式化 JSON 且全展开 | `src/client/json-pretty.tsx` | 行内参数页 `.ttl-jsonKey` 着色、**0 个折叠节点**（`.ttl-jsonToggle` 计数 0），完整文档一次性渲染 |
 
 交付：`v0.6.0`（`1d59876`，tag `v0.6.0`）；`pnpm test` **478 例 / 19 文件**；desktop profile 已装 0.6.0，`lib/client.js` 与仓库构建 **sha256 相同**（`facb37bc…`）。客户端改动 → 硬刷新页面即可生效。
+
+## 15. v0.7.0 长参数可读性（B + C，实机复核）
+
+按选定方案实现并在独立 profile 实例（19487，Playwright + 真实会话）上验证。测试对象是一条刚产生的真实 bash 步骤：命令 **664 字符 / 12 行**（python heredoc）。
+
+| 检查 | 实测 |
+| --- | --- |
+| 默认折叠（B） | 参数页出现 1 个长值块，meta = **`664 字符 · 12 行`**，展开正文**未渲染**（`ttl-json-long-body` 计数 0）；短字段 `"description": "v0.7.0 long-command viewer check"` 仍内联、JSON 结构完整 |
+| 展开还原真实换行 | 正文 **12 行**、首两行为 `python3 - <<'PY'` / `# v0.7.0 long-command viewer check…`；残留 `\n` 转义仅 **1** 处（是 Python 源码里 `print("\n".join(...))` 的真实反斜杠-n，不是转义残留） |
+| 展开块高度 | `scrollHeight 200 / clientHeight 200`（`max-height: 240px`，本例未超出） |
+| 中央单值查看器（C） | 打开成功；标题 **`command` + `12 行 · 664 字符`**；**12 行**行号；`white-space: pre-wrap`（软换行，无横向滚动） |
+| 查找高亮 | 搜索 `0123456789` → **18 处**，`<mark class="ttl-valueHit">` **18** 个 |
+| 关闭 | `Esc` 后查看器计数 0，底部步骤浮层保持 |
+| 视觉 | 折叠态：`"command": [664 字符 · 12 行] 展开 复制 ⤢`（虚线块）；展开态：蓝色左边线的 12 行命令；查看器：居中 1080×760 面板 + 行号 + 搜索框 |
+
+截图：`/tmp/f-collapsed.png`、`/tmp/f-expanded.png`、`/tmp/f-viewer.png`、`/tmp/f-viewer-search.png`。
+
+交付：`v0.7.0`（`cd83458`，tag `v0.7.0`）；`pnpm test` **489 例 / 20 文件**；desktop profile 已装 0.7.0，`lib/client.js` 与仓库构建 sha256 相同（`e45a4dfd…`）。
