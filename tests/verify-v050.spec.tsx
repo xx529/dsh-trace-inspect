@@ -1370,7 +1370,9 @@ describe('H · 产物一致性', () => {
     const match = /^##\s*\[([^\]]+)\]/m.exec(changelog)
     expect(match).not.toBeNull()
     expect(pkg.version).toBe(match?.[1])
-    expect(pkg.version).toBe('0.5.0')
+    // Deliberately NO hard-coded version here: the CHANGELOG comparison above is
+    // the bump-proof invariant (a literal '0.5.0' broke on the 0.5.1 bump).
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/)
   })
 
   it('H2 lib/ 由 git 跟踪，且 v0.5.0 的 host/client 标记都进了产物', () => {

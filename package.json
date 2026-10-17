@@ -1,6 +1,6 @@
 {
   "name": "dsh-trace-inspect",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Trace-inspector sidebar tab for dsh-better-sidebar: fold a session into user turns and expand any tool step in place — full arguments (JSON tree), tool results rendered as Markdown with a raw fallback, session-authorized image thumbnails, error details, on-demand untruncated payloads and a zoomed reading view — while keeping jump-back into the conversation | DSH 轮次轨迹侧边栏（详情增强版）：按轮次折叠会话，可就地展开任一步查看完整参数（JSON 树）、结果（Markdown 渲染/原文）、会话授权缩略图、错误详情与按需完整内容，并带放大阅读浮层，同时保留一键定位回对话原位",
   "type": "module",
   "main": "lib/index.js",

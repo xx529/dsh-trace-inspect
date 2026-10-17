@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1] - 2026-10-17
+
+### Fixed
+
+- **侧栏 tab 名称不跟随界面语言（中文界面显示 "Turn Outline"）**：标题以前只读 `navigator.language`，而 Electron 里它回报的是 Chromium 默认的 `en-US`，即使 DSH 界面是中文。现在改为跟随 DSH 官方 client `locale` 服务：`ctx.get('locale').getLocale().active` 作为主信号（`zh-CN` 这类区域标签会归一化），`locale.subscribe` 跟随运行时切换；`html[lang]` 与 `navigator.language` 只在服务缺失时回退。**同一个根因**也让面板内的文案在 Electron 下退化成英文，一并修正。
+- tab 的 `description`（better-sidebar 引导页标题下的一行说明）同样改为走字典 + `detectLang()`，不再硬编码语言判断。
+- 新增 6 个回归用例（`tests/client-apply.spec.tsx`）：`locale=zh` + `navigator.language=en-US` → 「轮次轨迹」（复现用户场景）、反向覆盖、`zh-CN` 归一化、运行时切换、`html[lang]` 回退、locale 服务抛错时不崩。
+
 ## [0.5.0] - 2026-10-17
 
 **完成 v1.0 之外的剩余项**：会话授权图片缩略图、按需完整内容、P2 放大阅读浮层、`mergedFrom` 可见提示，以及两处在独立 profile 实机复核中发现的正确性修复（F7/F8）。

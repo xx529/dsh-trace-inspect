@@ -1,18 +1,49 @@
 /**
- * locales.ts — zh/en dictionaries for the trail panel, following the
- * browser language (matching conversation-outline's i18n approach).
+ * locales.ts — zh/en dictionaries for the trail panel.
+ *
+ * The active language follows DSH itself: the official client `locale` service
+ * is the signal source (`ctx.get('locale').getLocale().active`), with
+ * `html[lang]` and `navigator.language` only as fallbacks. Reading
+ * `navigator.language` alone is wrong inside the Electron app: it reports the
+ * Chromium default (`en-US`) while the UI itself is Chinese, which made the
+ * sidebar tab read "Turn Outline" in a Chinese UI.
  */
 
 export type Lang = 'zh' | 'en'
 
-export function detectLang(): Lang {
-  if (typeof navigator === 'undefined') return 'en'
-  const raw = navigator.language ?? ''
+/** Normalize a locale id (`zh`, `zh-CN`, `en-US`, …) to a dictionary language. */
+function normalizeLang(raw: string): Lang {
   return raw.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
+/** Language reported by the host `locale` service; `null` until wired. */
+let hostLang: Lang | null = null
+
+/**
+ * Feed the host locale into the detector. Called from `apply()` when the DSH
+ * `locale` service is reachable, and again on every locale change.
+ * @param localeId - `LocaleSnapshot['active']` (`'zh'`, `'en'`, `'zh-CN'`, …).
+ */
+export function setHostLocale(localeId: string | null | undefined): void {
+  hostLang = localeId === undefined || localeId === null || localeId === ''
+    ? null
+    : normalizeLang(localeId)
+}
+
+export function detectLang(): Lang {
+  if (hostLang !== null) return hostLang
+  if (typeof document !== 'undefined') {
+    const htmlLang = document.documentElement?.lang
+    if (htmlLang) return normalizeLang(htmlLang)
+  }
+  if (typeof navigator !== 'undefined') return normalizeLang(navigator.language ?? '')
+  return 'en'
 }
 
 export interface Dict {
   tabTitle: string
+  /** One-liner shown under the tab title in better-sidebar's native guide page. */
+  tabDescription: string
   turnsCount: (n: number) => string
   followLatest: string
   followPaused: string
@@ -102,6 +133,7 @@ export interface Dict {
 
 const zh: Dict = {
   tabTitle: '轮次轨迹',
+  tabDescription: '按用户轮次折叠会话轨迹，一键定位回对话原位',
   turnsCount: (n) => `${n} 轮`,
   followLatest: '跟随最新',
   followPaused: '已暂停跟随',
@@ -186,6 +218,7 @@ const zh: Dict = {
 
 const en: Dict = {
   tabTitle: 'Turn Outline',
+  tabDescription: 'Fold the session into per-turn steps and jump back to any of them',
   turnsCount: (n) => `${n} turns`,
   followLatest: 'Follow latest',
   followPaused: 'Follow paused',

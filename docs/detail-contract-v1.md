@@ -29,7 +29,7 @@
 | HTTP 路由 | `/trace-inspect/api/events` | T1（src/index.ts）、T4（src/client/useTrail.ts） |
 | better-sidebar tab id | `trace-inspect` | T4（src/client/index.tsx） |
 | 注入 `<style>` 的 dataset | `dsh-trace-inspect` | T4（src/client/index.tsx） |
-| 用户可见 tab 标题 | 保持 `轮次轨迹` / `Turn Outline` | 不改 |
+| 用户可见 tab 标题 | `轮次轨迹` / `Turn Outline`，**跟随 DSH 界面语言**：v0.5.1 起由官方 client `locale` 服务（`getLocale().active` + `subscribe`）决定，`html[lang]` / `navigator.language` 仅作回退 | 文案不变，只修语言来源（Electron 的 `navigator.language` 恒为 en-US，曾导致中文界面显示 "Turn Outline"） |
 
 ## 2. Host 投影契约（`src/wire.ts`）
 

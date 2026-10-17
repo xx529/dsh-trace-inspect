@@ -11,6 +11,13 @@
 import * as React from 'react'
 import { trailCss } from './styles'
 import { TrailTab } from './TrailTab'
+import { detectLang, setHostLocale, t } from './locales'
+
+/** The slice of DSH's client `locale` service this plugin consumes. */
+interface LocaleFace {
+  getLocale?: () => { active?: string }
+  subscribe?: (listener: () => void) => () => void
+}
 
 /**
  * Tab glyph — Lucide `route` (ISC license): two round endpoints joined by an
@@ -47,15 +54,33 @@ function routeIcon(size: number): React.ReactNode {
 export const inject = ['sessions', 'uiConversation', 'betterSidebar']
 
 /**
- * Localized one-liners for the native right-Sidebar guide page (DSH
- * 0.1.5-rc.1+ / 0.2.0 render the descriptor's description under the title;
- * a descriptor without one renders the bare title).
+ * Make the panel follow DSH's own UI language.
+ *
+ * `navigator.language` is NOT the app language inside Electron (it reports the
+ * Chromium default, `en-US`, even for a Chinese UI), which used to leave the
+ * tab reading "Turn Outline" next to Chinese chrome. The official client
+ * `locale` service is the real signal; `html[lang]` / `navigator.language` are
+ * only fallbacks inside `detectLang()`.
+ * @param ctx - Client plugin context (for `ctx.get('locale')`).
  */
-function tabDescription(): string {
-  if (typeof navigator === 'undefined') return 'Turn outline'
-  return navigator.language.toLowerCase().startsWith('zh')
-    ? '按用户轮次折叠会话轨迹，一键定位回对话原位'
-    : 'Fold the session into per-turn steps and jump back to any of them'
+function followHostLocale(ctx: {
+  get(name: string): unknown
+  effect<T>(fn: () => T): T
+}): void {
+  const locale = ctx.get('locale') as LocaleFace | null | undefined
+  const readLocaleId = (): string | undefined => {
+    try {
+      return locale?.getLocale?.().active
+    } catch {
+      return undefined
+    }
+  }
+  setHostLocale(readLocaleId())
+  if (typeof locale?.subscribe === 'function') {
+    ctx.effect(() => (locale as { subscribe(listener: () => void): () => void }).subscribe(() => {
+      setHostLocale(readLocaleId())
+    }))
+  }
 }
 
 export function apply(ctx: {
@@ -73,6 +98,8 @@ export function apply(ctx: {
   // outline, the working reference).
   ctx.effect(() => () => style.remove())
 
+  followHostLocale(ctx)
+
   const betterSidebar = ctx.get('betterSidebar')
   if (
     betterSidebar === undefined || betterSidebar === null
@@ -84,10 +111,11 @@ export function apply(ctx: {
 
   ctx.effect(() => (betterSidebar as { registerTab(descriptor: unknown): () => void }).registerTab({
     id: 'trace-inspect',
-    title: () => (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh')
-      ? '轮次轨迹'
-      : 'Turn Outline'),
-    description: tabDescription,
+    // Both strings go through the dictionary so the sidebar chrome matches the
+    // app language (see `followHostLocale`); the getters are re-evaluated on
+    // every render, so a live locale switch is picked up too.
+    title: () => t(detectLang(), 'tabTitle') as string,
+    description: () => t(detectLang(), 'tabDescription') as string,
     icon: (size: number) => routeIcon(size),
     order: 46,
     single: true,
