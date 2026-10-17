@@ -253,7 +253,7 @@ const StepDetail = React.memo(function StepDetail(props: StepDetailProps): React
 
   const renderParams = (): React.ReactElement => (
     fullParsed.ok
-      ? <JsonPretty value={fullParsed.value} />
+      ? <JsonPretty value={fullParsed.value} lang={lang} />
       : (
         <>
           <RawText text={fullArgs} />

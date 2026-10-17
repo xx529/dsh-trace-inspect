@@ -316,6 +316,11 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
   // dialog is a portal, so nothing above it in the React tree sees these keys.
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      // A value viewer opened from the params pane is a modal on top of this
+      // one; it owns Esc / ⌘F / ⌘C until it closes (otherwise one Esc would
+      // close both dialogs).
+      if (typeof document !== 'undefined'
+        && document.querySelector('[data-testid="ttl-value-viewer"]') !== null) return
       if (event.key === 'Escape') {
         event.preventDefault()
         onClose()
@@ -358,7 +363,7 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
     if (tab === 'params') {
       const args = current.args ?? ''
       const parsed = parseJsonLoose(args)
-      if (parsed.ok) return <JsonPretty value={parsed.value} />
+      if (parsed.ok) return <JsonPretty value={parsed.value} lang={lang} />
       return (
         <>
           <RawText text={args} />

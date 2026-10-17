@@ -133,6 +133,15 @@ export interface Dict {
   zoomNoMatch: string
   zoomExport: string
   zoomHint: string
+  /** Meta line of a folded long value: formatted char count + line count. */
+  valueMeta: (chars: string, lines: number) => string
+  /** Dialog label of the centered single-value reader. */
+  valueViewerTitle: (label: string) => string
+  valueSearch: string
+  valueHits: (n: number) => string
+  valueNoHit: string
+  valueClipped: (n: number) => string
+  jsonShowAll: (n: number) => string
 }
 
 const zh: Dict = {
@@ -220,6 +229,13 @@ const zh: Dict = {
   zoomNoMatch: '无匹配步骤',
   zoomExport: '导出 JSON',
   zoomHint: 'Esc 关闭 · ↑↓ 切步 · ⌘F 搜索',
+  valueMeta: (chars, lines) => `${chars} 字符 · ${lines} 行`,
+  valueViewerTitle: (label) => `${label} · 全文`,
+  valueSearch: '搜索内容',
+  valueHits: (n) => `${n} 处`,
+  valueNoHit: '无匹配',
+  valueClipped: (n) => `仅显示前 4000 行（另有 ${n} 行；复制仍是全文）`,
+  jsonShowAll: (n) => `显示全部（当前只渲染了前 ${n} 行）`,
 }
 
 const en: Dict = {
@@ -307,6 +323,13 @@ const en: Dict = {
   zoomNoMatch: 'No matching step',
   zoomExport: 'Export JSON',
   zoomHint: 'Esc close · ↑↓ step · ⌘F search',
+  valueMeta: (chars, lines) => `${chars} chars · ${lines} lines`,
+  valueViewerTitle: (label) => `${label} · full text`,
+  valueSearch: 'Search in value',
+  valueHits: (n) => `${n} matches`,
+  valueNoHit: 'No match',
+  valueClipped: (n) => `First 4000 lines only (${n} more; copy still copies everything)`,
+  jsonShowAll: (n) => `Show all (only the first ${n} rows are rendered)`,
 }
 
 const dicts: Record<Lang, Dict> = { zh, en }
