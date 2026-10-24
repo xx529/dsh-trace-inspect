@@ -844,3 +844,64 @@ T10 的 §12.6 记的是 **07:12 时点**的指纹。其后 Lead 又改了两处
 截图：`/tmp/f-collapsed.png`、`/tmp/f-expanded.png`、`/tmp/f-viewer.png`、`/tmp/f-viewer-search.png`。
 
 交付：`v0.7.0`（`cd83458`，tag `v0.7.0`）；`pnpm test` **489 例 / 20 文件**；desktop profile 已装 0.7.0，`lib/client.js` 与仓库构建 sha256 相同（`e45a4dfd…`）。
+
+## 16. v0.8.0 并行工具调用可视化（实机复核）
+
+依据：用户要求「如果几个 tool 是并行调用，需要把这个信息通过 UI 表达出来」。判定只用事件自带的 `turn` / `step`（见契约 §14），本轮在**独立 profile + 真实会话**上复核功效与降级。
+
+### 16.1 环境（可复现）
+
+| 项 | 值 |
+| --- | --- |
+| 运行时 | App 内置 CLI `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh` → **DSH `0.2.1-rc.2`**（不是 PATH 里的 0.1.2-alpha.2） |
+| profile | `trace-verify`（`dsh-trace-inspect` 为 `link:` 到本仓库，改 `src` → `pnpm build` 后重启实例即复测） |
+| 启动 | `"$CLI" --profile trace-verify --no-open --port 19487` → `dsh web: http://127.0.0.1:19487/?token=…` |
+| 浏览器 | Playwright Chromium（MCP），真实渲染 1440×900 |
+| 会话 | `session-2720edba-d94f-4bf5-9ac1-ab3b29d3e5ee`（标题「优化侧边查看插件并推送」，本次面板显示 **11 轮 / 763 步**，chips：全部 763 / 失败 16 / bash 295 / edit 111 / read 81 / mcp__playwright__browser_evaluate 78） |
+
+> ⚠️ **环境坑（本轮踩到，记录以免复现耗时）**：`trace-verify` 里 pin 的 `dsh-better-sidebar@0.26.1` 在 DSH 0.2.1-rc.2 下**不激活**（启动告警 `pending (waiting for service: webRuntime)`，右侧栏无「轮次轨迹」tab，页面报 `sidebar/api/session.cwd 405` 循环）。升到 desktop profile 同款 **0.28.0** 后正常注册。命令：`"$CLI" plugin --profile trace-verify add dsh-better-sidebar@0.28.0`。
+
+### 16.2 表头徽标（折叠/展开都在，实测数值）
+
+面板加载完整个会话后，7 个含并行批次的轮次表头各自出现 `∥N` 徽标；无并行批次的轮次（3/4/7/10）**不渲染**徽标：
+
+| 轮次 | 徽标 | `title` / `aria-label` |
+| --- | --- | --- |
+| 1 | `∥76` | `76 组并行调用 · 共 163 次` |
+| 2 | `∥18` | `18 组并行调用 · 共 37 次` |
+| 5 | `∥18` | `18 组并行调用 · 共 36 次` |
+| 6 | `∥2` | `2 组并行调用 · 共 4 次` |
+| 8 | `∥5` | `5 组并行调用 · 共 10 次` |
+| 9 | `∥2` | `2 组并行调用 · 共 4 次` |
+| 11 | `∥1` | `1 组并行调用 · 共 2 次` |
+
+### 16.3 展开体（组标题 + 竖线 + 行内交互）
+
+轮次 11 展开后，正文出现 `role="group"`、`aria-label="并行 ×2"` 的组：
+
+- 组标题：`∥`（aria-hidden）+ `并行 ×2`，`title="同一助手步骤内下发的 2 个工具调用（DSH 可能按并发安全策略串行执行）"`；
+- 组内两行：`bash Document v0.7.0 evidence and push`、`job_kill {"job_id":"bash-158",…}`，行尾 `↗` 均在；
+- 组外前后仍然是平铺行（`输出` / `bash` / `read_image` 等），与 v0.7.0 一致。
+
+截图：`/tmp/v080-parallel-panel.png`（右侧栏 `轮次轨迹` tab，可见 `∥ 并行 ×2` 组与组内缩进/左侧发丝线）。
+
+### 16.4 降级口径（与旧日志一致）
+
+同一面板里，缺少 `step` 的较早事件（本会话前半段为 v0.4.0~v0.7.0 期间写入）不产生任何组/徽标；错误行与孤儿结果行也不入组（面板 chips 的 `失败 16` 是另一维度统计）。`tests/trail-tab.spec.tsx` 的 `threeSteps`（无 `turn`/`step`）固定该口径。
+
+### 16.5 门禁与交付
+
+```
+$ pnpm typecheck            # 0
+$ pnpm test                 # 510 例 / 21 文件 全绿
+$ pnpm build                # lib/index.js + lib/client.js，bundle 契约自检 ok
+$ pnpm check:lib            # 4 committed lib/ files match a fresh build
+```
+
+| 项 | 值 |
+| --- | --- |
+| 版本 | **v0.8.0**，提交 `d3424c0`（tag `v0.8.0` 已推送） |
+| 新增测试 | `tests/parallel-groups.spec.ts`（14）、`tests/trail-tab.spec.tsx` +7 |
+| desktop profile | 已装 **0.8.0**（`package.json` pin `github:xx529/dsh-trace-inspect#d3424c0fb285e2b396e058fc77988a0e58a78897`） |
+| 产物一致性 | 安装包 `lib/client.js` 与本仓库构建 **sha256 相同**（`09b8e672de984ad79c66cdd938a6e3c974462bd89a210fa38563f13bc68f98e1`）；`lib/index.js` 未改（`ce5bab2e…`，host 半无改动），profile `cordis.yml` 含 `id: trace-inspect` |
+| 生效方式 | **纯客户端改动**：桌面 App 里硬刷新页面（⌘/Ctrl+Shift+R）即可，无需重启 App；host 路由未改动 |
