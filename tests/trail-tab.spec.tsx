@@ -797,3 +797,127 @@ describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
     expect(row.getAttribute('title')).toBe('{"file_path":"/Users/me/project/README.md"}')
   })
 })
+
+// ── v0.8.0: parallel tool-call batches (assistant-step grouping) ──────────
+describe('TrailTab — parallel tool-call batches (v0.8.0)', () => {
+  /** A model-issued call: `data.turn` + `data.step` carry the batch identity. */
+  const stepCall = (
+    seq: number,
+    name: string,
+    args: string,
+    callId: string,
+    turn: number,
+    step: number,
+  ): Ev => ev('tool/call', seq, { name, arguments: args, callId, turn, step })
+
+  /** read + read in assistant step 1, then one bash in step 2. */
+  const mixedTurn = (): Ev[] => [
+    user(1, 'scan the repo'),
+    turnStart(2, 1),
+    stepCall(3, 'read', '{"file_path":"a.md"}', 'c3', 1, 1),
+    stepCall(4, 'read', '{"file_path":"b.md"}', 'c4', 1, 1),
+    toolResult(5, 'c3', 'A'),
+    toolResult(6, 'c4', 'B'),
+    stepCall(7, 'bash', '{"command":"ls"}', 'c7', 1, 2),
+    toolResult(8, 'c7', 'files'),
+    assistant(9, 'done'),
+    turnEnd(10, 1),
+  ]
+
+  it('groups same-step calls under a ∥ caption and badges the collapsed-ready header', async () => {
+    renderTab(mixedTurn())
+    const groups = await screen.findAllByTestId('ttl-parallel-group')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].getAttribute('data-step')).toBe('1')
+    const head = within(groups[0]).getByTestId('ttl-parallel-head')
+    expect(head.textContent).toBe('∥Parallel ×2')
+    expect(head.getAttribute('title')).toContain('2 tool calls issued in one assistant step')
+    // The batch holds exactly its two rows; the later bash row is outside it.
+    expect(within(groups[0]).getAllByTestId('ttl-step')).toHaveLength(2)
+    expect(screen.getAllByTestId('ttl-step')).toHaveLength(3)
+    // Header badge: one batch / two calls, visible while the turn is expanded.
+    const badge = screen.getByTestId('ttl-turn-parallel')
+    expect(badge.textContent).toBe('∥1')
+    expect(badge.getAttribute('title')).toBe('1 parallel group · 2 calls')
+  })
+
+  it('counts every batch of a turn and separates them across an assistant output', async () => {
+    renderTab([
+      user(1, 'two rounds'),
+      turnStart(2, 1),
+      stepCall(3, 'read', '{"file_path":"a"}', 'c3', 1, 1),
+      stepCall(4, 'read', '{"file_path":"b"}', 'c4', 1, 1),
+      toolResult(5, 'c3', 'A'),
+      toolResult(6, 'c4', 'B'),
+      assistant(7, 'round 2'),
+      stepCall(8, 'read', '{"file_path":"c"}', 'c8', 1, 2),
+      stepCall(9, 'read', '{"file_path":"d"}', 'c9', 1, 2),
+      toolResult(10, 'c8', 'C'),
+      toolResult(11, 'c9', 'D'),
+      turnEnd(12, 1),
+    ])
+    expect((await screen.findByTestId('ttl-turn-parallel')).textContent).toBe('∥2')
+    const groups = await screen.findAllByTestId('ttl-parallel-group')
+    expect(groups.map((group) => group.getAttribute('data-step'))).toEqual(['1', '2'])
+    expect(groups.map((group) => within(group).getAllByTestId('ttl-step')).map((rows) => rows.length)).toEqual([2, 2])
+  })
+
+  it('keeps the badge on a collapsed turn (no rows mounted)', async () => {
+    renderTab([
+      ...mixedTurn(),
+      user(20, 'next'),
+      turnStart(21, 2),
+      toolCall(22, 'bash', '{"command":"pwd"}', 'c22'),
+      toolResult(23, 'c22', '/'),
+      turnEnd(24, 2),
+    ])
+    const turns = await screen.findAllByTestId('ttl-turn')
+    expect(turns[0].getAttribute('data-collapsed')).toBe('true')
+    const badge = within(turns[0]).getByTestId('ttl-turn-parallel')
+    expect(badge.textContent).toBe('∥1')
+    expect(within(turns[0]).queryByTestId('ttl-parallel-group')).toBeNull()
+  })
+
+  it('no badge and no group on legacy logs without turn/step', async () => {
+    renderTab(threeSteps())
+    await screen.findByText('Turn 1')
+    expect(screen.queryByTestId('ttl-turn-parallel')).toBeNull()
+    expect(screen.queryByTestId('ttl-parallel-group')).toBeNull()
+  })
+
+  it('tool chips re-group the visible rows: both reads stay grouped, bash alone is flat', async () => {
+    renderTab(mixedTurn())
+    await screen.findAllByTestId('ttl-step')
+    fireEvent.click(screen.getByTestId('ttl-chip-read'))
+    const group = await screen.findByTestId('ttl-parallel-group')
+    expect(within(group).getAllByTestId('ttl-step').map((row) => row.textContent)).toHaveLength(2)
+    expect(screen.getAllByTestId('ttl-step')).toHaveLength(2)
+    fireEvent.click(screen.getByTestId('ttl-chip-bash'))
+    expect(await screen.findByTestId('ttl-step')).toBeTruthy()
+    expect(screen.queryByTestId('ttl-parallel-group')).toBeNull()
+    expect(screen.getAllByTestId('ttl-step')).toHaveLength(1)
+  })
+
+  it('a grouped row keeps expand + locate behaviour', async () => {
+    renderTab(mixedTurn())
+    const group = await screen.findByTestId('ttl-parallel-group')
+    const row = within(group).getAllByTestId('ttl-step')[0]
+    fireEvent.click(row)
+    const detail = await screen.findByTestId('ttl-detail')
+    expect(detail).toBeTruthy()
+    expect(within(group).getAllByTestId('ttl-step-jump')).toHaveLength(2)
+  })
+
+  it('renders the zh caption inside a Chinese host', async () => {
+    const previous = document.documentElement.lang
+    document.documentElement.lang = 'zh'
+    try {
+      renderTab(mixedTurn())
+      const head = await screen.findByTestId('ttl-parallel-head')
+      expect(head.textContent).toBe('∥并行 ×2')
+      expect(screen.getByTestId('ttl-turn-parallel').getAttribute('title')).toBe('1 组并行调用 · 共 2 次')
+    } finally {
+      document.documentElement.lang = previous
+    }
+  })
+})

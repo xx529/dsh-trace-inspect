@@ -84,6 +84,13 @@ export interface Dict {
   stepsLabel: string
   filterCollapse: string
   showEarlierSteps: (n: number) => string
+  // ── v0.8.0 parallel tool-call batches ─────────────────────
+  /** Caption of one assistant-step batch: 2+ tool calls issued together. */
+  parallelGroup: (n: number) => string
+  /** Tooltip of that caption (what the grouping evidence is). */
+  parallelGroupHint: (n: number) => string
+  /** Turn-header badge tooltip: batch count + call count. */
+  parallelGroupsTitle: (groups: number, calls: number) => string
   // ── v0.4.0 inline detail（契约 §4.6） ──────────────────────
   detailParams: string
   detailResult: string
@@ -186,6 +193,9 @@ const zh: Dict = {
   stepsLabel: '工具步骤数',
   filterCollapse: '收起',
   showEarlierSteps: (n) => `显示更早 ${n} 条`,
+  parallelGroup: (n) => `并行 ×${n}`,
+  parallelGroupHint: (n) => `同一助手步骤内下发的 ${n} 个工具调用（DSH 可能按并发安全策略串行执行）`,
+  parallelGroupsTitle: (groups, calls) => `${groups} 组并行调用 · 共 ${calls} 次`,
   detailParams: '参数',
   detailResult: '结果',
   detailRaw: '原始',
@@ -280,6 +290,9 @@ const en: Dict = {
   stepsLabel: 'tool steps',
   filterCollapse: 'Collapse',
   showEarlierSteps: (n) => `Show ${n} earlier`,
+  parallelGroup: (n) => `Parallel ×${n}`,
+  parallelGroupHint: (n) => `${n} tool calls issued in one assistant step (DSH may run them serially by concurrency policy)`,
+  parallelGroupsTitle: (groups, calls) => `${groups} parallel group${groups === 1 ? '' : 's'} · ${calls} calls`,
   detailParams: 'Params',
   detailResult: 'Result',
   detailRaw: 'Raw',

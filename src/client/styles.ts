@@ -1349,4 +1349,45 @@ export const trailCss = `
 .ttl-valueCode { white-space: pre-wrap; word-break: break-word; color: var(--dsw-alias-label-primary, #f9fafb); }
 .ttl-valueHit { background: var(--dsw-alias-state-warn-primary, #f59e0b); color: var(--dsw-alias-bg-layer-1, #111111); border-radius: 2px; }
 .ttl-valueClipped { padding: 6px 0 0 48px; font-size: 10.5px; color: var(--dsw-alias-label-tertiary, #adb2b8); }
+
+/* ── v0.8.0: parallel tool-call batches (one assistant step) ─────────────
+ * A batch of 2+ tool calls shares a compact "∥ 并行 ×N" caption and a hairline
+ * rail; the caption is informational (no state), and rows keep their density,
+ * disclosure and locate affordances unchanged. The turn-header badge is the
+ * collapsed-state summary, so a folded turn still says it holds batches. */
+.ttl-parallel { margin: 2px 0 3px; }
+.ttl-parallelHead {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px 1px 3px;
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 10px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.ttl-parallelMark {
+  color: var(--dsw-alias-brand-primary-new-colorprimary-new-color, #5686fe);
+  letter-spacing: -1px;
+}
+.ttl-parallelLabel { letter-spacing: 0.2px; }
+.ttl-parallelBody {
+  margin-left: 4px;
+  padding-left: 4px;
+  border-left: 1px solid var(--dsw-alias-separator-secondary, rgba(255, 255, 255, 0.12));
+}
+.ttl-parallelBadge {
+  flex: none;
+  padding: 0 4px;
+  border-radius: var(--dsw-radius-xs, 4px);
+  background: var(--dsw-alias-bg-module-platform, #353638);
+  color: var(--dsw-alias-label-tertiary, #adb2b8);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+}
 `

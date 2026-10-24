@@ -681,3 +681,47 @@ export interface TrailResult {
 | --- | --- |
 | 参数页长值块 `⤢` | 打开该**单值**查看器 |
 | 参数页「⤢ 在中央查看」（v0.6.0） | 打开**整步**浮层（内部长值同样以块呈现，可再进单值查看器） |
+
+---
+
+## 14. v0.8.0 并行工具调用可视化（assistant-step batch）
+
+> 依据：用户要求「如果几个 tool 是并行调用，需要把这个信息通过 UI 表达出来」。
+> 判定**只**采用会话事件自带的 `turn` / `step`，不做相邻性/耗时启发式。
+
+### 14.1 硬事实（实测，禁止推翻）
+
+| 事实 | 证据 |
+| --- | --- |
+| `tool/call.data` 恒带 `{turn, step, callId, name, arguments}`；`step` 是一次助手响应（模型请求）的序号，同一响应里的多个 tool 调用共享同一 `(turn, step)` | 真实会话 `~/.dsh/sessions/--Users-lzx-Documents-GitHub-dsh-trace-inspect--/session-2720edba-d94f-4bf5-9ac1-ab3b29d3e5ee/session.v4.jsonl.zstd`：747 个 `tool/call`，其中 128 组同 `(turn, step)`（2 个 ×119、3 个 ×5、4 个 ×3、5 个 ×1） |
+| `step` 只表示「同一批下发」，不等于都并发执行：DSH 调度器按工具的 `isConcurrencySafe` 分池，非并发安全的工具走独占屏障逐条执行 | App 内置 DSH 0.2.1-rc.2 `@deepseek-ai/dsh-agent-loop/lib/index.js` 的 `executeToolCalls` / `runGroup`（`mode === "parallel"` 才进滚动池）与 `@deepseek-ai/dsh-tools` 的 `executionMode`；内置工具里仅 `read` / `read_image` 声明并发安全 |
+| `wire.ts` 早已把 `turn` / `step` 透传到 `tool/call` 与 `tool/result`（§2） | `src/wire.ts` `case 'tool/call'` / `case 'tool/result'` |
+
+### 14.2 模型（`src/trail-model.ts`）
+
+- `TrailStep` 新增可选 `turn?: number` / `step?: number`，由 `tool/call` 的 `data.turn` / `data.step` 填充；`tool/result` 的错误行同样保留这两个字段（仅展示用）。
+- 新增导出（纯函数，无 React / DOM）：
+  - `TrailParallelGroup { key, turn, step, steps }`：一段**连续**同 `(turn, step)` 的 tool 行，长度 ≥2；
+  - `TrailGroupedItem = {kind:'item',item} | {kind:'group',group}`；
+  - `parallelGroupsOf(items)`：按列表顺序扫描，非 tool 行（输入/输出/压缩/错误行）、孤儿行、缺 `turn`/`step` 的行都会**打断**当前组；
+  - `groupParallelItems(items)`：把过滤/切片后的 item 列表转成渲染条目，组键 = `parallel:<turn>:<step>:<首条 seq>`（切片后仍唯一）。
+- `foldTurns` 与 `TrailFolder` 必须对同一事件流产出相同的 `turn`/`step`（单测对比 `snapshot()` 与 `foldTurns` 深相等）。
+
+### 14.3 视图（`src/client/TrailTab.tsx`）
+
+| 位置 | 行为 |
+| --- | --- |
+| 轮次表头（折叠/展开都显示） | `∥N` 徽标（N = 该轮并行组数，`data-testid="ttl-turn-parallel"`），`title`/`aria-label` = `parallelGroupsTitle(groups, calls)`；无组则完全不渲染 |
+| 展开体 | 先按 chip 过滤、再按 `STEP_CAP` 切片，**最后**分组；连续 ≥2 行同一步骤 → `.ttl-parallel`（`data-testid="ttl-parallel-group"`，`role="group"`，`data-step`）+ `.ttl-parallelHead`（`∥` + `parallelGroup(n)`，`title`/`hint` = `parallelGroupHint(n)`）+ `.ttl-parallelBody` 包住各行 |
+| 组内行 | 原 `StepRow` 不变：展开详情、`↗` 定位、`ArrowLeft/Right`、`⌘⇧O` 全部保留；行内 `string` 不新增交互 |
+| 筛选 | chips 仍逐行筛选；筛掉后同一步骤剩 1 行 → 平铺不成组；同一轮里被非 tool 行隔开的两批分别成组 |
+
+### 14.4 文案与样式
+
+- `locales.ts` 新增键（zh/en 都有）：`parallelGroup(n)`、`parallelGroupHint(n)`、`parallelGroupsTitle(groups, calls)`。
+- `styles.ts` 新增类（全部 `ttl-` 前缀，颜色/圆角只用 `var(--dsw-*)`）：`.ttl-parallel`、`.ttl-parallelHead`、`.ttl-parallelMark`、`.ttl-parallelLabel`、`.ttl-parallelBody`、`.ttl-parallelBadge`。
+- 组标题是**信息行**（非按钮、无展开状态）；不需要新的键盘路径。
+
+### 14.5 降级口径
+
+- 缺 `step` 的旧日志 / 孤儿结果行 / 纯错误行：不分组、不显示徽标，外观与 v0.7.0 完全一致（`tests/trail-tab.spec.tsx` 的 `threeSteps` 固定这一口径）。

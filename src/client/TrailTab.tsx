@@ -26,9 +26,10 @@ import type {
   TrailStep,
   TrailResult,
   TrailResultImage,
+  TrailParallelGroup,
   SessionEventLike,
 } from '../trail-model'
-import { stepsOf } from '../trail-model'
+import { groupParallelItems, parallelGroupsOf, stepsOf } from '../trail-model'
 import { detectLang, t, type Lang } from './locales'
 import {
   fetchToolDetail,
@@ -586,6 +587,25 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     if (item.kind === 'input') return false
     return !isToolFilter
   })
+  /**
+   * Parallel batches of THIS turn, computed on the unfiltered items so the
+   * header badge counts what the turn did, not what the active chip shows.
+   * Cheap guard: a turn with fewer than two steps cannot hold a batch.
+   */
+  const parallelGroups = React.useMemo(
+    () => (turn.stepsCount >= 2 ? parallelGroupsOf(turn.items) : []),
+    // Open-turn items are APPENDED in place (same array identity), so length is
+    // the structural signal; closed turns keep a frozen items array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [turn.stepsCount, turn.items.length],
+  )
+  const parallelCalls = React.useMemo(
+    () => parallelGroups.reduce((sum, group) => sum + group.steps.length, 0),
+    [parallelGroups],
+  )
+  const parallelBadgeTitle = parallelGroups.length > 0
+    ? (t(lang, 'parallelGroupsTitle') as (groups: number, calls: number) => string)(parallelGroups.length, parallelCalls)
+    : ''
   const [openOutputs, setOpenOutputs] = React.useState<ReadonlySet<string>>(() => new Set<string>())
   const toggleOutput = React.useCallback((key: string): void => {
     setOpenOutputs((current) => {
@@ -642,6 +662,36 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
       onZoom={onZoom}
     />
   )
+
+  /**
+   * One assistant-step batch: a compact `∥ 并行 ×N` caption plus a hairline
+   * rail around its rows, so calls requested together read as one unit instead
+   * of N unrelated steps. The caption is informational (no state); each row
+   * keeps its own disclosure / locate / keyboard behaviour untouched.
+   */
+  const renderParallelGroup = (group: TrailParallelGroup): React.ReactElement => {
+    const size = group.steps.length
+    const label = (t(lang, 'parallelGroup') as (n: number) => string)(size)
+    const hint = (t(lang, 'parallelGroupHint') as (n: number) => string)(size)
+    return (
+      <div
+        className="ttl-parallel"
+        key={group.key}
+        role="group"
+        aria-label={label}
+        data-testid="ttl-parallel-group"
+        data-step={group.step}
+      >
+        <div className="ttl-parallelHead" data-testid="ttl-parallel-head" title={hint}>
+          <span className="ttl-parallelMark" aria-hidden="true">∥</span>
+          <span className="ttl-parallelLabel">{label}</span>
+        </div>
+        <div className="ttl-parallelBody">
+          {group.steps.map((step) => renderStep(step, `seq:${step.seq}`))}
+        </div>
+      </div>
+    )
+  }
 
   const renderItem = (item: TurnItem, key: string): React.ReactElement | null => {
     if (item.kind === 'tool') return renderStep(item.step, key)
@@ -723,6 +773,16 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
         </button>
         <span className="ttl-turnMeta">
           {hasError ? <span className="ttl-errorDot" data-testid="ttl-error-dot" title={t(lang, 'error') as string} /> : null}
+          {parallelGroups.length > 0
+            ? (
+              <span
+                className="ttl-parallelBadge"
+                data-testid="ttl-turn-parallel"
+                title={parallelBadgeTitle}
+                aria-label={parallelBadgeTitle}
+              >{`∥${formatCount(parallelGroups.length)}`}</span>
+            )
+            : null}
           <span
             className="ttl-stepsNum"
             data-testid="ttl-steps-count"
@@ -747,6 +807,9 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
             const truncated = items.length > STEP_CAP && !showFull
             const shownItems = truncated ? items.slice(items.length - STEP_CAP) : items
             const hiddenCount = items.length - shownItems.length
+            // Group AFTER filtering/slicing, so a chip keeps only the calls it
+            // shows (a half-hidden batch renders as the visible run's own group).
+            const shownEntries = groupParallelItems(shownItems)
             return (
               <div className="ttl-turnBody">
                 {filter === 'all' && inputItem !== undefined ? renderInputRow(inputItem) : null}
@@ -760,7 +823,11 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                   : null}
                 {items.length === 0
                   ? <div className="ttl-emptyInline">{t(lang, 'emptyFiltered') as string}</div>
-                  : shownItems.map((item) => renderItem(item, keyOfItem(item)))}
+                  : shownEntries.map((entry) => (
+                    entry.kind === 'group'
+                      ? renderParallelGroup(entry.group)
+                      : renderItem(entry.item, keyOfItem(entry.item))
+                  ))}
               </div>
             )
           })()

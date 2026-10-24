@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.8.0] - 2026-10-25
+
+**并行工具调用可视化**：同一助手步骤内下发的多个 tool 调用在轮次轨迹里折叠成一个「∥ 并行 ×N」组，折叠态轮次表头也能看到并行组数。
+
+### Added
+
+- **并行组（assistant-step batch）**：DSH 的 `tool/call` 事件自带 `turn` + `step`；`step` 就是一次助手响应。同一个 `(turn, step)` 下的多个 tool 调用 = 模型在**一条响应里并行下发**的一批调用（DSH 随后交给工具调度器：并发安全的工具走并行池，其余走独占屏障）。轨迹面板现在把**连续的**同一步骤调用折成一个组：
+  - 组标题 `∥ 并行 ×N`（en: `Parallel ×N`），悬停解释判定依据（同一助手步骤内下发，DSH 可能按并发安全策略串行执行）；
+  - 组内行加一条发丝级左侧竖线 + 缩进，一眼看出这是「一批」而不是 N 个独立步骤；
+  - 组内每一行原有的展开详情、`↗` 定位、键盘操作完全不变；筛选 chips 仍逐行生效（筛选后同一步骤仍有 ≥2 行才成组，剩 1 行则平铺）。
+- **轮次表头徽标**：展开/折叠都在表头显示 `∥N`（N = 该轮并行的组数），悬停给出「N 组并行调用 · 共 M 次」；折叠轮次不用展开就能看出这一轮有没有并行调用。
+- **无数据的旧日志不变**：缺少 `step` 的历史日志（或孤儿结果行、错误行）不参与分组，外观与 v0.7.0 完全一致。
+
+### Changed
+
+- `TrailStep` 新增可选的 `turn` / `step`（来自 `tool/call.data`，wire 早已透传）；新增纯函数 `parallelGroupsOf` / `groupParallelItems`，UI 只消费折叠结果，不采信相邻性、耗时等启发式。
+
+### Verification
+
+- `pnpm typecheck` 0 / `pnpm test` **510 例 / 21 文件** / `pnpm build` + bundle 契约自检。
+- 新增：`tests/parallel-groups.spec.ts`（14：身份写入、两种折叠实现一致、连续/断组/旧日志/孤儿/切片），`tests/trail-tab.spec.tsx` +7（组标题与徽标、两组分离、折叠态徽标、旧日志无组、chips 重分组、组内行交互、中文文案）。
+- 判定依据来自真实会话日志（`/Users/lzx/.dsh/sessions/--Users-lzx-Documents-GitHub-dsh-trace-inspect--/session-2720edba-…/session.v4.jsonl.zstd`：747 个 `tool/call` 中 128 组同 `(turn, step)` 的并行批次，最大 5 个）与 App 内置 DSH 0.2.1-rc.2 的 `dsh-agent-loop` 调度源码。
+- 实机复核（独立 `trace-verify` profile，端口 19487，App 内置 DSH 0.2.1-rc.2 + Playwright，真实会话 11 轮 / 763 步 / 747 个 `tool/call`）：7 个含并行批次的轮次表头分别显示 `∥76`、`∥18`、`∥18`、`∥2`、`∥5`、`∥2`、`∥1`（turn 1 = 76 组 / 163 次），展开体出现 `role=group` 的 `并行 ×2` 组（`bash` + `job_kill` 两行，组内 `↗` 保留）；截图 `/tmp/v080-parallel-panel.png`。
+
 ## [0.7.0] - 2026-10-17
 
 **长参数可读性（方案 B + C，按选定口径）**：`\n` 还原为真实换行、超长值默认折叠、单值中央查看。

@@ -100,6 +100,20 @@ export interface TrailStep {
   result?: TrailResult
   /** No matching tool/call was found for this result (orphan placeholder row). */
   orphan?: boolean
+  /**
+   * Assistant step that issued this call: `tool/call.data.turn`. The wire
+   * forwards it verbatim (wire.ts tool/call `turn`); logs that predate the
+   * field leave it undefined, and the UI then shows no parallelism.
+   *
+   * Two or more tool calls sharing the same `turn` + `step` are one model
+   * step's tool-call batch — the assistant response contained several tool
+   * calls at once. DSH schedules that batch through its tool-call scheduler
+   * (parallel pool for concurrency-safe tools, exclusive barriers otherwise),
+   * so the batch is the trace-visible unit of "parallel tool calls".
+   */
+  turn?: number
+  /** Assistant step index inside the turn: `tool/call.data.step`. */
+  step?: number
 }
 
 export interface TrailTurn {
@@ -134,6 +148,112 @@ export function stepsOf(turn: TrailTurn): TrailStep[] {
   const out: TrailStep[] = []
   for (const item of turn.items) {
     if (item.kind === 'tool') out.push(item.step)
+  }
+  return out
+}
+
+// ── Parallel tool-call batches (assistant step grouping) ─────────────────
+//
+// DSH journals every model step as `tool/call` events carrying `{turn, step}`;
+// step = one assistant response. A response that emits several tool calls
+// yields several `tool/call` events with the SAME `{turn, step}` — the
+// trace-visible evidence that these calls were requested together (the loop
+// then schedules the batch: a parallel pool for concurrency-safe tools, an
+// exclusive barrier for the rest). The helpers below group consecutive
+// folded steps by that identity for the panel; they never guess from
+// adjacency or timing, so logs without `step` simply show no groups.
+
+/** One run of consecutive tool steps issued in the same assistant step. */
+export interface TrailParallelGroup {
+  /** Stable React key: identity + first call seq (unique per contiguous run). */
+  key: string
+  turn: number
+  step: number
+  /** The run's steps, in journaled (model) order; always length >= 2. */
+  steps: TrailStep[]
+}
+
+/** A filtered item list split into single items and parallel batches. */
+export type TrailGroupedItem =
+  | { kind: 'item'; item: TurnItem }
+  | { kind: 'group'; group: TrailParallelGroup }
+
+/** The assistant-step identity of one step, or null when it must not group. */
+function assistantStepOf(step: TrailStep): { turn: number; step: number } | null {
+  if (step.kind !== 'tool') return null
+  if (step.orphan === true) return null
+  if (typeof step.turn !== 'number' || typeof step.step !== 'number') return null
+  if (!Number.isFinite(step.turn) || !Number.isFinite(step.step)) return null
+  return { turn: step.turn, step: step.step }
+}
+
+/**
+ * Runs of >= 2 consecutive tool steps sharing `{turn, step}`, in list order.
+ * A non-tool item (assistant output / compaction / error row) breaks a run;
+ * so does a different assistant step. Single-call steps yield no group.
+ *
+ * `items` is expected to be the TURN's item list (or a filtered subset): only
+ * list order and step identity participate, never absolute turn numbers.
+ */
+export function parallelGroupsOf(items: readonly TurnItem[]): TrailParallelGroup[] {
+  const groups: TrailParallelGroup[] = []
+  let run: TrailStep[] = []
+  let identity: { turn: number; step: number } | null = null
+
+  const flush = (): void => {
+    if (identity !== null && run.length >= 2) {
+      groups.push({
+        key: `parallel:${identity.turn}:${identity.step}:${run[0].seq}`,
+        turn: identity.turn,
+        step: identity.step,
+        steps: run,
+      })
+    }
+    run = []
+    identity = null
+  }
+
+  for (const item of items) {
+    if (item.kind !== 'tool') {
+      flush()
+      continue
+    }
+    const step = assistantStepOf(item.step)
+    if (step === null) {
+      flush()
+      continue
+    }
+    if (identity !== null && (identity.turn !== step.turn || identity.step !== step.step)) flush()
+    identity = step
+    run.push(item.step)
+  }
+  flush()
+  return groups
+}
+
+/**
+ * Split a filtered item list into render entries: consecutive calls of one
+ * assistant step become one `group` entry, everything else stays an `item`.
+ * Group keys are unique per contiguous run, so a run cut by slicing renders
+ * as its own (smaller) group instead of colliding with the other half.
+ */
+export function groupParallelItems(items: readonly TurnItem[]): TrailGroupedItem[] {
+  const byFirstSeq = new Map<number, TrailParallelGroup>()
+  for (const group of parallelGroupsOf(items)) byFirstSeq.set(group.steps[0].seq, group)
+  const out: TrailGroupedItem[] = []
+  let index = 0
+  while (index < items.length) {
+    const item = items[index]
+    if (item.kind === 'tool') {
+      const group = byFirstSeq.get(item.step.seq)
+      if (group !== undefined) {
+        out.push({ kind: 'group', group })
+        index += group.steps.length
+        continue
+      }
+    }
+    out.push({ kind: 'item', item })
+    index += 1
   }
   return out
 }
@@ -523,6 +643,8 @@ class ResultIndex {
       argsBytes: typeof data.argsBytes === 'number' && Number.isFinite(data.argsBytes) ? data.argsBytes : args.length,
       callId,
       error: '',
+      ...(typeof data.turn === 'number' ? { turn: data.turn } : {}),
+      ...(typeof data.step === 'number' ? { step: data.step } : {}),
     }
     this.addStep(builder, step)
     this.register(callId, seq, { builder, step })
@@ -554,6 +676,8 @@ class ResultIndex {
         callId,
         error: compact(`${errorName}${detail}`),
         ...(errorCode !== undefined ? { errorCode } : {}),
+        ...(typeof data.turn === 'number' ? { turn: data.turn } : {}),
+        ...(typeof data.step === 'number' ? { step: data.step } : {}),
       }
       this.addStep(current, step)
       const bits: ContentBits = {
