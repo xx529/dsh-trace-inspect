@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.4] - 2026-11-06
+
+**展开态左右留白**：轨迹展开后不再紧贴面板两侧。
+
+### Changed
+
+- `.ttl-turn .ttl-step` 左右内边距 6/14 → **14/22px**；并行黄线随之内移到 `left:10px`；输出/输入行右侧 20px；「显示更早」左右 18px。
+- 详情带宽度保持 372px（margin 13.5），列表无横向滚动。
+
+### Verification
+
+- 实机（19487 / dock 400）：icon x=1055（+8）、耗时右缘距面板 22px、黄线 left 10px、desc 可用 139px；root/list scrollWidth=clientWidth=399，无横向滚动。截图 `docs/assets/v094-padding.jpg`。
+- `pnpm typecheck` 0；`pnpm test` 516 例 / 21 文件；`pnpm build` 通过。
+
 ## [0.9.3] - 2026-11-06
 
 **并行表达进一步极简**：不再有「∥ 并行 ×N」文字行，改由一条黄色连接线表达同一批调用；同时去掉贯穿图标的灰色时间线。

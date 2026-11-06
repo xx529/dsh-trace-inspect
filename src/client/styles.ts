@@ -2061,4 +2061,14 @@ export const trailCss = `
 }
 .ttl-parallelHead { display: none; }
 
+/* ══ v0.9.4: expanded trace gets breathing room on both sides ═════════════ */
+.ttl-turn .ttl-step {
+  padding-left: 14px;
+  padding-right: 22px;
+}
+.ttl-turn .ttl-stepJump { right: 8px; }
+.ttl-turn .ttl-item { padding-right: 20px; }
+.ttl-turn .ttl-parallel::before { left: 10px; }
+.ttl-turn .ttl-turnBody .ttl-showEarlier { width: calc(100% - 36px); margin-left: 18px; margin-right: 18px; }
+
 `

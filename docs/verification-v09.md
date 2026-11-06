@@ -108,3 +108,11 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 「每行 icon 有灰色竖线穿插，不需要」 | `.ttl-stepRail` `display:none`；普通行无任何竖线 | 221/221 行 rail 不可见；并行/普通 icon x 均 1047，name x 均 1073 |
 
 ![并行黄色连接线](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v093-parallel.jpg>)
+
+## 9. v0.9.4 展开态左右留白
+
+| 反馈 | 修正 | 实测 |
+| --- | --- | --- |
+| 「展开看轨迹，两边太紧贴边缘」 | `.ttl-turn .ttl-step` 内边距 6/14 → **14/22px**；黄线 left 10px；输出行右 20px；`显示更早` 18px | icon x=1055（+8）；耗时右缘距 root 22px（6 行一致）；desc 可用 139px；无横向滚动 |
+
+![展开态留白](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v094-padding.jpg>)
