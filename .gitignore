@@ -11,3 +11,9 @@ dist/
 # CI re-builds and runs `pnpm check:lib` (scripts/check-lib.mjs), which asserts
 # lib/ is tracked AND identical to the fresh build — so the committed output
 # cannot drift from src/.
+
+# DSH-to-Figma workspace artifacts (prototype exports live under docs/prototype)
+.figma/
+
+# pnpm content-addressable store (local cache)
+.pnpm-store/

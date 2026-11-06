@@ -114,6 +114,10 @@ export interface TrailStep {
   turn?: number
   /** Assistant step index inside the turn: `tool/call.data.step`. */
   step?: number
+  /** Wall-clock ms of the tool/call event (UI-only; absent on old logs). */
+  startedAt?: number
+  /** Wall-clock ms of the first tool/result event (UI-only; absent on old logs). */
+  endedAt?: number
 }
 
 export interface TrailTurn {
@@ -629,7 +633,7 @@ class ResultIndex {
   }
 
   /** tool/call → build the step (full args) and register callId + seq. */
-  applyToolCall(builder: Builder, data: Record<string, unknown>, seq: number): void {
+  applyToolCall(builder: Builder, data: Record<string, unknown>, seq: number, time?: number): void {
     const name = typeof data.name === 'string' && data.name.length > 0 ? data.name : 'tool'
     const args = typeof data.arguments === 'string' && data.arguments.length > 0 ? data.arguments : ''
     const callId = toolCallIdOf(data)
@@ -645,6 +649,7 @@ class ResultIndex {
       error: '',
       ...(typeof data.turn === 'number' ? { turn: data.turn } : {}),
       ...(typeof data.step === 'number' ? { step: data.step } : {}),
+      ...(time !== undefined ? { startedAt: time } : {}),
     }
     this.addStep(builder, step)
     this.register(callId, seq, { builder, step })
@@ -656,6 +661,7 @@ class ResultIndex {
     data: Record<string, unknown>,
     seq: number,
     eventSurfaceOp?: unknown,
+    time?: number,
   ): void {
     const callId = toolCallIdOf(data)
     const error = record(data.error)
@@ -678,6 +684,7 @@ class ResultIndex {
         ...(errorCode !== undefined ? { errorCode } : {}),
         ...(typeof data.turn === 'number' ? { turn: data.turn } : {}),
         ...(typeof data.step === 'number' ? { step: data.step } : {}),
+        ...(time !== undefined ? { startedAt: time, endedAt: time } : {}),
       }
       this.addStep(current, step)
       const bits: ContentBits = {
@@ -718,6 +725,7 @@ class ResultIndex {
       if (targets.length === 0) return
       for (const target of targets) {
         this.applyContent(target.builder, target.step, seq, bits, surfaceOp)
+        if (time !== undefined) target.step.endedAt = time
         this.seqIndex.set(seq, target)
         if (callId !== null && !this.byCallId.has(callId)) this.byCallId.set(callId, target)
       }
@@ -730,6 +738,7 @@ class ResultIndex {
     const hit = callId !== null ? this.byCallId.get(callId) : undefined
     if (hit !== undefined) {
       this.applyContent(hit.builder, hit.step, seq, bits)
+      if (time !== undefined) hit.step.endedAt = time
       this.seqIndex.set(seq, hit)
       return
     }
@@ -749,6 +758,7 @@ class ResultIndex {
     }
     this.addStep(current, step)
     this.applyContent(current, step, seq, bits)
+    if (time !== undefined) step.endedAt = time
     this.register(callId, seq, { builder: current, step })
   }
 
@@ -915,11 +925,11 @@ export function foldTurns(events: readonly SessionEventLike[]): TrailTurn[] {
       }
       case 'tool/call': {
         if (current === null) break
-        results.applyToolCall(current, data, seq)
+        results.applyToolCall(current, data, seq, time)
         break
       }
       case 'tool/result': {
-        results.applyToolResult(current, data, seq, event.surfaceOp)
+        results.applyToolResult(current, data, seq, event.surfaceOp, time)
         break
       }
       case 'compaction/summary': {
@@ -1003,11 +1013,11 @@ export function foldByUserBoundaries(events: readonly SessionEventLike[]): Trail
       continue
     }
     if (event.type === 'tool/call') {
-      results.applyToolCall(builder, data, seq)
+      results.applyToolCall(builder, data, seq, time)
       continue
     }
     if (event.type === 'tool/result') {
-      results.applyToolResult(builder, data, seq, event.surfaceOp)
+      results.applyToolResult(builder, data, seq, event.surfaceOp, time)
       continue
     }
   }
@@ -1289,11 +1299,11 @@ export class TrailFolder {
       }
       case 'tool/call': {
         if (this.current === null) break
-        this.results.applyToolCall(this.current, data, seq)
+        this.results.applyToolCall(this.current, data, seq, time)
         break
       }
       case 'tool/result': {
-        this.results.applyToolResult(this.current, data, seq, surfaceOp)
+        this.results.applyToolResult(this.current, data, seq, surfaceOp, time)
         break
       }
       case 'compaction/summary': {
@@ -1357,11 +1367,11 @@ export class TrailFolder {
       return
     }
     if (type === 'tool/call') {
-      this.results.applyToolCall(this.userActive, data, seq)
+      this.results.applyToolCall(this.userActive, data, seq, undefined)
       return
     }
     if (type === 'tool/result') {
-      this.results.applyToolResult(this.userActive, data, seq, surfaceOp)
+      this.results.applyToolResult(this.userActive, data, seq, surfaceOp, undefined)
       return
     }
     // compaction & anything else: foldByUserBoundaries ignores them.

@@ -44,24 +44,43 @@ describe('tool-summary — known tools', () => {
     expect(summarizeToolCall('ls', JSON.stringify({ path: '/tmp/x' }), '…')).toEqual({ label: 'ls', detail: '/tmp/x', icon: 'folder' })
   })
 
-  it('mcp tools collapse to mcp:<server> plus the tool name and an args marker', () => {
+  it('mcp tools split into server + tool + a human argument summary', () => {
     const summary = summarizeToolCall(
       'mcp__playwright__browser_click',
       JSON.stringify({ element: 'Save button', ref: 'e42' }),
       '…',
     )
-    expect(summary).toEqual({ label: 'mcp:playwright', detail: 'browser_click {…}', icon: 'mcp' })
+    expect(summary).toEqual({
+      label: 'playwright',
+      detail: 'browser_click · 2 个参数',
+      icon: 'mcp',
+      server: 'playwright',
+      toolName: 'browser_click',
+    })
+  })
+
+  it('mcp tools summarize asset arguments (counts + format + scale)', () => {
+    const summary = summarizeToolCall(
+      'mcp__figma__download_assets',
+      JSON.stringify({ nodeIds: ['1:2', '3:4', '5:6'], format: 'PNG', scale: 2 }),
+      '…',
+    )
+    expect(summary.label).toBe('figma')
+    expect(summary.toolName).toBe('download_assets')
+    expect(summary.detail).toBe('download_assets · 3 个节点 · PNG @2x')
   })
 
   it('mcp tools without arguments show just the tool name', () => {
-    expect(summarizeToolCall('mcp__deepwiki__read_wiki_structure', '', '').detail).toBe('read_wiki_structure')
+    const summary = summarizeToolCall('mcp__deepwiki__read_wiki_structure', '', '')
+    expect(summary.label).toBe('deepwiki')
+    expect(summary.detail).toBe('read_wiki_structure')
   })
 
   it('unknown tools keep the clipped preview and the generic glyph', () => {
     const summary = summarizeToolCall('some_custom_tool', undefined, '{"x":1}')
     expect(summary.label).toBe('some_custom_tool')
     expect(summary.icon).toBe('generic')
-    expect(summary.detail).toBe('{"x":1}')
+    expect(summary.detail).toBe('x 1')
   })
 
   it('unknown tools with object arguments surface a useful field', () => {

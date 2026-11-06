@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.9.0] - 2026-11-06
+
+**界面重设计（v0.9 原型 → 实现）**：按 `docs/prototype/` 的 8 帧原型重写侧栏与浮层的视觉/结构；数据折叠、并行分组、跳回对话、按需完整内容等行为保持不变。
+
+### Added
+
+- **列表总览**：`N 轮 · M 步` 头部 + 搜索（⌘F，内存子串过滤 name/args/result）+ 会话概览条（步数/轮数/失败数/总时长 + 工具族分布条 + legend）。
+- **轮次三行卡**：`#N` + `HH:mm` + 时长 + 工具族 mix（≤4）+ 错误/并行徽标 + 步数 + 定位 + 2 行 preview；展开体「输入 → 步骤/并行组 → 输出 → 汇总」。
+- **步骤时间线**：32px 行 = 工具族色 icon chip + mono 工具名 + 单行人话描述 + ✓/✗ + 单步时延；失败行整行标红；↗ 仅 hover/选中显示。
+- **并行组同级化**（语义修正）：并行调用与普通步骤**同列、不缩进**，只用整行浅底 + 2px 紫色时间线 + `∥ 并行 ×N` 分组头（含「N 个调用 · 合计时长」）标注归属。
+- **详情带四页签**：摘要 / 结果 / 参数 / 原始；摘要按工具族渲染——bash 命令按 `&&`/`;` 分段 + 语法高亮 + 软换行（超过 12 段折叠「展开全部 N 段」）、read/write/edit 文件块、MCP 参数表、其他参数表 + 输出预览。
+- **MCP 调用**：行内拆成「服务 · 工具 · 人话参数」（如 `figma download_assets · 5 个节点 · PNG @2x`），详情展示 MCP 徽标/连接状态、带类型徽标的参数表（数组折叠 chips + `+N`）、结果文件列表；未知工具的原始 JSON 预览也改为 `key value` 人话摘要。
+- **放大阅读浮层**：1280×800 双栏（256px 步骤大纲 + 宽版阅读区），面包屑/状态 pill/搜索/复制/导出/关闭，四页签与详情带同源；保留 Esc/↑↓/⌘F/⌘C/⌘E 键盘模型。
+- **状态与边角**：骨架屏、空会话、错误卡（错误码 + 重试/复制）、长命令折叠、底部常驻状态条（同步状态 + seq + 「有新更新↓」内联按钮）。
+- **单步时延数据**：`TrailStep` 新增 `startedAt` / `endedAt`（来自 wire `event.time`），UI 只展示真实时间戳，缺失即省略。
+
+### Changed
+
+- `styles.ts` 重写为「设计 token + 内容面复用 + v0.9 shell/detail/overlay」结构；颜色收敛到 v0.9 调色板（54 色白名单）并继续使用 `var(--dsw-*)` fallback。
+- `tool-summary.ts`：MCP `label` 改为服务名并新增 `server/toolName` 字段与 `mcpArgsSummary()`；未知工具增加对象参数的人话摘要。
+- `ZoomOverlay.tsx` 重写为双栏；共享原语（图片/剪贴板/字节格式化）抽到 `ui-shared.tsx`，四页签类型抽到 `detail-types.ts`；新增 `format.ts`（时长/时刻/工具族）与 `command-format.ts`（命令分段与 token 化）。
+- `TrailTab.tsx` 重写为 v0.9 结构（搜索/概览/三行卡/时间线/并行组/状态），内部 `StepDetail` 抽到 `StepDetail.tsx`。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **516 例 / 21 文件** 全绿；`pnpm build` + bundle 契约自检通过。
+- 独立 `trace-verify` web profile（DSH web，端口 19487，Playwright Chromium 1440×900 @2x，真实会话 11 轮 / 763 步 / 747 个 `tool/call`）逐帧实拍：dock 400px、`.ttl-step` 32px、`.ttl-detail` 372px、`.ttl-parallel` 缩进 0、`.ttl-zoomPanel` 1280×800、chips `scrollWidth=clientWidth=399`。
+- 逐帧对比图与差异记录：`docs/prototype/compare/`、`docs/verification-v09.md`（原型 vs 实机：列表 / 展开 / 详情命令 / 详情结果 / MCP / 浮层）。
+
 ## [0.8.0] - 2026-10-25
 
 **并行工具调用可视化**：同一助手步骤内下发的多个 tool 调用在轮次轨迹里折叠成一个「∥ 并行 ×N」组，折叠态轮次表头也能看到并行组数。

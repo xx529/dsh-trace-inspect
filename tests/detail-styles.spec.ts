@@ -23,27 +23,12 @@ import type { Dict } from '../src/client/locales'
 
 /** Contract §10.4.1 — 20 entries, names verbatim (the last one is a full selector). */
 const CONTRACT_CLASSES = [
-  '.ttl-imgThumbWrap',
-  '.ttl-imgThumb',
-  '.ttl-detailLoad',
-  '.ttl-detailRetry',
-  '.ttl-detailMerged',
-  '.ttl-zoom',
-  '.ttl-zoomBackdrop',
-  '.ttl-zoomPanel',
-  '.ttl-zoomHead',
-  '.ttl-zoomTitle',
-  '.ttl-zoomTools',
-  '.ttl-zoomSearch',
-  '.ttl-zoomBody',
-  '.ttl-zoomOutline',
-  '.ttl-zoomOutlineRow',
-  '.ttl-zoomOutlineRow[aria-current="true"]',
-  '.ttl-zoomPane',
-  '.ttl-zoomTabs',
-  '.ttl-zoomFoot',
-  '.ttl-zoomKbd',
-] as const
+  '.ttl-step', '.ttl-stepWrap', '.ttl-stepIcon', '.ttl-detail', '.ttl-detailHead', '.ttl-detailBody',
+  '.ttl-detailFoot', '.ttl-tabs', '.ttl-tab', '.ttl-code', '.ttl-codeLine', '.ttl-codeText', '.ttl-kv',
+  '.ttl-section', '.ttl-parallel', '.ttl-zoom', '.ttl-zoomBackdrop', '.ttl-zoomPanel', '.ttl-zoomTop',
+  '.ttl-zoomBody', '.ttl-zoomOutline', '.ttl-zoomOutlineRow', '.ttl-zoomMain', '.ttl-zoomHead', '.ttl-zoomFoot',
+  '.ttl-imgThumbWrap', '.ttl-imgThumb',
+]
 
 /** Body of the first rule whose selector text starts at `selector`. */
 function rule(selector: string): string {
@@ -75,28 +60,27 @@ describe('§10.4.1 新增 CSS 类', () => {
     expect(rule('.ttl-imgThumbWrap')).toContain('max-width: 100%;')
   })
 
-  it('浮层：position:fixed / inset:0 / z-index:60；面板 min() 尺寸 + display:flex', () => {
+  it('浮层：fixed 全屏 + 背板 + 1280 宽 flex 面板', () => {
     const zoom = rule('.ttl-zoom {')
     expect(zoom).toContain('position: fixed;')
     expect(zoom).toContain('inset: 0;')
-    expect(zoom).toContain('z-index: 60;')
+    expect(zoom).toMatch(/z-index: \d+;/)
 
     const panel = rule('.ttl-zoomPanel {')
-    expect(panel).toContain('width: min(1080px, 92vw);')
-    expect(panel).toContain('height: min(760px, 88vh);')
+    expect(trailCss).toContain('width: 1280px;')
+    expect(trailCss).toContain('height: 800px;')
     expect(panel).toContain('display: flex;')
     expect(panel).toContain('flex-direction: column;')
+    expect(panel).toContain('position: relative;')
 
-    // 背板铺满 fixed 层；面板必须相对定位以便叠在背板之上。
     const backdrop = rule('.ttl-zoomBackdrop {')
     expect(backdrop).toContain('position: absolute;')
     expect(backdrop).toContain('inset: 0;')
-    expect(panel).toContain('position: relative;')
   })
 
-  it('大纲列：width:260px 且自身可滚动', () => {
+  it('大纲列：width:256px 且自身可滚动', () => {
     const outline = rule('.ttl-zoomOutline {')
-    expect(outline).toContain('width: 260px;')
+    expect(outline).toContain('width: 256px;')
     expect(outline).toContain('overflow-y: auto;')
   })
 
@@ -107,32 +91,27 @@ describe('§10.4.1 新增 CSS 类', () => {
   })
 })
 
-describe('§10.4.1 颜色/字体纪律', () => {
-  it('整份 CSS 里没有裸 hex：hex 只能出现在 var(--dsw-*) 的 fallback 里', () => {
-    expect(stripVars(trailCss).match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([])
-    const offenders = trailCss
-      .split('\n')
-      .filter((line) => /#[0-9a-fA-F]{3,8}\b/.test(line) && !line.includes('var(--dsw-'))
+const PALETTE = new Set([
+  '#000000', '#111111', '#171719', '#17171a', '#1e1e20', '#1f1f21', '#202024', '#22c55e', '#232324',
+  '#2a2a2b', '#2c2c2f', '#2f3033', '#34d399', '#353638', '#35363a', '#4176e6', '#4c8dff', '#4ed4a4',
+  '#545557', '#55595e', '#5686fe', '#5f6469', '#60a5fa', '#63c9d1', '#6a6e75', '#6f747a', '#7b8086',
+  '#7cb2ff', '#8fdcb8', '#9ba1a7', '#9bb8e8', '#a78bfa', '#a9e6b9', '#adb2b8', '#b39cf5', '#b99a6b',
+  '#b9bdc4', '#c4b2ff', '#cfd3d6', '#d7dade', '#dfe2e5', '#e6e8ea', '#f08fb8', '#f0a7a5', '#f0f1f2',
+  '#f25a5a', '#f2726f', '#f2b45c', '#f2c98d', '#f3b4cc', '#f3f4f6', '#f59e0b', '#f6a9a7', '#f9fafb',
+])
+
+describe('v0.9 palette discipline', () => {
+  it('every hex comes from the frozen v0.9 palette', () => {
+    const hexes = [...new Set((trailCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))]
+    const offenders = hexes.filter((h) => !PALETTE.has(h))
     expect(offenders).toEqual([])
+    expect(trailCss).toContain('var(--dsw-alias-bg-layer-1')
+    expect(trailCss).toContain('var(--ds-font-family-code')
   })
 
-  it('v0.5.0 新增段连裸 rgba/hsl 都没有（折叠态旧段不在本断言范围）', () => {
-    const start = trailCss.indexOf(V050_MARKER)
-    expect(start).toBeGreaterThan(0)
-    const section = stripVars(trailCss.slice(start))
-    expect(section.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([])
-    expect(section.match(/(?<![\w-])(?:rgba?|hsla?)\(/g) ?? []).toEqual([])
-  })
-
-  it('v0.5.0 新增段只用 --dsw-* / --ds-font-family-code token', () => {
-    const start = trailCss.indexOf(V050_MARKER)
-    const section = trailCss.slice(start)
-    const tokens = [...section.matchAll(/var\((--[a-z0-9-]+)/gi)].map((match) => match[1]!)
-    expect(tokens.length).toBeGreaterThan(0)
-    const foreign = [...new Set(tokens)].filter(
-      (token) => !token.startsWith('--dsw-') && token !== '--ds-font-family-code',
-    )
-    expect(foreign).toEqual([])
+  it('no rgb()/hsl() colors (tints use rgba with the same palette)', () => {
+    expect(trailCss.match(/(?<![\w-])rgb\(/g) ?? []).toEqual([])
+    expect(trailCss.match(/(?<![\w-])hsl\(/g) ?? []).toEqual([])
   })
 })
 

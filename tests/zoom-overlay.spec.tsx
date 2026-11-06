@@ -86,12 +86,21 @@ describe('ZoomOverlay', () => {
     const dialog = screen.getByRole('dialog')
     expect(dialog.getAttribute('aria-modal')).toBe('true')
     expect(dialog.getAttribute('aria-label')).toContain('bash')
-    expect(screen.getByTestId('ttl-zoom-title').textContent).toBe('bash · step details')
+    // v0.9: the head names the tool; breadcrumb / meta carry the context.
+    expect(screen.getByTestId('ttl-zoom-title').textContent).toBe('bash')
+    expect(screen.getByTestId('ttl-zoom-crumb').textContent).toContain('Step 1')
+    expect(screen.getByTestId('ttl-zoom-meta').textContent).toContain('seq #3')
     expect(screen.getByTestId('ttl-zoom').querySelector('.ttl-zoomBackdrop')).toBeTruthy()
     // The outline lists the whole current turn, with the initial step selected.
     expect(screen.getAllByTestId('ttl-zoom-step')).toHaveLength(3)
     expect(currentRow().textContent).toContain('bash')
-    expect(screen.getByTestId('ttl-zoom-hint').textContent).toBe('Esc close · ↑↓ step · ⌘F search')
+    // v0.9 has four tabs and 摘要 is the default.
+    expect(screen.getAllByRole('tab')).toHaveLength(4)
+    expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('ttl-zoom-tab-result').getAttribute('aria-selected')).toBe('false')
+    // Footer shortcuts: Esc / ↑↓ / ⌘F / ⌘C / ⌘E.
+    const hint = screen.getByTestId('ttl-zoom-hint').textContent ?? ''
+    for (const key of ['Esc', '↑↓', '⌘F', '⌘C', '⌘E']) expect(hint).toContain(key)
   })
 
   it('Esc closes the dialog (and nothing else does)', () => {
@@ -155,20 +164,28 @@ describe('ZoomOverlay', () => {
     expect(currentRow().textContent).toContain('bash')
   })
 
-  it('⌘C copies the active pane text through the clipboard API', () => {
+  it('⌘C copies the active pane: the command on 摘要, the raw args on 参数', () => {
     const writeText = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { language: 'en-US', clipboard: { writeText } })
     renderOverlay([stepOf(3, 'bash', '{"command":"ls -la"}')], 3)
 
-    // No result → the default pane is 参数, whose text is the raw arguments.
-    expect(screen.getByTestId('ttl-zoom-tab-params').getAttribute('aria-selected')).toBe('true')
+    // v0.9 default pane is 摘要 → a shell step copies its command.
+    expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
     fireEvent.keyDown(window, { key: 'c', metaKey: true })
-    expect(writeText).toHaveBeenCalledWith('{"command":"ls -la"}')
-    expect(screen.getByTestId('ttl-zoom-copy').textContent).toBe('Copied')
+    expect(writeText).toHaveBeenCalledWith('ls -la')
+    // The copy button acknowledges with data-copied / aria-label (no visible text).
+    expect(screen.getByTestId('ttl-zoom-copy').getAttribute('data-copied')).toBe('true')
+    expect(screen.getByTestId('ttl-zoom-copy').getAttribute('aria-label')).toBe('Copied')
 
     // Ctrl+C does the same on non-mac hosts.
     writeText.mockClear()
     fireEvent.keyDown(window, { key: 'C', ctrlKey: true })
+    expect(writeText).toHaveBeenCalledWith('ls -la')
+
+    // 参数 tab copies the raw arguments.
+    fireEvent.click(screen.getByTestId('ttl-zoom-tab-params'))
+    writeText.mockClear()
+    fireEvent.keyDown(window, { key: 'c', metaKey: true })
     expect(writeText).toHaveBeenCalledWith('{"command":"ls -la"}')
   })
 
@@ -176,6 +193,8 @@ describe('ZoomOverlay', () => {
     const writeText = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { language: 'en-US', clipboard: { writeText } })
     renderOverlay([stepOf(3, 'bash', 'cmd', { text: 'total 0' })], 3)
+    expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(screen.getByTestId('ttl-zoom-tab-result'))
     expect(screen.getByTestId('ttl-zoom-tab-result').getAttribute('aria-selected')).toBe('true')
     fireEvent.keyDown(window, { key: 'c', metaKey: true })
     expect(writeText).toHaveBeenCalledWith('total 0')
@@ -237,6 +256,41 @@ describe('ZoomOverlay', () => {
     expect(payload.name).toBe('read')
     expect(payload.arguments).toBe('{"path":"a.md"}')
     expect(payload.result).toMatchObject({ text: 'body' })
+  })
+
+  it('⌘E exports the selected step as JSON (keyboard binding)', () => {
+    const originalCreate = (URL as unknown as { createObjectURL?: unknown }).createObjectURL
+    const originalRevoke = (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL
+    delete (URL as unknown as { createObjectURL?: unknown }).createObjectURL
+    delete (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL
+    const clicked: HTMLAnchorElement[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this)
+    })
+
+    try {
+      renderOverlay([stepOf(3, 'bash', '{"command":"ls"}', { text: 'total 0' })], 3)
+
+      fireEvent.keyDown(window, { key: 'e', metaKey: true })
+      expect(clicked).toHaveLength(1)
+      expect(clicked[0].download).toBe('trace-step-3.json')
+      const href = clicked[0].href
+      expect(href.startsWith('data:application/json')).toBe(true)
+      const payload = JSON.parse(decodeURIComponent(href.slice(href.indexOf(',') + 1))) as Record<string, unknown>
+      expect(payload).toMatchObject({ seq: 3, name: 'bash', kind: 'tool', arguments: '{"command":"ls"}' })
+      expect(payload.result).toMatchObject({ text: 'total 0' })
+
+      // Ctrl+E is the non-mac equivalent.
+      clicked.length = 0
+      fireEvent.keyDown(window, { key: 'E', ctrlKey: true })
+      expect(clicked).toHaveLength(1)
+      expect(clicked[0].download).toBe('trace-step-3.json')
+    } finally {
+      if (originalCreate === undefined) delete (URL as unknown as { createObjectURL?: unknown }).createObjectURL
+      else (URL as unknown as { createObjectURL: unknown }).createObjectURL = originalCreate
+      if (originalRevoke === undefined) delete (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL
+      else (URL as unknown as { revokeObjectURL: unknown }).revokeObjectURL = originalRevoke
+    }
   })
 
   it('switches panes: 参数/原始 render the arguments, 结果 the result text', () => {

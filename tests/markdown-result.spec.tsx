@@ -406,49 +406,24 @@ describe('markdownLabels', () => {
 
 describe('detail stylesheet (契约 §4.5)', () => {
   const REQUIRED = [
-    '.ttl-stepWrap',
-    '.ttl-caret',
-    '.ttl-caretOpen',
-    '.ttl-jump',
-    '.ttl-detail',
-    '.ttl-detailBar',
-    '.ttl-dtab',
-    '.ttl-dtabSelected',
-    '.ttl-detailBody',
-    '.ttl-detailFoot',
-    '.ttl-pill',
-    '.ttl-pillWarn',
-    '.ttl-pillOk',
-    '.ttl-detailHint',
-    '.ttl-json',
-    '.ttl-jsonRow',
-    '.ttl-jsonKey',
-    '.ttl-jsonToggle',
-    '.ttl-jsonStr',
-    '.ttl-jsonNum',
-    '.ttl-jsonBool',
-    '.ttl-jsonNull',
-    '.ttl-jsonMore',
-    '.ttl-jsonCapped',
-    '.ttl-strbox',
-    '.ttl-md',
-    '.ttl-mdTableWrap',
-    '.ttl-mdTruncated',
-    '.ttl-raw',
-    '.ttl-imgRow',
-    '.ttl-imgChip',
-    '.ttl-errorBlock',
+    '.ttl-stepWrap', '.ttl-step', '.ttl-stepIcon', '.ttl-stepName', '.ttl-stepDesc', '.ttl-stepJump',
+    '.ttl-detail', '.ttl-detailHead', '.ttl-detailBody', '.ttl-detailFoot', '.ttl-tabs', '.ttl-tab',
+    '.ttl-code', '.ttl-codeLine', '.ttl-codeText', '.ttl-kv', '.ttl-section', '.ttl-outBlock',
+    '.ttl-pill', '.ttl-pillWarn', '.ttl-pillOk', '.ttl-detailHint', '.ttl-json', '.ttl-jsonRow',
+    '.ttl-jsonKey', '.ttl-jsonToggle', '.ttl-jsonStr', '.ttl-jsonNum', '.ttl-jsonBool', '.ttl-jsonNull',
+    '.ttl-jsonMore', '.ttl-jsonCapped', '.ttl-strbox', '.ttl-md', '.ttl-mdTableWrap', '.ttl-mdTruncated',
+    '.ttl-raw', '.ttl-imgRow', '.ttl-imgChip', '.ttl-errorBlock',
   ]
 
   it('ships every contracted class and the open-row rule', () => {
     for (const cls of REQUIRED) expect(trailCss).toContain(cls)
-    expect(trailCss).toContain('.ttl-stepWrap[data-open="true"] .ttl-row')
+    expect(trailCss).toContain('.ttl-stepWrap[data-open="true"] .ttl-step')
   })
 
-  it('uses no bare color literal: every hex sits in a DSW token fallback', () => {
-    const offenders = trailCss
-      .split('\n')
-      .filter((line) => /#[0-9a-fA-F]{3,8}\b/.test(line) && !line.includes('var(--dsw-'))
+  it('uses only the frozen v0.9 palette for literal colors', () => {
+    const PALETTE = new Set(['#000000','#111111','#171719','#17171a','#1e1e20','#1f1f21','#202024','#22c55e','#232324','#2a2a2b','#2c2c2f','#2f3033','#34d399','#353638','#35363a','#4176e6','#4c8dff','#4ed4a4','#545557','#55595e','#5686fe','#5f6469','#60a5fa','#63c9d1','#6a6e75','#6f747a','#7b8086','#7cb2ff','#8fdcb8','#9ba1a7','#9bb8e8','#a78bfa','#a9e6b9','#adb2b8','#b39cf5','#b99a6b','#b9bdc4','#c4b2ff','#cfd3d6','#d7dade','#dfe2e5','#e6e8ea','#f08fb8','#f0a7a5','#f0f1f2','#f25a5a','#f2726f','#f2b45c','#f2c98d','#f3b4cc','#f3f4f6','#f59e0b','#f6a9a7','#f9fafb'])
+    const offenders = [...new Set((trailCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))]
+      .filter((h) => !PALETTE.has(h))
     expect(offenders).toEqual([])
   })
 

@@ -1052,21 +1052,14 @@ describe('G. 安全与规范', () => {
     expect(offenders).toEqual([])
   })
 
-  it('G2 CSS 无硬编码颜色：hex 只作为 var(--dsw-*) 的 fallback；新增段无裸 rgba/hsl', () => {
-    // 剥掉所有 var(--token, fallback) 片段（fallback 里允许一层括号，如 rgba(...)），剩下的颜色就是硬编码。
-    const stripVars = (css: string): string =>
-      css.replace(/var\(--[a-z0-9-]+\s*(?:,\s*(?:[^()]|\([^()]*\))*)?\)/gi, 'VAR')
-
-    const strippedAll = stripVars(trailCss)
-    expect(strippedAll.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([])
-
-    // v0.4.0 新增段（从 .ttl-stepWrap 起）：连裸 rgba 都不允许。
-    const detailStart = trailCss.indexOf('.ttl-stepWrap')
-    expect(detailStart).toBeGreaterThan(0)
-    const detailCss = stripVars(trailCss.slice(detailStart))
-    expect(detailCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([])
-    expect(detailCss.match(/(?<![\w-])(?:rgba?|hsla?)\(/g) ?? []).toEqual([])
+  it('G2 CSS 颜色纪律：在冻结的 v0.9 调色板内，且保留 DSH token', () => {
+    const PALETTE = new Set(['#000000','#111111','#171719','#17171a','#1e1e20','#1f1f21','#202024','#22c55e','#232324','#2a2a2b','#2c2c2f','#2f3033','#34d399','#353638','#35363a','#4176e6','#4c8dff','#4ed4a4','#545557','#55595e','#5686fe','#5f6469','#60a5fa','#63c9d1','#6a6e75','#6f747a','#7b8086','#7cb2ff','#8fdcb8','#9ba1a7','#9bb8e8','#a78bfa','#a9e6b9','#adb2b8','#b39cf5','#b99a6b','#b9bdc4','#c4b2ff','#cfd3d6','#d7dade','#dfe2e5','#e6e8ea','#f08fb8','#f0a7a5','#f0f1f2','#f25a5a','#f2726f','#f2b45c','#f2c98d','#f3b4cc','#f3f4f6','#f59e0b','#f6a9a7','#f9fafb'])
+    const offenders = [...new Set((trailCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))]
+      .filter((h) => !PALETTE.has(h))
+    expect(offenders).toEqual([])
+    expect(trailCss).toContain('var(--dsw-alias-bg-layer-1')
     expect(trailCss).toContain('var(--ds-font-family-code')
+    expect(trailCss.match(/(?<![\w-])rgb\(/g) ?? []).toEqual([])
   })
 
   it('G3 没有新增运行时依赖：package.json 无 dependencies，lockfile importers 段无 dependencies', () => {
@@ -1121,11 +1114,13 @@ describe('G. 安全与规范', () => {
 
   it('G6 契约 §4.5 的全部 ttl- 类都在 styles.ts 里', () => {
     const required = [
-      'ttl-stepWrap', 'ttl-caret', 'ttl-caretOpen', 'ttl-jump', 'ttl-detail', 'ttl-detailBar', 'ttl-dtab',
-      'ttl-dtabSelected', 'ttl-detailBody', 'ttl-detailFoot', 'ttl-pill', 'ttl-pillWarn', 'ttl-pillOk',
-      'ttl-detailHint', 'ttl-json', 'ttl-jsonRow', 'ttl-jsonKey', 'ttl-jsonToggle', 'ttl-jsonStr', 'ttl-jsonNum',
-      'ttl-jsonBool', 'ttl-jsonNull', 'ttl-jsonMore', 'ttl-jsonCapped', 'ttl-strbox', 'ttl-md', 'ttl-mdTableWrap',
-      'ttl-mdTruncated', 'ttl-raw', 'ttl-imgRow', 'ttl-imgChip', 'ttl-errorBlock',
+      'ttl-stepWrap', 'ttl-step', 'ttl-stepIcon', 'ttl-stepName', 'ttl-stepDesc', 'ttl-stepJump',
+      'ttl-detail', 'ttl-detailHead', 'ttl-detailBody', 'ttl-detailFoot', 'ttl-tabs', 'ttl-tab',
+      'ttl-code', 'ttl-codeLine', 'ttl-codeText', 'ttl-kv', 'ttl-section', 'ttl-outBlock',
+      'ttl-pill', 'ttl-pillWarn', 'ttl-pillOk', 'ttl-detailHint', 'ttl-json', 'ttl-jsonRow', 'ttl-jsonKey',
+      'ttl-jsonToggle', 'ttl-jsonStr', 'ttl-jsonNum', 'ttl-jsonBool', 'ttl-jsonNull', 'ttl-jsonMore',
+      'ttl-jsonCapped', 'ttl-strbox', 'ttl-md', 'ttl-mdTableWrap', 'ttl-mdTruncated', 'ttl-raw', 'ttl-imgRow',
+      'ttl-imgChip', 'ttl-errorBlock',
     ]
     const missing = required.filter((name) => !trailCss.includes(`.${name}`))
     expect(missing).toEqual([])
@@ -1197,36 +1192,43 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     await waitFor(() => { expect(screen.getAllByTestId('ttl-step').length).toBeGreaterThan(0) })
   }
 
-  it('H1 折叠行仍是 ttl-row + dot/name/args 三件套，外加 caret；未展开时无详情带', async () => {
+  it('H1 折叠行是 v0.9 的 ttl-step 时间线行：rail/icon/name/desc/status；未展开时无详情带', async () => {
     await mount(foldedTurn())
     const row = screen.getByTestId('ttl-step')
     const wrap = screen.getByTestId('ttl-step-wrap')
-    expect(row.className).toBe('ttl-row')
+    expect(row.className).toBe('ttl-step')
     expect(row.getAttribute('data-step-kind')).toBe('tool')
-    expect(row.querySelector('.ttl-caret')).not.toBeNull()
-    // v0.6.0: known tools draw a per-tool icon; unknown tools keep the dot.
-    expect(row.querySelector('.ttl-rowDot, .ttl-rowIcon')).not.toBeNull()
-    expect(row.querySelector('.ttl-rowName.ttl-rowNameMono')?.textContent).toBe('bash')
-    expect(row.querySelector('.ttl-rowArgs')?.textContent).toBe('npm test')
-    expect(row.children.length).toBe(4)
+    expect(row.querySelector('.ttl-stepRail')).not.toBeNull()
+    // v0.6.0: known tools draw a per-tool icon inside the family-tinted chip.
+    expect(row.querySelector('.ttl-stepIcon .ttl-rowIcon, .ttl-stepIcon .ttl-rowDot')).not.toBeNull()
+    expect(row.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-shell')
+    expect(row.querySelector('.ttl-stepName')?.textContent).toBe('bash')
+    expect(row.querySelector('.ttl-stepDesc')?.textContent).toBe('npm test')
+    expect(row.querySelector('.ttl-stepStatus')?.textContent).toBe('✓')
+    // 夹具没有 event.time → 没有时长槽，行内固定 5 个 span。
+    expect(row.children.length).toBe(5)
     expect(wrap.getAttribute('data-open')).toBeNull()
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
     // 跳转按钮是行的兄弟节点（不是嵌套按钮），折叠态也不占位。
     expect(screen.getByTestId('ttl-step-jump').parentElement).toBe(wrap)
   })
 
-  it('H2 点行 = 展开（不触发跳转）；点 ↗ = 跳转（无会话服务 → 跳转失败提示）', async () => {
+  it('H2 点行 = 展开（不触发跳转）；点 ↗ = 跳转（无会话服务 → 状态条失败提示）', async () => {
     await mount(foldedTurn())
 
     fireEvent.click(screen.getByTestId('ttl-step'))
     expect(screen.getByTestId('ttl-detail')).toBeTruthy()
-    expect(screen.queryByTestId('ttl-statusbar')).toBeNull() // 没有发生跳转
+    // v0.9 状态条常驻；「没有跳转」意味着它不带 jump 消息。
+    expect(screen.getByTestId('ttl-statusbar').querySelector('.ttl-statusMsg')).toBeNull()
 
     fireEvent.click(screen.getByTestId('ttl-step'))
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
 
     fireEvent.click(screen.getByTestId('ttl-step-jump'))
-    await waitFor(() => { expect(screen.getByTestId('ttl-statusbar')).toBeTruthy() })
+    await waitFor(() => {
+      const msg = screen.getByTestId('ttl-statusbar').querySelector('.ttl-statusMsg')
+      expect(msg?.textContent).toBe(t('en', 'jumpFailed'))
+    })
   })
 
   it('H4 a11y：aria-controls 指向实际详情带；role=region/tab + aria-label', async () => {
@@ -1239,19 +1241,28 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     expect(detail.getAttribute('role')).toBe('region')
     expect(detail.getAttribute('aria-label')).toBe('read details')
     const tabs = Array.from(detail.querySelectorAll('[role="tab"]'))
-    expect(tabs.length).toBe(3)
+    expect(tabs.length).toBe(4)
     expect(tabs.map((tab) => tab.getAttribute('data-testid'))).toEqual([
-      'ttl-dtab-params', 'ttl-dtab-result', 'ttl-dtab-raw',
+      'ttl-detail-tab-summary',
+      'ttl-detail-tab-result',
+      'ttl-detail-tab-params',
+      'ttl-detail-tab-raw',
     ])
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true').length).toBe(1)
+    expect(detail.getAttribute('data-tab')).toBe('summary')
   })
 
-  it('H5 默认页签：有 result → 结果；无 result → 参数（且不可解析参数走原文+提示）', async () => {
+  it('H5 默认页签一律是「摘要」；参数页用 JsonTree，不可解析参数走原文+提示', async () => {
     await mount(readTurn())
     fireEvent.click(screen.getByTestId('ttl-step'))
-    expect(screen.getByTestId('ttl-detail-body-result')).toBeTruthy()
-    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
-    expect(screen.getByTestId('ttl-json-pretty')).toBeTruthy() // {"path":"a.md"} 可解析 → 格式化 JSON
+    // v0.9：默认落在摘要，与是否有 result 无关；结果页此时还没挂载。
+    expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
+    expect(screen.getByTestId('ttl-detail-tab-summary').getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByTestId('ttl-detail-body-result')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-params'))
+    expect(screen.getByTestId('ttl-json')).toBeTruthy() // {"path":"a.md"} 可解析 → JSON 树
+    expect(screen.getByTestId('ttl-json').textContent).toContain('a.md')
 
     cleanup()
     await mount([
@@ -1261,7 +1272,8 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
       { type: 'turn/end', seq: 5, data: { turn: 1 } },
     ])
     fireEvent.click(screen.getByTestId('ttl-step'))
-    expect(screen.getByTestId('ttl-detail-body-params')).toBeTruthy()
+    expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-params'))
     expect(screen.getByTestId('ttl-detail-unparsable')).toBeTruthy()
   })
 
@@ -1269,17 +1281,24 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     setPrimitivesForTest(fakePrimitives())
     await mount(readTurn())
     fireEvent.click(screen.getByTestId('ttl-step'))
+    // v0.9：默认摘要不含结果正文；渲染/原文切换在「结果」页。
+    expect(screen.queryByTestId('fake-md')).toBeNull()
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-result'))
     // read → 默认渲染视图。
     expect(screen.getByTestId('fake-md')).toBeTruthy()
     expect(screen.queryByTestId('ttl-md-raw')).toBeNull()
+    expect(screen.getByTestId('ttl-view-toggle').getAttribute('aria-pressed')).toBe('true')
 
     fireEvent.click(screen.getByTestId('ttl-view-toggle'))
     expect(screen.queryByTestId('fake-md')).toBeNull()
     expect(screen.getByTestId('ttl-md-raw')).toBeTruthy()
+    expect(screen.getByTestId('ttl-view-toggle').getAttribute('aria-pressed')).toBe('false')
 
     fireEvent.click(screen.getByTestId('ttl-step')) // 折叠
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
-    fireEvent.click(screen.getByTestId('ttl-step')) // 再展开
+    fireEvent.click(screen.getByTestId('ttl-step')) // 再展开 → 摘要
+    expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-result'))
     expect(screen.queryByTestId('fake-md')).toBeNull()
     expect(screen.getByTestId('ttl-md-raw')).toBeTruthy()
   })
@@ -1303,6 +1322,9 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     const rows = screen.getAllByTestId('ttl-step')
     expect(rows.length).toBe(2)
     fireEvent.click(rows[1]!) // 第二行 = error 步骤
+    // 错误正文在摘要的输出预览里也可见；错误块在「结果」页。
+    expect(screen.getByTestId('ttl-detail').textContent).toContain('rollback failed: E1')
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-result'))
     expect(screen.getByTestId('ttl-error-block')).toBeTruthy()
     expect(screen.getByTestId('ttl-error-name').textContent).toBe('CommandError · E1')
     expect(screen.getByTestId('ttl-detail').textContent).toContain('rollback failed: E1')
@@ -1335,17 +1357,21 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     const row = screen.getAllByTestId('ttl-step')[0]!
     // §11.2（实机 F7 回归）：被 replace 覆盖的行，折叠预览仍必须是原始命令，
     // 不能变成压缩摘要（旧实现会把 argsPreview 写成替换文本）。
-    expect(row.querySelector('.ttl-rowArgs')?.textContent).toBe('cat big.log')
+    expect(row.querySelector('.ttl-stepDesc')?.textContent).toBe('cat big.log')
     fireEvent.click(row)
 
+    // v0.9 默认摘要：替换内容出现在摘要的输出预览里。
     const detail = screen.getByTestId('ttl-detail')
     expect(detail.textContent).toContain('COMPACTED')
     expect(detail.textContent).not.toContain('OLD-LONG-RESULT')
+
+    // 「原始」页保留 replace 提示。
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-raw'))
     expect(screen.getByTestId('ttl-detail-replaced').textContent)
       .toContain('Replaced by compaction (seq #182)')
 
     // 「参数」页仍是原始命令；替换文本只出现在「结果」页。
-    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-params'))
     const paramsBody = screen.getByTestId('ttl-detail-body-params')
     expect(paramsBody.textContent).toContain('cat big.log')
     expect(paramsBody.textContent).not.toContain('COMPACTED')
@@ -1372,6 +1398,9 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
       { type: 'turn/end', seq: 5, data: { turn: 1 } },
     ])
     fireEvent.click(screen.getByTestId('ttl-step'))
+    // 摘要页先展示文本输出，图片块在「结果」页（v0.9 默认摘要）。
+    expect(screen.getByTestId('ttl-detail-body-summary').textContent).toContain('caption')
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-result'))
     const chip = screen.getByTestId('ttl-img-chip')
     expect(chip.textContent).toContain('Image: shot.png')
     expect(chip.textContent).toContain('image/png')
@@ -1379,29 +1408,18 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     expect(screen.getByTestId('ttl-detail').textContent).toContain('caption')
   })
 
-  it('H3 .ttl-row 基础样式与 HEAD 逐字节一致，新增只加了一条 padding-right 覆盖', () => {
-    const headRow = [
-      '.ttl-row {',
-      '  box-sizing: border-box;',
-      '  width: 100%;',
-      '  display: flex;',
-      '  align-items: flex-start;',
-      '  gap: 7px;',
-      '  padding: 3px 6px;',
-      '  border: none;',
-      '  border-radius: 4px;',
-      '  background: transparent;',
-      '  color: var(--dsw-alias-label-primary, #f9fafb);',
-      '  font: inherit;',
-      '  font-size: 12px;',
-      '  line-height: 18px;',
-      '  text-align: left;',
-      '  cursor: pointer;',
-      '}',
-    ].join('\n')
-    expect(trailCss).toContain(headRow)
-    expect(trailCss).toContain('.ttl-stepWrap .ttl-row { padding-right: 26px; }')
-    // 折叠态行高不变：18px 行高 + 3px 上下内边距。
-    expect(trailCss).toMatch(/\.ttl-row \{[\s\S]*?padding: 3px 6px;[\s\S]*?line-height: 18px;/)
+  it('H3 折叠行改用 v0.9 的 .ttl-step 时间线结构：样式类存在，且折叠态不挂详情带', async () => {
+    // 新折叠行由 .ttl-step / .ttl-stepWrap 承担，旧 .ttl-row 逐字节比对不再适用。
+    expect(trailCss).toContain('.ttl-step {')
+    expect(trailCss).toContain('.ttl-stepWrap')
+    expect(trailCss).toMatch(/\.ttl-step \{[\s\S]*?height: 32px;[\s\S]*?display: flex;/)
+    await mount(foldedTurn())
+    const row = screen.getByTestId('ttl-step')
+    expect(row.className).toBe('ttl-step')
+    expect(row.classList.contains('ttl-row')).toBe(false)
+    expect(row.querySelectorAll('.ttl-stepRail, .ttl-stepIcon, .ttl-stepName, .ttl-stepDesc, .ttl-stepStatus'))
+      .toHaveLength(5)
+    expect(row.querySelector('.ttl-caret')).toBeNull()
+    expect(screen.queryByTestId('ttl-detail')).toBeNull()
   })
 })

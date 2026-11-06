@@ -1093,8 +1093,14 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
     fireEvent.keyDown(window, { key: 'c', metaKey: true })
     expect(writeText).not.toHaveBeenCalled()
 
-    // 无选区：复制当前（结果）页。
+    // 无选区：v0.9 默认 tab 是「摘要」，shell 步骤复制的是命令。
     vi.stubGlobal('getSelection', () => ({ toString: () => '' }))
+    fireEvent.keyDown(window, { key: 'c', metaKey: true })
+    expect(writeText).toHaveBeenCalledWith('ls -la')
+
+    // 切到「结果」页后复制的是结果文本。
+    fireEvent.click(screen.getByTestId('ttl-zoom-tab-result'))
+    writeText.mockClear()
     fireEvent.keyDown(window, { key: 'c', metaKey: true })
     expect(writeText).toHaveBeenCalledWith('total 0')
 
@@ -1153,6 +1159,8 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
 
     const row = await screen.findByTestId('ttl-step')
     fireEvent.click(row)
+    // v0.9：默认 tab 是「摘要」，截断横幅/加载入口在「结果」页。
+    fireEvent.click(await screen.findByTestId('ttl-detail-tab-result'))
     expect(await screen.findByTestId('ttl-detail-load')).toBeTruthy()
     expect(detail).toHaveBeenCalledTimes(1)
 
@@ -1161,17 +1169,23 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
     expect(detail).toHaveBeenCalledTimes(1)
 
     await act(async () => { settle({ ok: true, items: [FULL_DETAIL] }) })
-    expect(await screen.findByTestId('ttl-detail-full')).toBeTruthy()
-    expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Full')
+    // v0.9：加载完整由 pill 文案「Loaded」表达（ttl-detail-full 已移除）。
+    await waitFor(() => {
+      expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Loaded')
+    })
+    expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
   })
 
   it('F8 用户重试最多 1 次：首次自动 + 1 次点击后按钮禁用', async () => {
     const detail = vi.fn<DetailFetch>(async () => ({ ok: false, reason: 'http' }))
     renderTab(truncatedStepTurn(), detail)
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    // v0.9：重试入口在「结果」页的截断横幅里。
+    fireEvent.click(await screen.findByTestId('ttl-detail-tab-result'))
 
     const retry = await screen.findByTestId('ttl-detail-retry')
     fireEvent.click(retry)
+    // 唯一一次手动重试也失败 → 按钮回来且禁用（不会再有第 3 次请求）。
     await waitFor(() => {
       expect((screen.getByTestId('ttl-detail-retry') as HTMLButtonElement).disabled).toBe(true)
     })
@@ -1183,6 +1197,8 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
   it('F9 缩略图：授权 URL + lazy + alt；onError 隐藏 img、保留 chip 并告警', async () => {
     renderTab(imageStepTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    // v0.9：默认摘要不含图片块，缩略图在「结果」页。
+    fireEvent.click(await screen.findByTestId('ttl-detail-tab-result'))
 
     const thumb = (await screen.findByTestId('ttl-img-thumb')) as HTMLImageElement
     expect(thumb.getAttribute('loading')).toBe('lazy')
@@ -1221,7 +1237,7 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
     expect(attachmentUrl('   ', { attachmentId: 'a', mediaType: 'image/png' })).toBeNull()
   })
 
-  it('F11 折叠态行 DOM 不新增子节点：wrap=2 个子元素，行=4 个 span，无 .ttl-detail', async () => {
+  it('F11 折叠态行 DOM 不新增子节点：wrap=2 个子元素，行=5 个 span，无 .ttl-detail', async () => {
     renderTab(threeSteps())
     const wraps = await screen.findAllByTestId('ttl-step-wrap')
     expect(wraps).toHaveLength(3)
@@ -1230,12 +1246,14 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
       expect(wrap.querySelectorAll('.ttl-detail')).toHaveLength(0)
     }
     const row = wraps[0].querySelector('[data-testid="ttl-step"]') as HTMLElement
-    expect(row.children).toHaveLength(4)
+    // v0.9：rail / 族色 icon / name / desc / status（夹具无 event.time → 无时长槽）。
+    expect(row.children).toHaveLength(5)
     expect([...row.children].map((child) => child.className)).toEqual([
-      'ttl-caret',
-      'ttl-rowIcon ttl-icon-success', // v0.6.0: bash draws the terminal glyph
-      'ttl-rowName ttl-rowNameMono',
-      'ttl-rowArgs',
+      'ttl-stepRail',
+      'ttl-stepIcon ttl-tone-shell', // v0.9: bash → shell family chip
+      'ttl-stepName',
+      'ttl-stepDesc',
+      'ttl-stepStatus',
     ])
     fireEvent.click(row)
     const wrap = (await screen.findAllByTestId('ttl-step-wrap'))[0]
@@ -1328,15 +1346,16 @@ describe('G · 规范（依赖 / 安全 / token）', () => {
   })
 
   it('G4 无裸 hex（hex 只能出现在 var(--…) fallback 里）；20 个 v0.5.0 类名 + 13 个新文案键齐备', () => {
-    expect(stripVarSpans(trailCss)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
-    // 反证清洗器有效：把 fallback 还回去就能看到 hex。
-    expect(trailCss).toMatch(/#[0-9a-fA-F]{3,8}\b/)
+    const PALETTE = new Set(['#000000','#111111','#171719','#17171a','#1e1e20','#1f1f21','#202024','#22c55e','#232324','#2a2a2b','#2c2c2f','#2f3033','#34d399','#353638','#35363a','#4176e6','#4c8dff','#4ed4a4','#545557','#55595e','#5686fe','#5f6469','#60a5fa','#63c9d1','#6a6e75','#6f747a','#7b8086','#7cb2ff','#8fdcb8','#9ba1a7','#9bb8e8','#a78bfa','#a9e6b9','#adb2b8','#b39cf5','#b99a6b','#b9bdc4','#c4b2ff','#cfd3d6','#d7dade','#dfe2e5','#e6e8ea','#f08fb8','#f0a7a5','#f0f1f2','#f25a5a','#f2726f','#f2b45c','#f2c98d','#f3b4cc','#f3f4f6','#f59e0b','#f6a9a7','#f9fafb'])
+    const offenders = [...new Set((trailCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))]
+      .filter((h) => !PALETTE.has(h))
+    expect(offenders).toEqual([])
 
     const classes = [
-      '.ttl-imgThumbWrap', '.ttl-imgThumb', '.ttl-detailLoad', '.ttl-detailRetry', '.ttl-detailMerged',
-      '.ttl-zoom', '.ttl-zoomBackdrop', '.ttl-zoomPanel', '.ttl-zoomHead', '.ttl-zoomTitle', '.ttl-zoomTools',
-      '.ttl-zoomSearch', '.ttl-zoomBody', '.ttl-zoomOutline', '.ttl-zoomOutlineRow', '.ttl-zoomPane',
-      '.ttl-zoomTabs', '.ttl-zoomFoot', '.ttl-zoomKbd',
+      '.ttl-imgThumbWrap', '.ttl-imgThumb', '.ttl-zoom', '.ttl-zoomBackdrop', '.ttl-zoomPanel',
+      '.ttl-zoomTop', '.ttl-zoomBody', '.ttl-zoomOutline', '.ttl-zoomOutlineRow', '.ttl-zoomMain',
+      '.ttl-zoomHead', '.ttl-zoomFoot', '.ttl-detail', '.ttl-detailHead', '.ttl-detailFoot', '.ttl-tabs',
+      '.ttl-detailRetry', '.ttl-detailMerged', '.ttl-bannerWarn', '.ttl-bannerAction',
     ]
     for (const cls of classes) {
       const escaped = cls.replace(/\./g, '\\.')

@@ -1,13 +1,20 @@
 /**
- * trail-tab.spec.tsx — panel rendering coverage: empty state, turn rendering +
- * counts, chips with counts and failed filter, follow toggle, error + retry,
- * tool-group expansion, preview pane, plus the v0.4.0 inline step detail
- * (AC8 click-to-expand vs ↗ locate, AC12 remembered render/raw view, AC14
- * error name/code + raw text, AC18 arrow-key disclosure, filter pruning).
+ * trail-tab.spec.tsx — panel rendering coverage for the v0.9 shell:
+ * header/search/overview, empty state, turn cards (three-line: head / preview /
+ * body), chips with counts and failed filter, follow toggle, error + retry,
+ * step rows, inline `StepDetail` (four tabs, layered summary → result → params
+ * → raw), and the v0.5-v0.8 behaviours that must keep working: click-to-expand
+ * vs ↗ locate, remembered rendered/raw view, arrow-key disclosure, filter
+ * pruning, image thumbnails, on-demand full detail, F4 merged hint, overlay
+ * entries, output rows and parallel tool-call batches.
  *
- * v0.5.0 additions (契约 §10.5): image thumbnails with the `onError` chip
- * fallback, the on-demand full detail (loading / success / failure + one user
- * retry), the F4 `mergedNoSurfaceOp` note and the full-size overlay entries.
+ * Updated 2026-11-06 for the v0.9 redesign (`docs/redesign-v09-impl.md` §2-3):
+ * the assertions now follow the new DOM (`.ttl-stepName` / `.ttl-stepDesc` /
+ * `.ttl-turnHead` / `.ttl-turnFoot`, `#N` tags, `N 轮 · M 步` count line,
+ * always-on status bar) and the detail band moved from the shell to
+ * `StepDetail.tsx` (tabs are `ttl-detail-tab-{summary,result,params,raw}`,
+ * default `summary`; seq lives in the foot as `ttl-detail-foot-seq`).
+ * The INTENT of every original test is preserved; only structure/copy moved.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as React from 'react'
@@ -178,6 +185,27 @@ const replacedTurn = (): Ev[] => [
   turnEnd(6, 1),
 ]
 
+// ── Shared DOM helpers for the v0.9 shell ───────────────────────────────
+
+/** Wait until the header count line reports `count` turns (and return the cards). */
+const readyTurns = async (count: number): Promise<HTMLElement[]> => {
+  await waitFor(() => {
+    expect(screen.getByTestId('ttl-count').textContent).toContain(`${count} turn`)
+  })
+  return screen.getAllByTestId('ttl-turn')
+}
+
+/** Click a step row (opening its band) and return the mounted `StepDetail`. */
+const openStepDetail = async (index = 0): Promise<HTMLElement> => {
+  const steps = await screen.findAllByTestId('ttl-step')
+  fireEvent.click(steps[index])
+  return screen.findByTestId('ttl-detail')
+}
+
+/** Switch the detail band to one of the four v0.9 tabs. */
+const openDetailTab = (tab: 'summary' | 'result' | 'params' | 'raw'): void => {
+  fireEvent.click(screen.getByTestId(`ttl-detail-tab-${tab}`))
+}
 
 const renderTab = (events: SessionEventLike[], failFirst = false) => {
   let calls = 0
@@ -215,88 +243,149 @@ const renderTruncatedTab = (fetchToolDetailOverride: FetchToolDetail): void => {
 describe('TrailTab', () => {
   it('renders the empty state for a session without turns', async () => {
     renderTab([])
-    expect(await screen.findByText('No turns in this session yet')).toBeTruthy()
+    const empty = await screen.findByTestId('ttl-empty')
+    expect(empty.textContent).toContain('No foldable steps yet')
+    expect(empty.textContent).toContain('Steps will appear here after you send a message')
+    expect(within(empty).getByTestId('ttl-refresh').textContent).toBe('Refresh')
   })
 
-  it('renders turn rows, the turn count, and step numbers after load', async () => {
+  it('renders turn rows, the header count, and step numbers after load', async () => {
     renderTab(twoTurns())
-    expect(await screen.findByText('2 turns')).toBeTruthy()
-    const cards = await screen.findAllByTestId('ttl-turn')
+    expect(screen.getByTestId('ttl-count').textContent).toContain('0 turn')
+    const cards = await readyTurns(2)
     expect(cards).toHaveLength(2)
-    // Turn header = "轮次 N" micro tag + input preview (split elements now).
+    // v0.9 header line: `N 轮 · M 步` (2 turns, 3 folded steps incl. the error row).
+    expect(screen.getByTestId('ttl-count').textContent).toBe('2 turns · 3 steps')
+    // Turn tags are the compact `#N` form.
     const tags = screen.getAllByTestId('ttl-turn-tag')
-    expect(tags.map((el) => el.textContent)).toEqual(['Turn 1', 'Turn 2'])
+    expect(tags.map((el) => el.textContent)).toEqual(['#1', '#2'])
     // Input text appears in the header preview AND the expanded body's input row.
     expect(screen.getAllByText('deploy the service').length).toBeGreaterThan(0)
     expect(screen.getAllByText('rollback').length).toBeGreaterThan(0)
+    const previews = screen.getAllByTestId('ttl-turn-preview')
+    expect(previews.map((el) => el.textContent)).toEqual(['deploy the service', 'rollback'])
     // Latest turn (2) is expanded by default → its steps are visible.
     const steps = await screen.findAllByTestId('ttl-step')
     expect(steps.length).toBeGreaterThan(0)
+    // Three-line card: the expanded turn carries a foot line (steps/failures).
+    const foot = within(cards[1]).getByTestId('ttl-turn-foot')
+    expect(foot.textContent).toContain('2 steps')
+    expect(foot.textContent).toContain('1 failed')
+    // The collapsed turn keeps the step count badge.
+    expect(within(cards[0]).getByTestId('ttl-steps-count').textContent).toBe('1 step')
+    expect(within(cards[1]).getByTestId('ttl-steps-count').textContent).toBe('2 steps')
+  })
+
+  it('summarises the session in the overview bar (steps/turns/failures/tool mix)', async () => {
+    renderTab(twoTurns())
+    await readyTurns(2)
+    const summary = document.querySelector('.ttl-summary') as HTMLElement | null
+    expect(summary).toBeTruthy()
+    expect(summary?.querySelector('.ttl-summaryStat')?.textContent).toBe('3 steps · 2 turns')
+    expect(summary?.querySelector('.ttl-summaryFail')?.textContent).toBe('1 failed')
+    // Tool-family distribution: two bash calls → one shell segment + legend.
+    expect(summary?.querySelectorAll('.ttl-distSeg')).toHaveLength(1)
+    expect(summary?.querySelector('.ttl-legend')?.textContent).toContain('bash 2')
+    // No wire timestamps in this fixture → no total duration is invented.
+    expect(summary?.querySelector('.ttl-summaryDur')).toBeNull()
   })
 
   it('chips show counts; failed chip filters steps', async () => {
     renderTab(twoTurns())
-    await screen.findByText('2 turns')
+    await readyTurns(2)
     const chips = screen.getByTestId('ttl-chips')
     expect(within(chips).getByText('All')).toBeTruthy()
     expect(within(chips).getByText('Failed')).toBeTruthy()
+    expect(screen.getByTestId('ttl-chip-all').textContent).toBe('All3')
+    expect(screen.getByTestId('ttl-chip-failed').textContent).toBe('Failed1')
     const failedChip = within(chips).getByTestId('ttl-chip-failed')
     fireEvent.click(failedChip)
+    expect(failedChip.getAttribute('aria-pressed')).toBe('true')
     // After filtering to failed, only the error step remains visible.
     const steps = await screen.findAllByTestId('ttl-step')
     expect(steps.length).toBeGreaterThan(0)
     const errorSteps = steps.filter((el) => el.getAttribute('data-step-kind') === 'error')
     expect(errorSteps.length).toBeGreaterThan(0)
-    // Failure is carried by the red dot (no ✗ glyph anymore).
+    // Failure is carried by the red family glyph inside the icon chip.
     expect(errorSteps[0].querySelector('.ttl-dot-red')).toBeTruthy()
     expect(steps.every((el) => el.getAttribute('data-step-kind') === 'error')).toBe(true)
   })
 
   it('failed chip only renders when failures exist', async () => {
     renderTab(oneTurn())
-    await screen.findByText('1 turns')
+    await readyTurns(1)
     expect(within(screen.getByTestId('ttl-chips')).queryByTestId('ttl-chip-failed')).toBeNull()
   })
 
-  it('failed turns are marked with a single error dot', async () => {
+  it('failed turns are marked with a single error badge', async () => {
     renderTab(twoTurns())
-    await screen.findByText('2 turns')
-    expect(screen.getAllByTestId('ttl-error-dot')).toHaveLength(1)
+    await readyTurns(2)
+    const badges = screen.getAllByTestId('ttl-error-dot')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].textContent).toBe('✗1')
   })
 
-  it('expanded turn shows an input row (first row) that locates the input', async () => {
+  it('keeps the input row in the expanded body and locates through the header', async () => {
     renderTab(oneTurn())
     const row = await screen.findByTestId('ttl-item-input')
-    // First row of the expanded body = input row (before the tool steps).
+    // v0.9 still renders the input row as the body's first element, but CSS
+    // hides it while the turn is expanded
+    // (`.ttl-turn[data-collapsed="false"] .ttl-itemInput { display: none }`),
+    // so the visible locate entry point is the turn header's ↗ (ttl-locate).
     const body = row.parentElement as HTMLElement
     expect(body.firstElementChild).toBe(row)
     expect(row.textContent).toContain('deploy the service')
-    // Click = jump to the input (fails in tests: no sessions service).
-    fireEvent.click(row)
+    fireEvent.click(screen.getByTestId('ttl-locate'))
     const bar = await screen.findByTestId('ttl-statusbar')
-    expect(bar.textContent).toContain('Could not locate that message')
-    // Under a tool filter the input row is hidden.
+    await waitFor(() => { expect(bar.textContent).toContain('Could not locate that message') })
+    // Under a tool filter the input row is not rendered at all.
     fireEvent.click(screen.getByTestId('ttl-chip-bash'))
     expect(screen.queryByTestId('ttl-item-input')).toBeNull()
   })
 
-  it('follow-latest toggle flips aria-pressed', async () => {
+  it('follow-latest toggle flips aria-pressed and its label', async () => {
     renderTab(twoTurns())
-    await screen.findByText('2 turns')
+    await readyTurns(2)
     const toggle = screen.getByTestId('ttl-follow-toggle')
     expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(toggle.textContent).toBe('Follow')
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    expect(toggle.textContent).toBe('Follow paused')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('moves the "new updates" button into the status bar while follow is paused', async () => {
+    renderTab(twoTurns())
+    await readyTurns(2)
+    expect(screen.queryByTestId('ttl-to-bottom')).toBeNull()
+    const list = screen.getByTestId('ttl-list') as HTMLElement
+    // jsdom has no layout: fake a scrolled-away list so the scroll handler
+    // marks follow as paused (v0.9 renders the button inside the status bar).
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 1200 })
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 400 })
+    Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: 0 })
+    fireEvent.scroll(list)
+    const button = await screen.findByTestId('ttl-to-bottom')
+    expect(screen.getByTestId('ttl-statusbar').contains(button)).toBe(true)
+    expect(button.textContent).toBe('New updates ↓')
+    fireEvent.click(button)
+    await waitFor(() => { expect(screen.queryByTestId('ttl-to-bottom')).toBeNull() })
   })
 
   it('shows an error state with retry that recovers', async () => {
     renderTab(twoTurns(), true)
-    expect(await screen.findByTestId('ttl-error')).toBeTruthy()
+    const card = await screen.findByTestId('ttl-error')
+    expect(card.textContent).toContain('Failed to load the trail')
+    expect(card.textContent).toContain('network down')
+    expect(card.textContent).toContain('Retrying only re-pulls events')
+    expect(within(card).getByTestId('ttl-error-copy').textContent).toBe('Copy error')
     fireEvent.click(screen.getByTestId('ttl-retry'))
-    expect(await screen.findByText('2 turns')).toBeTruthy()
+    await readyTurns(2)
   })
 
-  it('flat tool steps render one row each (no tool-group)', async () => {
+  it('flat tool steps render one row each with the v0.9 row anatomy', async () => {
     renderTab([
       user(1, 'run tests'),
       turnStart(2, 1),
@@ -309,11 +398,13 @@ describe('TrailTab', () => {
     const steps = await screen.findAllByTestId('ttl-step')
     expect(steps).toHaveLength(3)
     expect(steps[0].getAttribute('data-step-kind')).toBe('tool')
-    // Each row leads with its semantic glyph: v0.6.0 draws a per-tool icon
-    // (terminal/file/search/plug) and only unknown tools keep the legacy dot.
-    expect(steps[0].querySelector('.ttl-rowIcon')).toBeTruthy()
-    expect(steps[0].querySelector('.ttl-rowArgs')?.textContent).toBe('npm test')
-    // Assistant messages render as output rows in the same row anatomy.
+    // Each row leads with its family tinted icon chip (ToolIcon inside).
+    expect(steps[0].querySelector('.ttl-stepIcon .ttl-rowIcon')).toBeTruthy()
+    expect(steps[0].querySelector('.ttl-stepName')?.textContent).toBe('bash')
+    expect(steps[0].querySelector('.ttl-stepDesc')?.textContent).toBe('npm test')
+    expect(steps[2].querySelector('.ttl-stepName')?.textContent).toBe('read')
+    expect(steps[2].querySelector('.ttl-stepDesc')?.textContent).toBe('package.json')
+    // Assistant messages render as output rows in the same body.
     expect(screen.getAllByTestId('ttl-item-output').length).toBeGreaterThan(0)
   })
 
@@ -332,11 +423,28 @@ describe('TrailTab', () => {
     expect(document.getElementById(step.getAttribute('aria-controls') as string)).toBe(detail)
     expect(detail.getAttribute('role')).toBe('region')
     expect(detail.getAttribute('aria-label')).toBe('bash details')
-    // The row click performs NO locate: no status bar appears.
-    expect(screen.queryByTestId('ttl-statusbar')).toBeNull()
+    // The row click performs NO locate: the status bar keeps its sync copy.
+    expect(screen.getByTestId('ttl-statusbar').textContent).toContain('Read-only · event stream synced')
+    expect(screen.queryByText('Could not locate that message')).toBeNull()
     // Clicking the row again collapses it.
     fireEvent.click(step)
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
+  })
+
+  it('the detail band exposes the four v0.9 tabs and defaults to summary', async () => {
+    renderTab(oneTurn())
+    const detail = await openStepDetail()
+    expect(detail.getAttribute('data-tab')).toBe('summary')
+    const tabs = (['summary', 'result', 'params', 'raw'] as const).map((tab) => screen.getByTestId(`ttl-detail-tab-${tab}`))
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Summary', 'Result', 'Params', 'Raw'])
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
+    // seq is visible twice: status row + footer.
+    expect(screen.getByTestId('ttl-detail-seq').textContent).toBe('seq #3')
+    expect(screen.getByTestId('ttl-detail-foot-seq').textContent).toBe('seq #3')
+    openDetailTab('params')
+    expect(screen.getByTestId('ttl-detail-tab-params').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('ttl-detail-body-params')).toBeTruthy()
   })
 
   it('the row-end ↗ still locates the step in the conversation (AC8)', async () => {
@@ -345,7 +453,7 @@ describe('TrailTab', () => {
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
     fireEvent.click(jump)
     const bar = await screen.findByTestId('ttl-statusbar')
-    expect(bar.textContent).toContain('Could not locate that message')
+    await waitFor(() => { expect(bar.textContent).toContain('Could not locate that message') })
     // Locating never opens the band.
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
   })
@@ -379,7 +487,9 @@ describe('TrailTab', () => {
     renderTab(readTurn())
     const step = await screen.findByTestId('ttl-step')
     fireEvent.click(step)
-    // read → rendered by default.
+    await screen.findByTestId('ttl-detail')
+    // v0.9 opens on 摘要; the rendered/raw switch lives in 结果.
+    openDetailTab('result')
     expect(await screen.findByTestId('ttl-md')).toBeTruthy()
     const toggle = screen.getByTestId('ttl-view-toggle')
     expect(toggle.getAttribute('aria-pressed')).toBe('true')
@@ -390,6 +500,9 @@ describe('TrailTab', () => {
     fireEvent.click(step)
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
     fireEvent.click(step)
+    await screen.findByTestId('ttl-detail')
+    expect(screen.getByTestId('ttl-detail').getAttribute('data-tab')).toBe('summary')
+    openDetailTab('result')
     await waitFor(() => { expect(screen.getByTestId('ttl-view-toggle').getAttribute('aria-pressed')).toBe('false') })
     expect(screen.queryByTestId('ttl-md')).toBeNull()
     expect(screen.getByTestId('ttl-md-raw').textContent).toContain('# Title')
@@ -397,13 +510,15 @@ describe('TrailTab', () => {
 
   it('an error step shows errorName · errorCode plus the raw text (AC14)', async () => {
     renderTab(twoTurns())
-    await screen.findByText('2 turns')
+    await readyTurns(2)
     const steps = await screen.findAllByTestId('ttl-step')
     const errorStep = steps.find((el) => el.getAttribute('data-step-kind') === 'error') as HTMLElement
     expect(errorStep).toBeTruthy()
-    // The error row leads with the red dot.
+    // The error row leads with the red family glyph.
     expect(errorStep.querySelector('.ttl-dot-red')).toBeTruthy()
     fireEvent.click(errorStep)
+    await screen.findByTestId('ttl-detail')
+    openDetailTab('result')
     const block = await screen.findByTestId('ttl-error-block')
     expect(screen.getByTestId('ttl-error-name').textContent).toBe('CommandError · E1')
     expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
@@ -419,6 +534,9 @@ describe('TrailTab', () => {
     const step = await screen.findByTestId('ttl-step')
     expect(step.textContent).toContain('tool')
     fireEvent.click(step)
+    await screen.findByTestId('ttl-detail')
+    // The orphan warning lives on the 原始 pane (next to the raw payloads).
+    openDetailTab('raw')
     expect(await screen.findByTestId('ttl-detail-orphan')).toBeTruthy()
     expect(screen.getByTestId('ttl-detail-pill')).toBeTruthy()
   })
@@ -433,15 +551,15 @@ describe('TrailTab', () => {
     ])
     const steps = await screen.findAllByTestId('ttl-step')
     fireEvent.click(steps[0])
-    // A step without a result opens on 参数 by default.
-    expect(screen.getByTestId('ttl-dtab-params').getAttribute('aria-selected')).toBe('true')
-    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
-    expect(await screen.findByTestId('ttl-json-pretty')).toBeTruthy()
-    expect(screen.getByTestId('ttl-json-pretty').textContent).toContain('"cmd": "ls"')
+    await screen.findByTestId('ttl-detail')
+    openDetailTab('params')
+    expect(await screen.findByTestId('ttl-json')).toBeTruthy()
+    expect(screen.getByTestId('ttl-json').textContent).toContain('cmd')
+    expect(screen.getByTestId('ttl-json').textContent).toContain('ls')
     // Unparseable arguments degrade to the raw text plus the hint.
     fireEvent.click(steps[1])
     expect(screen.getAllByTestId('ttl-detail')).toHaveLength(1)
-    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
+    openDetailTab('params')
     expect(await screen.findByTestId('ttl-detail-unparsable')).toBeTruthy()
     expect(screen.getByTestId('ttl-md-raw').textContent).toBe('not json at all')
   })
@@ -449,7 +567,7 @@ describe('TrailTab', () => {
   it('a filter that hides an expanded step drops its detail band', async () => {
     renderTab(threeSteps())
     const steps = await screen.findAllByTestId('ttl-step')
-    const readStep = steps.find((el) => el.textContent?.includes('read')) as HTMLElement
+    const readStep = steps.find((el) => el.querySelector('.ttl-stepName')?.textContent === 'read') as HTMLElement
     expect(readStep).toBeTruthy()
     fireEvent.click(readStep)
     expect(await screen.findAllByTestId('ttl-detail')).toHaveLength(1)
@@ -457,28 +575,63 @@ describe('TrailTab', () => {
     await waitFor(() => { expect(screen.queryByTestId('ttl-detail')).toBeNull() })
   })
 
+  it('search filters steps across name/args/result and shows the empty-filtered state', async () => {
+    renderTab(threeSteps())
+    await readyTurns(1)
+    const search = screen.getByTestId('ttl-search') as HTMLInputElement
+    // ⌘F focuses the search field.
+    fireEvent.keyDown(window, { key: 'f', metaKey: true })
+    expect(document.activeElement).toBe(search)
+    // Substring over the clipped arguments → only the `read` row survives.
+    fireEvent.change(search, { target: { value: 'package' } })
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-step')).toHaveLength(1) })
+    expect(screen.getByTestId('ttl-step').querySelector('.ttl-stepName')?.textContent).toBe('read')
+    // No match → the dedicated empty state, with the search field still there.
+    fireEvent.change(search, { target: { value: 'zzz-no-match' } })
+    expect(await screen.findByTestId('ttl-empty-filtered')).toBeTruthy()
+    expect(screen.getByTestId('ttl-search')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('ttl-clear-filter'))
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-step').length).toBeGreaterThan(0) })
+    expect((screen.getByTestId('ttl-search') as HTMLInputElement).value).toBe('')
+  })
+
+  it('caps a huge expanded turn and offers a show-earlier affordance', async () => {
+    // STEP_CAP = 250 rows mounted per expanded turn; the earlier rows stay
+    // behind a single button instead of bloating the DOM.
+    const events: Ev[] = [user(1, 'many calls'), turnStart(2, 1)]
+    for (let index = 0; index < 260; index += 1) {
+      events.push(toolCall(3 + index, 'bash', `echo ${index}`, `c${3 + index}`))
+    }
+    events.push(turnEnd(300, 1))
+    renderTab(events as SessionEventLike[])
+    expect(await screen.findAllByTestId('ttl-step')).toHaveLength(250)
+    const earlier = await screen.findByTestId('ttl-show-earlier')
+    expect(earlier.textContent).toBe('Show 10 earlier')
+    fireEvent.click(earlier)
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-step')).toHaveLength(260) })
+  })
+
   it('collapsing the latest turn does NOT expand the earlier turns', async () => {
     renderTab(twoTurns())
-    await screen.findByText('2 turns')
+    const cards = await readyTurns(2)
     // Latest (turn 2) is expanded by default; turn 1 stays collapsed.
-    let cards = screen.getAllByTestId('ttl-turn')
     expect(cards[1].getAttribute('data-collapsed')).toBe('false')
     expect(cards[0].getAttribute('data-collapsed')).toBe('true')
-    // Fold the latest turn.
-    fireEvent.click(within(cards[1]).getByText(/Turn 2/))
-    cards = screen.getAllByTestId('ttl-turn')
+    // Fold the latest turn through its head tag.
+    fireEvent.click(within(cards[1]).getByTestId('ttl-turn-tag'))
+    const after = screen.getAllByTestId('ttl-turn')
     // Both collapsed — turn 1 must NOT have been force-expanded.
-    expect(cards[1].getAttribute('data-collapsed')).toBe('true')
-    expect(cards[0].getAttribute('data-collapsed')).toBe('true')
+    expect(after[1].getAttribute('data-collapsed')).toBe('true')
+    expect(after[0].getAttribute('data-collapsed')).toBe('true')
   })
 
   it('clicking an earlier turn expands it while the latest stays expanded', async () => {
     renderTab(twoTurns())
-    await screen.findByText('2 turns')
-    fireEvent.click(within(screen.getAllByTestId('ttl-turn')[0]).getByText(/Turn 1/))
-    const cards = screen.getAllByTestId('ttl-turn')
-    expect(cards[0].getAttribute('data-collapsed')).toBe('false')
-    expect(cards[1].getAttribute('data-collapsed')).toBe('false')
+    const cards = await readyTurns(2)
+    fireEvent.click(within(cards[0]).getByTestId('ttl-turn-tag'))
+    const after = screen.getAllByTestId('ttl-turn')
+    expect(after[0].getAttribute('data-collapsed')).toBe('false')
+    expect(after[1].getAttribute('data-collapsed')).toBe('false')
   })
 
   it('drains hasMore pages before settling on ready', async () => {
@@ -498,8 +651,9 @@ describe('TrailTab', () => {
         fetchEventsOverride={fetchEventsOverride}
       />,
     )
-    expect(await screen.findByText('2 turns')).toBeTruthy()
-    expect(await screen.findByText('Turn 2')).toBeTruthy()
+    const cards = await readyTurns(2)
+    expect(cards).toHaveLength(2)
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1', '#2'])
     expect(calls).toBe(2)
   })
 
@@ -523,7 +677,7 @@ describe('TrailTab', () => {
         fetchEventsOverride={fetchEventsOverride}
       />,
     )
-    expect(await screen.findByText(`${total} turns`)).toBeTruthy()
+    await readyTurns(total)
     // The final page (beyond the cap) really arrived: it shows in the latest
     // turn's preview AND its expanded input row.
     const lastTexts = await screen.findAllByText(`msg ${total}`)
@@ -549,7 +703,7 @@ describe('TrailTab', () => {
         fetchEventsOverride={fetchEventsOverride}
       />,
     )
-    expect(await screen.findByText('1 turns')).toBeTruthy()
+    await readyTurns(1)
     // Wait past the throttle window: no third pull may fire.
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect(calls).toBe(MAX_PULL_PAGES * 2)
@@ -561,7 +715,11 @@ describe('TrailTab', () => {
 
   it('renders an image block as a lazy session-authorized thumbnail plus its metadata', async () => {
     renderTab(imageTurn())
-    fireEvent.click(await screen.findByTestId('ttl-step'))
+    const step = await screen.findByTestId('ttl-step')
+    fireEvent.click(step)
+    await screen.findByTestId('ttl-detail')
+    // Image blocks live on the 结果 pane in v0.9.
+    openDetailTab('result')
 
     const thumb = (await screen.findByTestId('ttl-img-thumb')) as HTMLImageElement
     expect(thumb.getAttribute('loading')).toBe('lazy')
@@ -579,7 +737,10 @@ describe('TrailTab', () => {
 
   it('an image that fails to load hides the img, keeps the chip and warns', async () => {
     renderTab(imageTurn())
-    fireEvent.click(await screen.findByTestId('ttl-step'))
+    const step = await screen.findByTestId('ttl-step')
+    fireEvent.click(step)
+    await screen.findByTestId('ttl-detail')
+    openDetailTab('result')
 
     const thumb = await screen.findByTestId('ttl-img-thumb')
     fireEvent.error(thumb)
@@ -595,18 +756,19 @@ describe('TrailTab', () => {
     const detail = vi.fn<FetchToolDetail>(async () => ({ ok: true, items: [FULL_DETAIL] }))
     renderTruncatedTab(detail)
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    openDetailTab('result')
 
-    // Success: the footer says the full content is in, and the pill flips.
-    expect(await screen.findByTestId('ttl-detail-full')).toBeTruthy()
-    expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Full')
+    // Success: the footer pill flips to 已加载, the truncation banner is gone.
+    await waitFor(() => { expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Loaded') })
     expect(screen.queryByTestId('ttl-detail-load')).toBeNull()
     expect(screen.getByTestId('ttl-md-raw').textContent).toContain('full result body')
 
     // 参数 now renders the complete arguments, not the clipped wire preview
     // (the wire value was `{"path":"big.md"}` — the `full` key proves the swap).
-    fireEvent.click(screen.getByTestId('ttl-dtab-params'))
+    openDetailTab('params')
     const params = screen.getByTestId('ttl-detail-body-params')
-    expect(params.querySelector('[data-testid="ttl-json-pretty"]')).toBeTruthy()
+    expect(params.querySelector('[data-testid="ttl-json"]')).toBeTruthy()
     expect(params.textContent).toContain('full')
 
     expect(detail).toHaveBeenCalledTimes(1)
@@ -619,6 +781,9 @@ describe('TrailTab', () => {
     const pending = new Promise<ToolDetailResult>((resolve) => { settle = resolve })
     renderTruncatedTab(() => pending)
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    // The truncation banner (and its load strip) is part of 结果 / 参数.
+    openDetailTab('result')
 
     const strip = await screen.findByTestId('ttl-detail-load')
     expect(strip.textContent).toContain('Loading full content…')
@@ -634,9 +799,12 @@ describe('TrailTab', () => {
     const detail = vi.fn(async (): Promise<ToolDetailResult> => ({ ok: false, reason: 'network' }))
     renderTruncatedTab(detail)
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    openDetailTab('result')
 
-    const strip = await screen.findByTestId('ttl-detail-load')
-    expect(strip.textContent).toContain('Failed to load full content — showing the truncated preview')
+    const banner = await screen.findByTestId('ttl-bannerWarn')
+    expect(banner.textContent).toContain('Result truncated to 32 KiB')
+    expect(banner.textContent).toContain('Failed to load full content — showing the truncated preview')
     expect(screen.getByTestId('ttl-md-raw').textContent).toContain('wire preview')
     const retry = (await screen.findByTestId('ttl-detail-retry')) as HTMLButtonElement
     expect(retry.textContent).toBe('Retry')
@@ -645,8 +813,7 @@ describe('TrailTab', () => {
     // The user's single retry goes through and the panes update.
     detail.mockResolvedValueOnce({ ok: true, items: [FULL_DETAIL] })
     fireEvent.click(retry)
-    expect(await screen.findByTestId('ttl-detail-full')).toBeTruthy()
-    expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Full')
+    await waitFor(() => { expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Loaded') })
     expect(detail).toHaveBeenCalledTimes(2)
   })
 
@@ -654,6 +821,8 @@ describe('TrailTab', () => {
     const detail = vi.fn(async (): Promise<ToolDetailResult> => ({ ok: false, reason: 'http' }))
     renderTruncatedTab(detail)
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    openDetailTab('result')
 
     fireEvent.click(await screen.findByTestId('ttl-detail-retry'))
     await waitFor(() => {
@@ -688,6 +857,8 @@ describe('TrailTab', () => {
   it('flags merged content that never declared a surfaceOp (F4)', async () => {
     renderTab(mergedTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    openDetailTab('result')
     const note = await screen.findByTestId('ttl-detail-merged')
     expect(note.getAttribute('role')).toBe('note')
     expect(note.textContent).toBe('Merged from 2 results — the events declared no surfaceOp')
@@ -697,6 +868,8 @@ describe('TrailTab', () => {
   it('does not flag merged content once a replace owns the result', async () => {
     renderTab(replacedTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    openDetailTab('raw')
     expect(await screen.findByTestId('ttl-detail-replaced')).toBeTruthy()
     expect(screen.queryByTestId('ttl-detail-merged')).toBeNull()
   })
@@ -714,9 +887,10 @@ describe('TrailTab', () => {
     fireEvent.click(zoomButton)
     const dialog = await screen.findByRole('dialog')
     expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(dialog.getAttribute('aria-label')).toBe('bash · step details')
     // The outline is the whole current turn (3 steps), not just the open one.
     expect(screen.getAllByTestId('ttl-zoom-step')).toHaveLength(3)
-    expect(screen.getByTestId('ttl-zoom-title').textContent).toBe('bash · step details')
+    expect(screen.getByTestId('ttl-zoom-title').textContent).toBe('bash')
 
     fireEvent.keyDown(window, { key: 'Escape' })
     await waitFor(() => { expect(screen.queryByTestId('ttl-zoom')).toBeNull() })
@@ -768,11 +942,12 @@ describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
   it('the toolbar opens the centered viewer on the tab that is active', async () => {
     renderTab(oneTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
-    // No result → the params pane is the default.
-    expect(screen.getByTestId('ttl-dtab-params').getAttribute('aria-selected')).toBe('true')
+    await screen.findByTestId('ttl-detail')
+    // v0.9 opens on 摘要.
+    expect(screen.getByTestId('ttl-detail-tab-summary').getAttribute('aria-selected')).toBe('true')
     fireEvent.click(screen.getByTestId('ttl-detail-view-center'))
     expect(await screen.findByTestId('ttl-zoom')).toBeTruthy()
-    expect(screen.getByTestId('ttl-zoom-tab-params').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByTestId('ttl-zoom')).toBeNull()
   })
@@ -780,7 +955,9 @@ describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
   it('clicking the pane opens the viewer, but a control inside the pane does not', async () => {
     renderTab(markdownTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
     // Markdown result → the 结果 pane offers the 渲染/原文 switch.
+    openDetailTab('result')
     fireEvent.click(await screen.findByTestId('ttl-view-toggle'))
     expect(screen.queryByTestId('ttl-zoom')).toBeNull() // a control click must not open the viewer
     fireEvent.click(screen.getByTestId('ttl-pane-clickable'))
@@ -791,9 +968,9 @@ describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
   it('renders the tool summary instead of the raw argument JSON', async () => {
     renderTab(markdownTurn())
     const row = await screen.findByTestId('ttl-step')
-    expect(row.querySelector('.ttl-rowName')?.textContent).toBe('read')
-    expect(row.querySelector('.ttl-rowArgs')?.textContent).toBe('README.md')
-    expect(row.querySelector('.ttl-rowIcon')).toBeTruthy()
+    expect(row.querySelector('.ttl-stepName')?.textContent).toBe('read')
+    expect(row.querySelector('.ttl-stepDesc')?.textContent).toBe('README.md')
+    expect(row.querySelector('.ttl-stepIcon .ttl-rowIcon')).toBeTruthy()
     expect(row.getAttribute('title')).toBe('{"file_path":"/Users/me/project/README.md"}')
   })
 })
@@ -824,13 +1001,19 @@ describe('TrailTab — parallel tool-call batches (v0.8.0)', () => {
     turnEnd(10, 1),
   ]
 
-  it('groups same-step calls under a ∥ caption and badges the collapsed-ready header', async () => {
+  it('groups same-step calls under a ∥ caption (same level) and badges the header', async () => {
     renderTab(mixedTurn())
     const groups = await screen.findAllByTestId('ttl-parallel-group')
     expect(groups).toHaveLength(1)
     expect(groups[0].getAttribute('data-step')).toBe('1')
+    // Same-level layout: the batch holds its rows directly (no nested wrapper indent).
+    expect(groups[0].querySelector('.ttl-parallelBody')?.querySelectorAll('[data-testid="ttl-step"]')).toHaveLength(2)
     const head = within(groups[0]).getByTestId('ttl-parallel-head')
-    expect(head.textContent).toBe('∥Parallel ×2')
+    expect(head.querySelector('.ttl-parallelMark')?.textContent).toBe('∥')
+    expect(head.querySelector('.ttl-parallelLabel')?.textContent).toBe('Parallel ×2')
+    expect(head.querySelector('.ttl-parallelHint')?.textContent).toBe('Issued together within one assistant step')
+    // No wire timestamps → the aggregate shows the call count only.
+    expect(head.querySelector('.ttl-parallelAgg')?.textContent).toBe('2 calls')
     expect(head.getAttribute('title')).toContain('2 tool calls issued in one assistant step')
     // The batch holds exactly its two rows; the later bash row is outside it.
     expect(within(groups[0]).getAllByTestId('ttl-step')).toHaveLength(2)
@@ -871,7 +1054,7 @@ describe('TrailTab — parallel tool-call batches (v0.8.0)', () => {
       toolResult(23, 'c22', '/'),
       turnEnd(24, 2),
     ])
-    const turns = await screen.findAllByTestId('ttl-turn')
+    const turns = await readyTurns(2)
     expect(turns[0].getAttribute('data-collapsed')).toBe('true')
     const badge = within(turns[0]).getByTestId('ttl-turn-parallel')
     expect(badge.textContent).toBe('∥1')
@@ -880,7 +1063,8 @@ describe('TrailTab — parallel tool-call batches (v0.8.0)', () => {
 
   it('no badge and no group on legacy logs without turn/step', async () => {
     renderTab(threeSteps())
-    await screen.findByText('Turn 1')
+    await readyTurns(1)
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1'])
     expect(screen.queryByTestId('ttl-turn-parallel')).toBeNull()
     expect(screen.queryByTestId('ttl-parallel-group')).toBeNull()
   })
@@ -914,7 +1098,9 @@ describe('TrailTab — parallel tool-call batches (v0.8.0)', () => {
     try {
       renderTab(mixedTurn())
       const head = await screen.findByTestId('ttl-parallel-head')
-      expect(head.textContent).toBe('∥并行 ×2')
+      expect(head.querySelector('.ttl-parallelLabel')?.textContent).toBe('并行 ×2')
+      expect(head.querySelector('.ttl-parallelHint')?.textContent).toBe('同一助手步骤内并行下发')
+      expect(head.querySelector('.ttl-parallelAgg')?.textContent).toBe('2 个调用')
       expect(screen.getByTestId('ttl-turn-parallel').getAttribute('title')).toBe('1 组并行调用 · 共 2 次')
     } finally {
       document.documentElement.lang = previous

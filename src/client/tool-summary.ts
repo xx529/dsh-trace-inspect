@@ -33,12 +33,16 @@ export type ToolIconKind =
   | 'generic'
 
 export interface ToolSummary {
-  /** Mono label rendered in the name slot (`bash`, `read`, `mcp:playwright`, …). */
+  /** Mono label rendered in the name slot (`bash`, `read`, `figma`, …). */
   label: string
   /** Compact human detail rendered in the argument slot. */
   detail: string
   /** Inline glyph family. */
   icon: ToolIconKind
+  /** MCP server name (`figma`), when the tool is an MCP tool. */
+  server?: string
+  /** MCP tool name (`download_assets`), when the tool is an MCP tool. */
+  toolName?: string
 }
 
 /** Keys worth showing for tools we do not special-case. */
@@ -90,6 +94,33 @@ function str(args: Record<string, unknown> | null, key: string): string | undefi
   return undefined
 }
 
+/** Human-readable summary of an MCP call's JSON arguments (`5 个节点 · PNG @2x`). */
+export function mcpArgsSummary(args: Record<string, unknown> | null): string {
+  if (args === null) return ''
+  const strings = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+  const nodes = strings(args.nodeIds)
+  const files = strings(args.paths ?? args.files)
+  const parts: string[] = []
+  if (nodes.length > 0) parts.push(`${nodes.length} 个节点`)
+  else if (files.length > 0) parts.push(`${files.length} 个文件`)
+  const format = str(args, 'format')
+  const scale = typeof args.scale === 'number' && Number.isFinite(args.scale) ? args.scale : undefined
+  if (format !== undefined) parts.push(scale !== undefined ? `${format} @${scale}x` : format)
+  const scalarKeys = ['path', 'file_path', 'url', 'query', 'name', 'description', 'prompt', 'text', 'command']
+  if (parts.length === 0) {
+    for (const key of scalarKeys) {
+      const value = str(args, key)
+      if (value !== undefined) { parts.push(clip(firstLine(value), 48)); break }
+    }
+  }
+  if (parts.length === 0) {
+    const count = Object.keys(args).length
+    if (count > 0) parts.push(`${count} 个参数`)
+  }
+  return parts.join(' · ')
+}
+
 /** `mcp__playwright__browser_click` → `{ server: 'playwright', tool: 'browser_click' }`. */
 export function splitMcpName(name: string): { server: string; tool: string } | null {
   if (!name.startsWith('mcp__') && !name.startsWith('mcp_')) return null
@@ -124,12 +155,15 @@ export function summarizeToolCall(
   const mcp = splitMcpName(name)
 
   if (mcp !== null) {
-    const hasArgs = args !== null ? Object.keys(args).length > 0 : (rawArgs ?? argsPreview).trim().length > 0
     const tool = mcp.tool.length > 0 ? mcp.tool : ''
+    const summary = mcpArgsSummary(args)
+    const detail = [tool, summary].filter((part) => part.length > 0).join(' · ')
     return {
-      label: `mcp:${mcp.server}`,
-      detail: hasArgs ? `${tool} {…}`.trim() : tool,
+      label: mcp.server,
+      detail,
       icon: 'mcp',
+      server: mcp.server,
+      toolName: tool,
     }
   }
 
@@ -177,6 +211,21 @@ export function summarizeToolCall(
       const value = str(args, key)
       if (value !== undefined) return { label: name, detail: clip(key === 'file_path' || key === 'path' ? fileBaseName(value) : firstLine(value)), icon: 'generic' }
     }
+    // Unknown tools: never show raw JSON in the row — prefer a readable
+    // `key value` pair, then an array count, then the argument count.
+    for (const [key, value] of Object.entries(args)) {
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return { label: name, detail: clip(`${key} ${firstLine(value)}`), icon: 'generic' }
+      }
+      if (typeof value === 'number' || typeof value === 'boolean') {
+        return { label: name, detail: clip(`${key} ${String(value)}`), icon: 'generic' }
+      }
+      if (Array.isArray(value)) {
+        return { label: name, detail: `${key} · ${value.length} 项`, icon: 'generic' }
+      }
+    }
+    const count = Object.keys(args).length
+    if (count > 0) return { label: name, detail: `${count} 个参数`, icon: 'generic' }
   }
   return { label: name, detail: clip(firstLine(argsPreview)), icon: 'generic' }
 }
