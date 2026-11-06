@@ -86,6 +86,16 @@ function messageIcon(): React.ReactElement {
   )
 }
 
+/** Tiny user glyph for the input row (12px, currentColor). */
+function inputIcon(): React.ReactElement {
+  return React.createElement(
+    'svg',
+    { viewBox: '0 0 24 24', width: 12, height: 12, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+    React.createElement('circle', { cx: 12, cy: 8, r: 3.4 }),
+    React.createElement('path', { d: 'M4.6 20a7.4 7.4 0 0 1 14.8 0' }),
+  )
+}
+
 /** One-line character budget of the collapsed assistant-message row. */
 const OUTPUT_PREVIEW_CHARS = 32
 
@@ -562,22 +572,35 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
   const hasError = turn.hasError
   /** The turn's user input; rendered as the first row of the expanded body. */
   const inputItem = turn.items.find((item): item is Extract<TurnItem, { kind: 'input' }> => item.kind === 'input')
+  /** The body's input row replaces the header preview while it is shown. */
+  const inputRowShown = inputItem !== undefined && filter === 'all' && !searchActive
 
-  /** First row of the expanded body: full input (2-line clamp), click = locate. */
-  const renderInputRow = (item: Extract<TurnItem, { kind: 'input' }>): React.ReactElement => (
-    <button
-      type="button"
-      className="ttl-item ttl-itemInput"
-      data-testid="ttl-item-input"
-      title={clipTitle(item.text)}
-      onClick={() => { onJump({ seq: item.seq, kind: 'input' }, turn) }}
-    >
-      <span className="ttl-itemDot ttl-dot-blue" aria-hidden="true" />
-      <span className="ttl-itemLabel">{t(lang, 'input') as string}</span>
-      <span className="ttl-itemText">{item.text}</span>
-      <span className="ttl-itemJump" aria-hidden="true">↗</span>
-    </button>
-  )
+  /**
+   * First row of the expanded body: the user's own message on the same 32px
+   * grid as steps / outputs (icon + 输入 + one-line preview + char budget).
+   * A click keeps the v0.4-v0.8 behaviour: locate the message in the chat.
+   */
+  const renderInputRow = (item: Extract<TurnItem, { kind: 'input' }>): React.ReactElement => {
+    const text = item.text
+    const flat = outputPreviewText(text)
+    const rest = text.length > OUTPUT_PREVIEW_CHARS ? text.length - OUTPUT_PREVIEW_CHARS : 0
+    return (
+      <button
+        type="button"
+        className="ttl-itemInput ttl-msgRow"
+        data-testid="ttl-item-input"
+        title={clipTitle(text)}
+        onClick={() => { onJump({ seq: item.seq, kind: 'input' }, turn) }}
+      >
+        <span className="ttl-stepIcon ttl-inputIcon" aria-hidden="true">{inputIcon()}</span>
+        <span className="ttl-msgRole">{t(lang, 'input') as string}</span>
+        <span className="ttl-msgPreview" data-testid="ttl-input-preview">{rest > 0 ? `${flat}…` : flat}</span>
+        {rest > 0
+          ? <span className="ttl-msgRest" data-testid="ttl-input-rest">{ui.charsLeft(rest)}</span>
+          : null}
+      </button>
+    )
+  }
 
   const renderStep = (step: TrailStep, key: string): React.ReactElement => (
     <StepRow
@@ -784,13 +807,12 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
           onClick={() => { onJump({ seq: turn.anchorSeq, kind: 'input' }, turn) }}
         >{arrowIcon()}</button>
       </div>
-      {preview.length > 0
+      {preview.length > 0 && (!expanded || !inputRowShown)
         ? (
           <p
             className="ttl-turnPreview"
             data-testid="ttl-turn-preview"
             title={clipTitle(preview)}
-            style={expanded ? { WebkitLineClamp: 1 } : undefined}
           >{preview}</p>
         )
         : null}
@@ -806,7 +828,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
             // Group AFTER filtering/slicing, so a chip keeps only the calls it
             // shows (a half-hidden batch renders as the visible run's own group).
             const shownEntries = groupParallelItems(shownItems)
-            const showInput = filter === 'all' && !searchActive && inputItem !== undefined
+            const showInput = inputRowShown
             const emptyBody = items.length === 0 && (filter !== 'all' || searchActive)
             return (
               <div className="ttl-turnBody">

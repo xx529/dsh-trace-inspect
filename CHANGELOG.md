@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.5] - 2026-11-07
+
+**输入行统一样式**：展开轮次里的用户输入不再是一整行大字 preview，改为展开体第一行，与工具/输出同一套 32px 行。
+
+### Changed
+
+- 输入行改为 `.ttl-itemInput.ttl-msgRow`：中性 chip + 蓝色用户字形 + 「输入」+ 前 32 字预览 + 「还有 N 字符」，行高 32 / `padding: 0 22px 0 14px` / 8px gap，正文列与 `.ttl-stepDesc` 严格同列。
+- 点击输入行保持 v0.4 起的定位行为（跳回对话里的这条用户消息）；展开态不再重复渲染头部 preview。折叠卡仍是原来的 2 行 preview；切到工具筛选 / 搜索时输入行隐藏，头部 preview 照常显示。
+- 删除 v0.9 的「展开态隐藏输入行」规则（`.ttl-turn[data-collapsed="false"] .ttl-itemInput`）与旧的蓝点 / 标签样式。
+
+### Verification
+
+- 更新/新增 2 例：输入行作为展开体首行 + 点击定位 + 过滤时隐藏；长输入同样出现 char budget。`pnpm typecheck` 0、`pnpm test` **530 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2）：输入行 `399×32`、chip `18×18 @ x=1055`、preview x=**1221** = `.ttl-stepDesc` x、预览宽 128、meta `还有 82 字符`；截图 `docs/assets/v0105-input-row.jpg`。
+
 ## [0.10.4] - 2026-11-07
 
 ### Fixed

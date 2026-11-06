@@ -142,12 +142,22 @@ async function metrics() {
     const step = document.querySelector('[data-testid="ttl-step"]')
     const stepChip = step?.querySelector('.ttl-stepIcon')
     const stepDesc = document.querySelector('[data-testid="ttl-step"] .ttl-stepDesc')
+    const inputRow = document.querySelector('[data-testid="ttl-item-input"]')
+    const inputPreview = inputRow?.querySelector('[data-testid="ttl-input-preview"]')
+    const inputRest = inputRow?.querySelector('[data-testid="ttl-input-rest"]')
     const body = document.querySelector('[data-testid="ttl-output-body"]')
     return {
       row: r(row),
       rowStyle: style(row, ['height', 'paddingLeft', 'paddingRight', 'gap', 'fontSize']),
       rowExpanded: row?.getAttribute('aria-expanded') ?? null,
       stepDesc: r(stepDesc),
+      inputRow: r(inputRow),
+      inputRowStyle: style(inputRow, ['height', 'paddingLeft', 'paddingRight', 'gap']),
+      inputChip: r(inputRow?.querySelector('.ttl-stepIcon')),
+      inputPreview: r(inputPreview),
+      inputPreviewText: (inputPreview?.textContent ?? '').slice(0, 40),
+      inputRest: r(inputRest),
+      inputRestText: inputRest?.textContent ?? null,
       chip: r(chip),
       chipBg: style(chip, ['backgroundColor']),
       stepChip: r(stepChip),
@@ -180,6 +190,20 @@ try {
   const targetTag = tags[0] ?? '#1'
   await expandTurn(targetTag)
   await page.waitForSelector('[data-testid="ttl-turn"] [data-testid="ttl-item-output"]', { timeout: 15000 })
+
+  await page.locator('[data-testid="ttl-item-input"]').first().scrollIntoViewIfNeeded()
+  await sleep(page, 500)
+  await parkMouse()
+  const ib = await page.locator('[data-testid="ttl-item-input"]').first().boundingBox()
+  if (ib !== null) {
+    const iTop = Math.max(0, Math.round(ib.y) - 40)
+    await page.screenshot({
+      path: path.join(OUT_DIR, 'panel-inputrow.png'),
+      clip: { x: Math.max(0, Math.round(ib.x) - 4), y: iTop, width: 400, height: Math.min(260, page.viewportSize().height - iTop - 20) },
+      animations: 'disabled',
+    })
+    log('shot panel-inputrow.png')
+  }
 
   const rowBox = await page.evaluate(() => {
     const row = document.querySelector('[data-testid="ttl-item-output"]')

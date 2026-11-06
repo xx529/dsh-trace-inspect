@@ -262,8 +262,10 @@ describe('TrailTab', () => {
     // Input text appears in the header preview AND the expanded body's input row.
     expect(screen.getAllByText('deploy the service').length).toBeGreaterThan(0)
     expect(screen.getAllByText('rollback').length).toBeGreaterThan(0)
+    // Collapsed cards keep the 2-line preview; the expanded card swaps it for
+    // the body's input row (v0.10.5), so it has no preview text of its own.
     const previews = screen.getAllByTestId('ttl-turn-preview')
-    expect(previews.map((el) => el.textContent)).toEqual(['deploy the service', 'rollback'])
+    expect(previews.map((el) => el.textContent)).toEqual(['deploy the service'])
     // Latest turn (2) is expanded by default → its steps are visible.
     const steps = await screen.findAllByTestId('ttl-step')
     expect(steps.length).toBeGreaterThan(0)
@@ -325,22 +327,38 @@ describe('TrailTab', () => {
     expect(badges[0].textContent).toBe('✗1')
   })
 
-  it('keeps the input row in the expanded body and locates through the header', async () => {
+  it('shows the input as the expanded body\'s first row on the step grid and locates on click', async () => {
     renderTab(oneTurn())
     const row = await screen.findByTestId('ttl-item-input')
-    // v0.9 still renders the input row as the body's first element, but CSS
-    // hides it while the turn is expanded
-    // (`.ttl-turn[data-collapsed="false"] .ttl-itemInput { display: none }`),
-    // so the visible locate entry point is the turn header's ↗ (ttl-locate).
+    // v0.10.5: the expanded body renders the input as a first-class row
+    // (icon + 输入 + preview), replacing the header preview text.
     const body = row.parentElement as HTMLElement
     expect(body.firstElementChild).toBe(row)
+    expect(screen.queryByTestId('ttl-turn-preview')).toBeNull()
     expect(row.textContent).toContain('deploy the service')
-    fireEvent.click(screen.getByTestId('ttl-locate'))
+    // Click = the v0.4–v0.8 locate behaviour (no conversation binding in tests).
+    fireEvent.click(row)
     const bar = await screen.findByTestId('ttl-statusbar')
     await waitFor(() => { expect(bar.textContent).toContain('Could not locate that message') })
     // Under a tool filter the input row is not rendered at all.
     fireEvent.click(screen.getByTestId('ttl-chip-bash'))
     expect(screen.queryByTestId('ttl-item-input')).toBeNull()
+  })
+
+  it('a long user input also collapses to one line with a char budget (v0.10.5)', async () => {
+    const long = `这是很长的用户输入，用来验证输入行也走前 32 字 + 还有 N 字符的同一套行式。${'补充说明 '.repeat(40)}`
+    renderTab([
+      user(1, long),
+      turnStart(2, 1),
+      toolCall(3, 'bash', 'ls', 'c3'),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-input')
+    const preview = within(row).getByTestId('ttl-input-preview')
+    expect(preview.textContent?.endsWith('…')).toBe(true)
+    expect(preview.textContent?.length ?? 0).toBeLessThanOrEqual(33)
+    const rest = within(row).getByTestId('ttl-input-rest')
+    expect(Number((rest.textContent ?? '').replace(/[^\d]/g, ''))).toBe(long.length - 32)
   })
 
   it('follow-latest toggle flips aria-pressed and its label', async () => {

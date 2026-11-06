@@ -1884,8 +1884,6 @@ export const trailCss = `
 /* ── v0.9 leaf classes used by the new shell / detail ───── */
 .ttl-empty-filtered { padding: 8px 14px; color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 10.5px; }
 .ttl-item-compaction { color: var(--dsw-alias-label-quaternary, #5f6469); }
-.ttl-itemInput .ttl-itemDot { background: #60a5fa; }
-.ttl-itemInput .ttl-itemLabel { color: #9bb8e8; }
 .ttl-itemJump {
   flex: none;
   width: 16px;
@@ -2019,7 +2017,6 @@ export const trailCss = `
   box-shadow: none;
   white-space: nowrap;
 }
-.ttl-turn[data-collapsed="false"] .ttl-itemInput { display: none; }
 .ttl-detail { margin-left: 13.5px; margin-right: 13.5px; }
 
 /* ══ v0.9.1 polish: quieter parallel groups, green MCP success ═══════════ */
@@ -2100,6 +2097,7 @@ export const trailCss = `
 }
 /* Reuse the step chip for the message glyph; only the ink stays message-green. */
 .ttl-msgIcon { color: #4ed4a4; }
+.ttl-inputIcon { color: #60a5fa; }
 .ttl-msgRole {
   flex: none;
   /* Same name column as the tool name, so the message text starts exactly

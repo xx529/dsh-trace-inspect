@@ -225,3 +225,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![v0.10.4：输出正文与工具描述同列](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0104-output-aligned.jpg>)
 
 ![点开：完整 Markdown 全文](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0103-output-open.jpg>)
+
+## 18. v0.10.5 输入行统一样式
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 展开轮次里的用户输入是一整行大字、没有图标，跟上下行不统一 | 输入改为展开体的第一行，与工具/输出同一 32px 栅格：中性 chip + 蓝色用户字形 + 「输入」+ 前 32 字预览 + 「还有 N 字符」；点击保持 v0.4 起的「定位回对话」；展开态不再重复渲染头部 preview（折叠卡仍是原 2 行 preview，工具筛选 / 搜索时退回头部 preview） | 行 `399×32`、chip `18×18 @ x=1055`、preview x=**1221** = `.ttl-stepDesc` x、预览宽 `128`、meta `还有 82 字符`；长输入用例如期出现 char budget；过滤时 `ttl-item-input` 不再渲染 |
+| 与上一版行式的复用 | 输入行复用 `.ttl-msgRow` / `.ttl-msgRole` / `.ttl-msgPreview` / `.ttl-msgRest`（与输出行同栅格），glyph 用蓝色区分「用户 vs 助手」 | 输入行无 chevron（点击=定位，不是展开） |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **530 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-outputrow.mjs`（新增 `panel-inputrow.png` 与 `inputRow` 度量）。
+- 已知偏差：输入行预览同样固定 32 字；点击是跳回对话（不在此面板展开全文），与工具/输出的展开语义不同。
+
+![输入行：与工具行同栅格、正文同列](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0105-input-row.jpg>)
