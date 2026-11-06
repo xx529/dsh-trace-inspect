@@ -238,3 +238,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：输入行预览同样固定 32 字；点击是跳回对话（不在此面板展开全文），与工具/输出的展开语义不同。
 
 ![输入行：与工具行同栅格、正文同列](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0105-input-row.jpg>)
+
+## 19. v0.10.6 `skill` 调用单独成族
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 加载 skill 的图标不要用通用的 🔧，辨识度要特别一点；后面的描述不要 `name`，只留 skill 名称 | `ToolIconKind` / `ToolFamily` 新增 `skill`：sparkle（Lucide sparkles 四角星）字形 + 青色 `#63c9d1`；`summarizeToolCall('skill')` 取 `args.name`（兼容 `args.skill`）作为 detail，不再走通用 `key value` 回退；概览分布 / legend 增加 skill 段 | 行 label `skill`、desc `figma-workbench` / `ui-ux-pro-max`（无 `name ` 前缀）；字形 ink `rgb(99,201,209)`；legend `bash 1 · skill 2`；chip 仍为统一中性底 |
+
+- 覆盖范围：步骤行、turn 头部 mix、详情 / 浮层图标、概览分布与 legend 都走同一 `toolFamily('skill')`；筛选 chips 仍按工具名（`skill`）。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **532 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-skillrow.mjs`（路由 mock 一段含 2 个 skill 调用的最小会话 + 截图 / 度量）。
+- 已知偏差：mock 会话（真实 trace-verify 历史里没有 `skill` 调用），字形 / 颜色与真实插件渲染一致。
+
+![skill 行：青色四角星 + 仅 skill 名称](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0106-skill-row.jpg>)

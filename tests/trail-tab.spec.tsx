@@ -542,6 +542,22 @@ describe('TrailTab', () => {
     expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
   })
 
+  it('a skill call reads as its skill name and draws the sparkle family glyph (v0.10.6)', async () => {
+    renderTab([
+      user(1, 'load the skills'),
+      turnStart(2, 1),
+      toolCall(3, 'skill', '{"name":"figma-workbench"}', 'c3'),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-step')
+    expect(row.querySelector('.ttl-stepName')?.textContent).toBe('skill')
+    expect(row.querySelector('.ttl-stepDesc')?.textContent).toBe('figma-workbench')
+    expect(row.querySelector('.ttl-stepDesc')?.textContent).not.toContain('name ')
+    expect(row.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-skill')
+    const path = row.querySelector('.ttl-stepIcon .ttl-rowIcon svg path')
+    expect(path?.getAttribute('d') ?? '').toContain('m12 3-1.9 5.8')
+  })
+
   it('a failed tool result leads with the prototype alert glyph, not its family glyph (v0.10.2)', async () => {
     renderTab([
       user(1, 'run tests'),

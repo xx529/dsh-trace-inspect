@@ -30,6 +30,7 @@ export type ToolIconKind =
   | 'search'
   | 'folder'
   | 'mcp'
+  | 'skill'
   | 'alert'
   | 'generic'
 
@@ -202,6 +203,16 @@ export function summarizeToolCall(
     case 'list_dir': {
       const path = str(args, 'path') ?? str(args, 'file_path')
       return { label: name, detail: path !== undefined ? clip(path) : clip(firstLine(argsPreview)), icon: 'folder' }
+    }
+    case 'skill': {
+      // `skill {name: "figma-workbench"}` — the skill name IS the row detail;
+      // the generic fallback would prefix it with the raw `name` key.
+      const skillName = str(args, 'name') ?? str(args, 'skill')
+      return {
+        label: name,
+        detail: skillName !== undefined ? clip(skillName) : clip(firstLine(argsPreview)),
+        icon: 'skill',
+      }
     }
     default:
       break

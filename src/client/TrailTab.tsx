@@ -314,6 +314,7 @@ function familyIconKind(family: ToolFamily): ToolIconKind {
     case 'read': return 'file-read'
     case 'edit': return 'file-edit'
     case 'mcp': return 'mcp'
+    case 'skill': return 'skill'
     default: return 'generic'
   }
 }
@@ -325,6 +326,7 @@ function familyLabel(family: ToolFamily, ui: UiStrings): string {
     case 'read': return 'read'
     case 'edit': return 'edit'
     case 'mcp': return 'mcp'
+    case 'skill': return 'skill'
     case 'todo': return 'todo'
     case 'error': return 'error'
     default: return ui.others
@@ -938,7 +940,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       const family = toolFamily(tool.name, false)
       counts.set(family, (counts.get(family) ?? 0) + tool.count)
     }
-    const order: ToolFamily[] = ['shell', 'read', 'edit', 'mcp', 'todo', 'generic']
+    const order: ToolFamily[] = ['shell', 'read', 'edit', 'mcp', 'skill', 'todo', 'generic']
     const families = order
       .filter((family) => (counts.get(family) ?? 0) > 0)
       .map((family) => ({ family, count: counts.get(family) ?? 0 }))

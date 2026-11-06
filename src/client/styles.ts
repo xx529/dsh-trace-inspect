@@ -2181,4 +2181,8 @@ export const trailCss = `
   background: rgba(255, 255, 255, 0.08);
 }
 
+
+/* ══ v0.10.6: skill tool gets its own family glyph (sparkle) + teal ink ══ */
+.ttl-tone-skill { color: #63c9d1; }
+.ttl-distSeg.ttl-tone-skill, .ttl-legendDot.ttl-tone-skill { background: #63c9d1; }
 `

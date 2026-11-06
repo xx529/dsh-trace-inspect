@@ -36,7 +36,7 @@ export function turnDuration(startedAt?: number, endedAt?: number): string {
 }
 
 /** Tool family used for coloring an icon chip / row. */
-export type ToolFamily = 'shell' | 'read' | 'edit' | 'mcp' | 'todo' | 'error' | 'generic'
+export type ToolFamily = 'shell' | 'read' | 'edit' | 'mcp' | 'skill' | 'todo' | 'error' | 'generic'
 
 /** Map a raw tool name onto the visual family used by the redesign. */
 export function toolFamily(name: string, isError: boolean): ToolFamily {
@@ -45,6 +45,7 @@ export function toolFamily(name: string, isError: boolean): ToolFamily {
   if (name === 'bash' || name === 'bash_output' || name === 'shell' || name === 'pwsh') return 'shell'
   if (name === 'read' || name === 'read_image' || name === 'glob' || name === 'grep' || name === 'search' || name === 'ls') return 'read'
   if (name === 'write' || name === 'edit' || name === 'append') return 'edit'
+  if (name === 'skill') return 'skill'
   if (name === 'todo_write' || name === 'todo_read') return 'todo'
   return 'generic'
 }

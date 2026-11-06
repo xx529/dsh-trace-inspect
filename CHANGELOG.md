@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.6] - 2026-11-07
+
+### Changed
+
+- **skill 工具单独成族**：`skill` 不再落进通用工具（扳手）——新增 sparkle（四角星）字形 + 青色家族色 `#63c9d1`；chip 仍用统一中性底，只有字形 / 图例着色。
+- **行详情只显示 skill 名称**：`skill {"name":"figma-workbench"}` 的行显示 `skill  figma-workbench`，不再出现 `name figma-workbench` 的原始 key。
+- 会话概览的工具分布 / legend 增加 skill 段（label `skill`），筛选 chips 仍按工具名。
+
+### Verification
+
+- 新增 `tests/tool-summary.spec.ts` 1 例 + `tests/trail-tab.spec.tsx` 1 例（label / detail / ttl-tone-skill / sparkle path）；`pnpm typecheck` 0、`pnpm test` **532 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，mock 事件 `scripts/verify/shoot-skillrow.mjs`）：行 label `skill`、desc `figma-workbench` / `ui-ux-pro-max`、字形 ink `rgb(99,201,209)`、legend `bash 1 · skill 2`；截图 `docs/assets/v0106-skill-row.jpg`。
+
 ## [0.10.5] - 2026-11-07
 
 **输入行统一样式**：展开轮次里的用户输入不再是一整行大字 preview，改为展开体第一行，与工具/输出同一套 32px 行。

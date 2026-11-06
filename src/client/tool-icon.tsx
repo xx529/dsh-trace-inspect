@@ -55,6 +55,13 @@ function pathsOf(kind: ToolIconKind): React.ReactNode {
         React.createElement('line', { key: 'b', x1: 15, y1: 2, x2: 15, y2: 7, ...stroke }),
         React.createElement('path', { key: 'c', d: 'M6 7h12v5a6 6 0 0 1-12 0z', ...stroke }),
         React.createElement('line', { key: 'd', x1: 12, y1: 18, x2: 12, y2: 22, ...stroke }))
+    case 'skill':
+      // Sparkle/star: "a loaded capability", deliberately not the wrench.
+      return React.createElement('path', {
+        key: 'a',
+        d: 'm12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z',
+        ...stroke,
+      })
     case 'alert':
       return React.createElement(React.Fragment, null,
         React.createElement('path', { key: 'a', d: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z', ...stroke }),

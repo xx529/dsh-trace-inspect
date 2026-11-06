@@ -44,6 +44,13 @@ describe('tool-summary — known tools', () => {
     expect(summarizeToolCall('ls', JSON.stringify({ path: '/tmp/x' }), '…')).toEqual({ label: 'ls', detail: '/tmp/x', icon: 'folder' })
   })
 
+  it('skill shows the bare skill name (never the raw `name` key) and the skill glyph', () => {
+    expect(summarizeToolCall('skill', JSON.stringify({ name: 'figma-workbench' }), '…'))
+      .toEqual({ label: 'skill', detail: 'figma-workbench', icon: 'skill' })
+    expect(summarizeToolCall('skill', JSON.stringify({ skill: 'ui-ux-pro-max' }), '…').detail).toBe('ui-ux-pro-max')
+    expect(summarizeToolCall('skill', 'not json', 'not json').detail).toBe('not json')
+  })
+
   it('mcp tools split into server + tool + a human argument summary', () => {
     const summary = summarizeToolCall(
       'mcp__playwright__browser_click',
