@@ -2065,6 +2065,8 @@ export const trailCss = `
   padding-left: 14px;
   padding-right: 22px;
 }
+/* v0.10.8: an expanded turn's body nests under its header (tree indent). */
+.ttl-turn[data-collapsed="false"] .ttl-turnBody { padding-left: 14px; }
 .ttl-turn .ttl-stepJump { right: 8px; }
 .ttl-turn .ttl-item { padding-right: 20px; }
 .ttl-turn .ttl-parallel::before { left: 10px; }

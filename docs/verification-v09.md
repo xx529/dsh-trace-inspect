@@ -263,3 +263,18 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：软换行仍可能把一行折成多视觉行（命令本来就很长），但折行末尾的连接符不会单独成行。
 
 ![命令：连接符在上一行行尾](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0107-command-tail.jpg>)
+
+## 21. v0.10.8 展开轮次体 tree 缩进
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 展开后输入 / 步骤 / 输出与轮次标题同列，看不出这些内容属于该轮 | 对展开态的 `.ttl-turnBody` 加 `padding-left: 14px`：输入行、步骤行、消息行、并行组、详情带、轮次脚注整体右移；轮次标题保持原位，形成「#N 是父、body 是子」的 tree 结构。折叠卡不受影响 | `rowIndentVsHead = 14`、`iconIndentVsTag = 14`；dock 400 下详情带 `399-14-27 = 358` 宽（v0.9 契约的 372 是未缩进时代的数值，本版更新） |
+
+- 覆盖：`.ttl-step`、`.ttl-msgRow`、`.ttl-itemInput`、`.ttl-parallel`、`.ttl-showEarlier`、`.ttl-turnFoot`、`.ttl-detail` 都在 `ttl-turnBody` 内，因此一起缩进；`.ttl-turnHead` / `.ttl-turnPreview` 不在 body 内，保持标题列。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **534 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-treeindent.mjs`（展开态 / 打开详情带两帧 + 缩进度量）。
+- 已知偏差：详情带宽度从 372 变成 358（缩进 14 + 原有 13.5 margin），内容布局与换行逻辑不变。
+
+![展开轮次：body 缩进 14px，形成 tree 层级](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0108-tree-indent.jpg>)
+
+![打开详情带：band 随 body 缩进](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0108-tree-band.jpg>)

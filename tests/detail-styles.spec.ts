@@ -187,6 +187,15 @@ describe('v0.10.2: 统一 ICON 底色 + 图标间竖线（原型 2-02）', () =>
   })
 })
 
+describe('v0.10.8: 展开轮次体缩进（tree）', () => {
+  it('只对展开态给 turnBody 加 14px 左缩进，折叠卡保持满宽', () => {
+    const expanded = rule('.ttl-turn[data-collapsed="false"] .ttl-turnBody {')
+    expect(expanded).toContain('padding-left: 14px;')
+    // The base body rule must not carry the indent (collapsed cards unaffected).
+    expect(rule('.ttl-turnBody {')).not.toContain('padding-left')
+  })
+})
+
 describe('向后兼容：v0.4.0 的类与键没有被删改', () => {
   it('既有 ttl- 类仍然在 CSS 里', () => {
     const legacy = [

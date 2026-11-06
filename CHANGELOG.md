@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.8] - 2026-11-07
+
+### Changed
+
+- **展开轮次的体做 tree 缩进**：展开后，输入行 / 步骤行 / 消息行 / 并行组 / 详情带 / 轮次脚注整体左缩进 **14px**，视觉上从属于该轮标题（`#N 时间 时长 步数`），折叠卡仍保持满宽。
+- 详情带随缩进占 `358`（dock 400；此前 372），内部命令 / Markdown 等布局不变。
+
+### Verification
+
+- 新增 1 例样式回归：`.ttl-turn[data-collapsed="false"] .ttl-turnBody { padding-left: 14px }`，基础 `.ttl-turnBody` 不带缩进。
+- `pnpm typecheck` 0、`pnpm test` **534 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2）：`rowIndentVsHead = 14`、`iconIndentVsTag = 14`、展开详情带 `358`；截图 `docs/assets/v0108-tree-indent.jpg` / `v0108-tree-band.jpg`。
+
 ## [0.10.7] - 2026-11-07
 
 ### Changed
