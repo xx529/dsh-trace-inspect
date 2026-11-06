@@ -909,6 +909,10 @@ export const trailCss = `
   white-space: nowrap;
 }
 .ttl-badgeErr { background: rgba(242, 114, 111, 0.14); color: var(--dsw-alias-state-error-primary, #f2726f); }
+/* v0.10.16: the failure stat uses the row's alert-triangle glyph, not "✗". */
+.ttl-badgeErr .ttl-rowIcon { display: inline-flex; }
+.ttl-badgeErr svg { width: 11px; height: 11px; }
+.ttl-badgeCount { font-variant-numeric: tabular-nums; }
 .ttl-badgeParallel { background: rgba(167, 139, 250, 0.16); color: #c4b2ff; }
 .ttl-stepsNum { flex: none; color: var(--dsw-alias-label-tertiary, #9ba1a7); font-size: 10.5px; white-space: nowrap; }
 .ttl-locateBtn {

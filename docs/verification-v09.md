@@ -371,3 +371,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话；真实 4k 字符参数同样一次渲染，面板高度由内容撑开。
 
 ![展开的长值：全部渲染、无内部滚动](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0115-longvalue.jpg>)
+
+## 29. v0.10.16 失败统计改用告警图标
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 图1 轮次头部的报错统计（`✗5`）应该用图2 里统一的失败图标 | 折叠卡头部徽标由文本 `✗{n}` 改为 `ToolIcon kind="alert"`（警示三角）+ 数字；红色 chip、title 语义不变；与失败行、原型 2-02 / 6-06 的失败图标一致 | mock 轮次（1 个失败步骤）：头部显示红色 chip「⚠ 1」；`.ttl-badgeErr` 内 path 含 `M10.29 3.86`；文本不再包含 `✗` |
+| 不影响其他计数 | 只换图形；数字保留在 `ttl-error-count`，`ttl-error-dot` testid 不变 | mix（shell/read/edit/skill）+ 失败徽标 + `9 步` 同行布局不变 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **544 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-turnmix.mjs`（mock 轮次新增 1 个 `FsError` 步骤，截取折叠卡头部）。
+- 已知偏差：mock 会话；真实失败轮次的徽标同样只显示三角 + 数量。
+
+![轮次头部：失败统计 = 警示三角 + 数字](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0116-error-badge.jpg>)

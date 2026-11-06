@@ -324,7 +324,9 @@ describe('TrailTab', () => {
     await readyTurns(2)
     const badges = screen.getAllByTestId('ttl-error-dot')
     expect(badges).toHaveLength(1)
-    expect(badges[0].textContent).toBe('✗1')
+    // v0.10.16: the stat is the alert triangle + count, not a "✗" text glyph.
+    expect(badges[0].textContent).toBe('1')
+    expect(badges[0].querySelector('.ttl-rowIcon svg path')?.getAttribute('d') ?? '').toContain('M10.29 3.86')
   })
 
   it('shows the input as the expanded body\'s first row on the step grid and locates on click', async () => {

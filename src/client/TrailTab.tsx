@@ -13,7 +13,7 @@
  *   ├ div.ttl-filters            chips: 全部 / 失败 / top tools / ⋯ dropdown
  *   ├ div.ttl-summary            steps · turns · failures · duration + family bar + legend
  *   ├ div.ttl-list               turn cards (three-line: head / 2-line preview / body)
- *   │   └ section.ttl-turn       head: #N · HH:mm · dur · mix · ✗n · ∥n · steps · ↗ · ⌄
+ *   │   └ section.ttl-turn       head: #N · HH:mm · dur · mix · ⚠n · ∥n · steps · ↗ · ⌄
  *   │       └ div.ttl-turnBody   input row → steps (parallel groups inline) → output → foot
  *   ├ div.ttl-statusbar          read-only sync dot · seq
  *   └ jump banner / to-bottom / zoom overlay
@@ -791,7 +791,11 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                   className="ttl-badge ttl-badgeErr"
                   data-testid="ttl-error-dot"
                   title={(t(lang, 'error') as string)}
-                >{`✗${errorCount}`}</span>
+                >
+                  {/* v0.10.16: same alert-triangle glyph as the failed rows. */}
+                  <ToolIcon kind="alert" tone="red" />
+                  <span className="ttl-badgeCount" data-testid="ttl-error-count">{errorCount}</span>
+                </span>
               )
               : null}
             {parallelGroups.length > 0

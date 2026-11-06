@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.16] - 2026-11-07
+
+### Changed
+
+- **轮次头部的失败统计改用统一的告警图标**：折叠卡头部的 `✗N` 文本徽标改为「警示三角 + 数字」（`ToolIcon kind="alert"`），红色 chip 保留，与失败行、原型 2-02 / 6-06 的失败图标一致。
+- 覆盖：折叠轮次卡头部统计；行内失败行本来就是同一三角字形，未变。
+
+### Verification
+
+- 更新面板回归断言：`ttl-error-dot` 内出现 alert-triangle path（含 `M10.29 3.86`），数字单独在 `ttl-error-count`，不再是 `✗1` 文本。
+- `pnpm typecheck` 0、`pnpm test` **544 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，mock 轮次含 1 个失败步骤）：头部 mix 后显示红色 chip「⚠ 1」，文本不再出现 `✗`；截图 `docs/assets/v0116-error-badge.jpg`。
+
 ## [0.10.15] - 2026-11-07
 
 ### Changed
