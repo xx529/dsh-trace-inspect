@@ -278,3 +278,17 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![展开轮次：body 缩进 14px，形成 tree 层级](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0108-tree-indent.jpg>)
 
 ![打开详情带：band 随 body 缩进](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0108-tree-band.jpg>)
+
+## 22. v0.10.9 轮次头部 mix 固定包含 skill
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 折叠轮次卡头部的工具族统计里看不到 skill 数量 | mix 原来只取数量 Top 4；`skill` 是「加载能力」的语义事件，数量少容易被挤掉。现在若存在 skill 则固定占一席（其余取 Top 3），总项数仍为 4 | mock 轮次（bash 2 / read 2 / edit 2 / custom 1 / skill 1）修复后 mix = `bash 2 · read 2 · edit 2 · skill 1`；修复前第 4 项是通用扳手 |
+| 不破坏宽度 | 仍为 4 项，不增加头部宽度 | `.ttl-mixItem` 数量 = 4；轮次卡宽度不变 |
+
+- 覆盖：仅折叠卡显示 mix（展开态 CSS 隐藏），展开态的轮次脚注/概览 legend 仍含 skill（v0.10.6）。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **535 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-turnmix.mjs`（mock 两个轮次，截取折叠 `#1` 卡 + mix 度量）。
+- 已知偏差：mock 会话（真实 trace-verify 历史里没有 skill 调用），组件渲染路径与真实插件一致。
+
+![轮次头部 mix：skill 固定出现](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0109-turn-mix.jpg>)

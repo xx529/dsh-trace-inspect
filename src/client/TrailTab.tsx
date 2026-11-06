@@ -541,7 +541,12 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     return count
   }, [turn])
 
-  /** Head mix: tool steps by family, top four — the turn's shape at a glance. */
+  /**
+   * Head mix: tool steps by family, at most four — the turn's shape at a glance.
+   * `skill` is pinned (v0.10.9): loading a skill is a semantic event, not just
+   * more calls, so a turn that used one always shows its count even when three
+   * louder families would otherwise fill the four slots.
+   */
   const mix = React.useMemo(() => {
     const counts = new Map<ToolFamily, number>()
     for (const item of turn.items) {
@@ -549,10 +554,13 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
       const family = toolFamily(item.step.name, false)
       counts.set(family, (counts.get(family) ?? 0) + 1)
     }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([family, count]) => ({ family, count }))
+    const entries = [...counts.entries()].sort((a, b) => b[1] - a[1])
+    const skill = entries.find(([family]) => family === 'skill')
+    const others = entries.filter(([family]) => family !== 'skill')
+    const picked = skill === undefined
+      ? others.slice(0, 4)
+      : [...others.slice(0, 3), skill]
+    return picked.map(([family, count]) => ({ family, count }))
   }, [turn])
 
   const [openOutputs, setOpenOutputs] = React.useState<ReadonlySet<string>>(() => new Set<string>())

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.9] - 2026-11-07
+
+### Fixed
+
+- **折叠轮次卡的 mix 漏掉 skill 计数**：头部工具族统计只取数量 Top 4，加载 skill 这种「语义事件」数量通常很少，会被 mcp / bash / read / edit 等挤掉。现在 `skill` 若存在必占一席（其余取数量 Top 3），总项数仍为 4。
+- 实测（mock 轮次：bash 2 / read 2 / edit 2 / custom 1 / skill 1）修复前第 4 项是通用扳手、skill 不显示；修复后显示 `bash 2 · read 2 · edit 2 · skill 1`。
+
+### Verification
+
+- 新增 1 例：5 个工具族、skill 数量最小，仍出现在 mix，且 mix 总项数仍为 4。
+- `pnpm typecheck` 0、`pnpm test` **535 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，mock 事件 `scripts/verify/shoot-turnmix.mjs`）：mix items = shell2 / read2 / edit2 / skill1；截图 `docs/assets/v0109-turn-mix.jpg`。
+
 ## [0.10.8] - 2026-11-07
 
 ### Changed

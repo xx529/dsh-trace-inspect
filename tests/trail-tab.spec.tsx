@@ -542,6 +542,36 @@ describe('TrailTab', () => {
     expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
   })
 
+  it('collapsed-turn mix always includes a loaded skill even when four louder families exist (v0.10.9)', async () => {
+    renderTab([
+      user(1, 'mixed turn'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"a"}', 'c3'),
+      toolCall(4, 'bash', '{"command":"b"}', 'c4'),
+      toolCall(5, 'read', '{"file_path":"a.ts"}', 'c5'),
+      toolCall(6, 'read', '{"file_path":"b.ts"}', 'c6'),
+      toolCall(7, 'edit', '{"file_path":"c.ts"}', 'c7'),
+      toolCall(8, 'edit', '{"file_path":"d.ts"}', 'c8'),
+      toolCall(9, 'custom_tool', '{"x":1}', 'c9'),
+      toolCall(10, 'skill', '{"name":"figma-workbench"}', 'c10'),
+      turnEnd(11, 1),
+      user(12, 'next'),
+      turnStart(13, 2),
+      toolCall(14, 'bash', '{"command":"c"}', 'c14'),
+      turnEnd(15, 2),
+    ])
+    const turns = await readyTurns(2)
+    const mix = turns[0].querySelector('.ttl-mix')
+    expect(mix).toBeTruthy()
+    const skillItem = mix?.querySelector('.ttl-mixItem.ttl-tone-skill')
+    expect(skillItem).toBeTruthy()
+    expect(skillItem?.querySelector('.ttl-mixCount')?.textContent).toBe('1')
+    // The mix stays capped at four items (skill replaces the smallest slot).
+    expect(mix?.querySelectorAll('.ttl-mixItem')).toHaveLength(4)
+    // shell/read/edit (2 each) are the loud families that would otherwise fill it.
+    expect(mix?.querySelectorAll('.ttl-mixItem.ttl-tone-shell').length).toBe(1)
+  })
+
   it('draws && / ; at the end of the previous command line (v0.10.7)', async () => {
     renderTab([
       user(1, 'run it'),
