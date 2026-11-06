@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.5] - 2026-11-06
+
+**模型文本输出改为引用块**：assistant 消息不再复用工具行的「绿点 + 输出 + 原文」，改为独立的阅读块。
+
+### Changed
+
+- 输出块：左侧 2px 绿色竖条 + 很淡底色 + 顶部小图标/「输出」角色标签/发丝分隔线；正文 12.5px/19，**内联渲染加粗与行内 code**，3 行截断 + 「展开全文」；悬停显示 `↗` 定位。
+- 展开后显示完整 Markdown（标题/列表/代码块），提供「收起」。
+- 保留 `ttl-item-output` / `ttl-output-wrap` / `ttl-output-body` / `ttl-output-jump` testid；新增 `ttl-output-toggle`。
+
+### Fixed
+
+- 折叠的助手文本此前直接显示原始 `**...**` 标记，现在加粗/行内 code 正常渲染。
+
+### Verification
+
+- 实机（19487 / dock 400）：`.ttl-msg` 引用块、3 行 clamp、展开完整 Markdown、悬停才显示 ↗；截图 `docs/assets/v095-output.jpg`、`docs/assets/v095-output-open.jpg`。
+- `pnpm typecheck` 0；`pnpm test` 516 例 / 21 文件；`pnpm build` 通过。
+
 ## [0.9.4] - 2026-11-06
 
 **展开态左右留白**：轨迹展开后不再紧贴面板两侧。

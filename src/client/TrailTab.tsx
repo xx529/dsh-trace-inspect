@@ -76,6 +76,42 @@ export interface TrailTabProps {
 }
 
 /** `all` | `failed` | a raw tool name (the chips). */
+/** Tiny chat-bubble glyph for the assistant message block (12px, currentColor). */
+function messageIcon(): React.ReactElement {
+  return React.createElement(
+    'svg',
+    { viewBox: '0 0 24 24', width: 12, height: 12, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+    React.createElement('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }),
+  )
+}
+
+/**
+ * Inline-only Markdown for the clamped message preview: **bold** and `code`
+ * are styled; block structure stays with the full MarkdownResult shown after
+ * expanding. Newlines survive because the block uses white-space: pre-wrap.
+ */
+function inlineMarkdown(text: string): React.ReactNode {
+  const nodes: React.ReactNode[] = []
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`)/g
+  let last = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) nodes.push(text.slice(last, match.index))
+    const token = match[0]
+    if (token.startsWith('**')) {
+      key += 1
+      nodes.push(React.createElement('strong', { key, className: 'ttl-msgStrong' }, token.slice(2, -2)))
+    } else {
+      key += 1
+      nodes.push(React.createElement('code', { key, className: 'ttl-msgCode' }, token.slice(1, -1)))
+    }
+    last = match.index + token.length
+  }
+  if (last < text.length) nodes.push(text.slice(last))
+  return nodes
+}
+
 type StepFilter = 'all' | 'failed' | string
 
 /** Max step/items rows mounted per expanded turn (bounds the DOM). */
@@ -579,41 +615,67 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     if (item.kind === 'tool') return renderStep(item.step, key)
     if (item.kind === 'input') return null // shown as the body's first row
     if (item.kind === 'output') {
-      // Clicking the output row reveals the FULL message inline (the row itself
-      // stays a 2-line clamp); ↗ keeps the locate-in-conversation action.
+      // Assistant prose is a MESSAGE, not a tool row: a quote-style block with a
+      // green accent, a tiny role label, inline **bold** / `code`, and a 3-line
+      // clamp. Expanding swaps in the full Markdown rendering.
       const open = openOutputs.has(key)
+      const text = item.text
+      const long = text.length > 90 || text.includes('\n')
       return (
-        <div className="ttl-outputWrap" key={key} data-open={open ? 'true' : undefined} data-testid="ttl-output-wrap">
-          <button
-            type="button"
-            className="ttl-item ttl-itemOutput"
+        <div
+          className="ttl-msg"
+          key={key}
+          data-open={open ? 'true' : undefined}
+          data-testid="ttl-output-wrap"
+        >
+          <div
+            className="ttl-msgMain"
             data-testid="ttl-item-output"
+            role="button"
+            tabIndex={0}
             aria-expanded={open}
-            title={clipTitle(item.text)}
+            title={clipTitle(text)}
             onClick={() => { toggleOutput(key) }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                toggleOutput(key)
+              }
+            }}
           >
-            <span className="ttl-itemDot ttl-dot-green" aria-hidden="true" />
-            <span className="ttl-itemLabel">{t(lang, 'output') as string}</span>
-            <span className="ttl-itemText ttl-itemText2">{item.text}</span>
-            <span className={`ttl-chevron${open ? ' ttl-chevronOpen' : ''}`} aria-hidden="true">{chevronIcon()}</span>
-          </button>
+            <div className="ttl-msgHead">
+              <span className="ttl-msgIcon" aria-hidden="true">{messageIcon()}</span>
+              <span className="ttl-msgRole">{t(lang, 'output') as string}</span>
+              <span className="ttl-msgRule" aria-hidden="true" />
+            </div>
+            {open
+              ? (
+                <div className="ttl-output-body" data-testid="ttl-output-body">
+                  {looksLikeMarkdown(text)
+                    ? <MarkdownResult text={text} labels={markdownLabels(lang)} />
+                    : <div className="ttl-msgText ttl-msgTextOpen">{inlineMarkdown(text)}</div>}
+                </div>
+              )
+              : <div className="ttl-msgText">{inlineMarkdown(text)}</div>}
+          </div>
+          {long
+            ? (
+              <button
+                type="button"
+                className="ttl-msgMore"
+                data-testid="ttl-output-toggle"
+                onClick={() => { toggleOutput(key) }}
+              >{open ? (t(lang, 'collapseLabel') as string) : (lang === 'zh' ? '展开全文' : 'Show full')}</button>
+            )
+            : null}
           <button
             type="button"
-            className="ttl-stepJump"
+            className="ttl-msgJump"
             data-testid="ttl-output-jump"
             title={t(lang, 'locateInChat') as string}
             aria-label={t(lang, 'locateInChat') as string}
             onClick={() => { onJump(targetFor(item), turn) }}
           >↗</button>
-          {open
-            ? (
-              <div className="ttl-output-body" data-testid="ttl-output-body">
-                {looksLikeMarkdown(item.text)
-                  ? <MarkdownResult text={item.text} labels={markdownLabels(lang)} />
-                  : <RawText text={item.text} />}
-              </div>
-            )
-            : null}
         </div>
       )
     }

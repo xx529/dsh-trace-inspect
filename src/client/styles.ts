@@ -2071,4 +2071,69 @@ export const trailCss = `
 .ttl-turn .ttl-parallel::before { left: 10px; }
 .ttl-turn .ttl-turnBody .ttl-showEarlier { width: calc(100% - 36px); margin-left: 18px; margin-right: 18px; }
 
+/* ══ v0.9.5: assistant prose as a quote-style message block ═════════════ */
+.ttl-msg {
+  position: relative;
+  margin: 6px 14px 10px;
+  padding: 6px 10px 7px 12px;
+  border-left: 2px solid rgba(78, 212, 164, 0.55);
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 255, 255, 0.025);
+}
+.ttl-msgMain { cursor: pointer; outline: none; }
+.ttl-msgMain:focus-visible { box-shadow: 0 0 0 1px rgba(124, 178, 255, 0.55); border-radius: 4px; }
+.ttl-msgHead { display: flex; align-items: center; gap: 6px; height: 16px; }
+.ttl-msgIcon { display: inline-flex; color: #4ed4a4; }
+.ttl-msgRole { color: var(--dsw-alias-label-tertiary, #9ba1a7); font-size: 9.5px; letter-spacing: 0.4px; }
+.ttl-msgRule { flex: 1; height: 1px; background: rgba(255, 255, 255, 0.05); }
+.ttl-msgText {
+  margin-top: 3px;
+  color: #dfe2e5;
+  font-size: 12.5px;
+  line-height: 19px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ttl-msgTextOpen { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.ttl-msgStrong { color: #f3f4f6; font-weight: 600; }
+.ttl-msgCode {
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
+  font-size: 11px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #d7dade;
+}
+.ttl-msgMore {
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dsw-static-blue-300, #7cb2ff);
+  font: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+.ttl-msgJump {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  width: 18px;
+  height: 18px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--dsw-alias-label-quaternary, #7b8086);
+  cursor: pointer;
+}
+.ttl-msg:hover .ttl-msgJump { display: inline-flex; }
+.ttl-msg .ttl-output-body { margin-top: 6px; }
+
 `

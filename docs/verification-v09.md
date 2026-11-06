@@ -116,3 +116,13 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 「展开看轨迹，两边太紧贴边缘」 | `.ttl-turn .ttl-step` 内边距 6/14 → **14/22px**；黄线 left 10px；输出行右 20px；`显示更早` 18px | icon x=1055（+8）；耗时右缘距 root 22px（6 行一致）；desc 可用 139px；无横向滚动 |
 
 ![展开态留白](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v094-padding.jpg>)
+
+## 10. v0.9.5 模型文本输出改版
+
+| 问题 | 方案 | 实测 |
+| --- | --- | --- |
+| 输出复用工具行（绿点 + 「输出」+ 原文），与步骤行栅格/语气都不搭，且直接显示 `**bold**` 原文 | 改为引用块：2px 绿色竖条 + 淡底 + 顶部角色标签；正文 12.5px/19、内联加粗/code、3 行截断 + 展开全文；展开后完整 Markdown | `.ttl-msg` 块、`ttl-msgStrong`/`ttl-msgCode` 渲染正常；↗ 仅 hover；展开/收起可用 |
+
+![输出引用块](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v095-output.jpg>)
+
+![展开后的完整 Markdown](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v095-output-open.jpg>)
