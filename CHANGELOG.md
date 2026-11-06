@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.2] - 2026-11-06
+
+**工具名完整显示**：工具/服务名列不再固定 52px 截断。
+
+### Fixed
+
+- 工具名列改为按当前可见步骤的**最长名字自适应宽度**（CSS 变量 `--ttl-step-name-w`，52–132px），`playwright`、`team_task_create`、`spawn_teammate`、`open-computer-use` 等不再显示为 `playwri…` / `open-…`；同一根节点内所有行共享列宽，desc 起点保持对齐。
+- 空参数工具（解析成功的 `{}`）不再把 `{}` 当描述，只显示工具名。
+
+### Verification
+
+- 实机（19487 / Playwright / dock 400）：`--ttl-step-name-w=132px`（该会话存在超长名）、`.ttl-stepName` `overflow=false`、5 条采样 descX 一致（1213）；截图 `docs/assets/v092-names.jpg`。
+- `pnpm typecheck` 0；`pnpm test` 516 例 / 21 文件；`pnpm build` 通过。
+
 ## [0.9.1] - 2026-11-06
 
 **视觉修正（按实机反馈）**：并行组减重、未知工具补通用图标、MCP 成败配色与失败行状态。

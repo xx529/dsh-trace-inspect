@@ -89,3 +89,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![通用图标与错误图标](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v091-generic.jpg>)
 
 ![失败结果行](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v091-mcp-error.jpg>)
+
+## 7. v0.9.2 工具名完整显示
+
+| 反馈 | 修正 | 实测 |
+| --- | --- | --- |
+| `playwri…` / `open-…` 等长工具名被截断 | 工具名列从固定 52px 改为按可见步骤最长名字自适应（`--ttl-step-name-w`，52–132px）；所有行共享列宽，desc 起点对齐 | 该会话 `--ttl-step-name-w=132px`；`.ttl-stepName` 无溢出；5 条采样 `descX=1213` 一致 |
+| 空参数工具显示 `{}` | 解析成功但无字段的工具不再输出 `{}` 描述 | `team_task_create` 等行只显示名字（desc 为审计内容而非 `{}`） |
+
+![工具名完整显示](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v092-names.jpg>)

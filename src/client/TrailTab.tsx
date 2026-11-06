@@ -50,7 +50,7 @@ import {
   type ToolDetailResult,
 } from './useTrail'
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
-import { summarizeToolCall, type ToolIconKind, type ToolTone } from './tool-summary'
+import { splitMcpName, summarizeToolCall, type ToolIconKind, type ToolTone } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
 import { markdownLabels } from './markdown-labels'
@@ -1473,6 +1473,25 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     ? ui.syncing
     : error !== null ? ui.syncFailed : ui.synced
 
+  /**
+   * Width of the tool-name column, sized to the longest visible label so names
+   * like `open-computer-use` render in full instead of `open-...`. MCP labels
+   * are the server name (no JSON parsing here); everything else is the wire
+   * tool name. Capped so the description keeps enough room.
+   */
+  const stepNameWidth = React.useMemo(() => {
+    let max = 0
+    for (const turn of turns) {
+      for (const item of turn.items) {
+        if (item.kind !== 'tool') continue
+        const mcp = splitMcpName(item.step.name)
+        const label = mcp !== null ? mcp.server : item.step.name
+        if (label.length > max) max = label.length
+      }
+    }
+    return Math.min(132, Math.max(52, Math.round(max * 6.5) + 8))
+  }, [turns])
+
   const statusBar = showStatusBar
     ? (
       <div className="ttl-statusbar" data-testid="ttl-statusbar">
@@ -1505,7 +1524,13 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     : null
 
   return (
-    <div className="ttl-root" role="complementary" aria-label={t(lang, 'tabTitle') as string} data-testid="ttl-root">
+    <div
+      className="ttl-root"
+      role="complementary"
+      aria-label={t(lang, 'tabTitle') as string}
+      data-testid="ttl-root"
+      style={{ ['--ttl-step-name-w' as string]: `${stepNameWidth}px` }}
+    >
       {header}
       {turns.length > 0 ? searchRow : null}
       {turns.length > 0 ? chips : null}

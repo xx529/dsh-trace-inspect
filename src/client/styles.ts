@@ -2041,4 +2041,10 @@ export const trailCss = `
 .ttl-tone-mcp { color: #34d399; }
 .ttl-stepIcon.ttl-tone-mcp { background: rgba(52, 211, 153, 0.13); }
 
+/* ══ v0.9.2 polish: full tool names, content-sized column ════════════════ */
+.ttl-stepName {
+  width: var(--ttl-step-name-w, 52px);
+  min-width: 0;
+}
+
 `

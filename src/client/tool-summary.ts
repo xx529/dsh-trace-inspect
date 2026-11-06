@@ -227,6 +227,8 @@ export function summarizeToolCall(
     }
     const count = Object.keys(args).length
     if (count > 0) return { label: name, detail: `${count} 个参数`, icon: 'generic' }
+    // Parsed object with no fields: show the name only, never the raw `{}`.
+    return { label: name, detail: '', icon: 'generic' }
   }
   return { label: name, detail: clip(firstLine(argsPreview)), icon: 'generic' }
 }
