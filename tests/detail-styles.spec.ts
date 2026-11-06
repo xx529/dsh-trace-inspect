@@ -187,6 +187,15 @@ describe('v0.10.2: 统一 ICON 底色 + 图标间竖线（原型 2-02）', () =>
   })
 })
 
+describe('v0.10.15: 展开的长值不再有内部滚动', () => {
+  it('ttl-jpRestored 没有 max-height / overflow 滚动盒', () => {
+    const restored = rule('.ttl-jpRestored {')
+    expect(restored).not.toContain('max-height')
+    expect(restored).not.toContain('overflow: auto')
+    expect(restored).toContain('white-space: pre-wrap')
+  })
+})
+
 describe('v0.10.12: 展开的输出是卡片', () => {
   it('展开体与详情带同款 surface / 圆角 / 边框 / 内边距 / 13.5px 内缩', () => {
     const body = rule('.ttl-msgBody {')

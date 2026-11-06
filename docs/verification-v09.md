@@ -358,3 +358,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话；字形与 DSH 题目图标一致（非同一 SVG 源）。
 
 ![skill 行：打开的书图标](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0114-skill-book.jpg>)
+
+## 28. v0.10.15 展开的长值不再内部滚动
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 很长的参数值点「展开」后仍要在小滚动框里滚才能看完 | `.ttl-jpRestored` 去掉 `max-height: 240px` 与 `overflow: auto`：展开即把整段文本一次渲染，滚动交给详情带 / 浮层本身；`收起 / 复制 / ⤢` 行为不变 | mock `mcp__figma__use_figma` 的 84 行 `code`：展开块 `359×1352`、`max-height: none`、`overflow: visible`、`scrollHeight == clientHeight = 1352` → **无内部滚动**；文本 1,491 字符 / 84 行全部在 DOM 里 |
+| 覆盖范围 | 浮层与内联详情带的「参数 / 结果」long-value 共用 `JsonPretty` | 同一 CSS 改动两处生效；`ttl-strbox`（JSON 树短滚动盒）不受影响 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **544 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-longvalue.mjs`（打开浮层 → 参数 tab → 展开 long value → 量 scrollHeight/clientHeight）。
+- 已知偏差：mock 会话；真实 4k 字符参数同样一次渲染，面板高度由内容撑开。
+
+![展开的长值：全部渲染、无内部滚动](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0115-longvalue.jpg>)

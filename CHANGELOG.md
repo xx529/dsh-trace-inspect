@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.15] - 2026-11-07
+
+### Changed
+
+- **长参数值展开后全量显示，不再有内部滚动条**：`.ttl-jpRestored` 去掉 `max-height: 240px` / `overflow: auto`，点「展开」后 4k+ 字符的 `code` 等长值一次渲染完（由面板 / 浮层本身滚动）；复制、收起、⤢ 中央查看器行为不变。
+- 覆盖范围：浮层与内联详情带的「参数 / 结果」里，JSON long-value 都由 `JsonPretty` 渲染，一处改动同时生效。
+
+### Verification
+
+- 新增 1 例样式回归：`.ttl-jpRestored` 不再含 `max-height` / `overflow: auto`，仍保留 `white-space: pre-wrap`。
+- `pnpm typecheck` 0、`pnpm test` **544 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，mock `mcp__figma__use_figma` + 84 行 code）：展开块 `359×1352`、`max-height: none`、`overflow: visible`、`scrollHeight == clientHeight = 1352`、`innerScroll: false`；截图 `docs/assets/v0115-longvalue.jpg`。
+
 ## [0.10.14] - 2026-11-07
 
 ### Changed
