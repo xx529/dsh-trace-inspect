@@ -102,7 +102,7 @@ export const trailCss = `
   color: var(--dsw-alias-label-tertiary, #adb2b8);
 }
 
-.ttl-jsonKey::after {
+.ttl-jsonRow .ttl-jsonKey::after {
   content: ":";
   margin-right: 3px;
 }

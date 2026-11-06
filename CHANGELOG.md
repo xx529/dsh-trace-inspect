@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.0] - 2026-11-06
+
+**工具输出自动格式化**：结果按「JSON → JSONL → Markdown → 原文」启发式选择渲染方式，不再一律显示原始字符串。
+
+### Added
+
+- `src/client/output-format.ts`：纯函数检测器 `detectOutputKind()` / `parseJsonValue()` / `parseJsonLines()` / `prettyJsonText()`。规则保守：只有**整段**能 parse 才算 JSON，多行则要求**每一行**都是 JSON 才算 JSONL；混合日志、ANSI、diff 一律原文。
+- 摘要 tab 的「输出」预览：JSON/JSONL 先 `JSON.stringify(…, 2)` 再走 3 行折叠，缩进可读。
+- 结果 tab：JSON → `JsonPretty` 结构化渲染（沿用长值折叠/查看器）；JSONL → 按数组渲染；Markdown → `MarkdownResult`；其余 → `RawText`。
+- 默认页签策略：检测到 JSON / Markdown 的结果**默认走渲染**（不再因为 bash 默认 raw 而先显示原始串）；显式点「原文」仍可切回。
+
+### Verification
+
+- 新增 `tests/output-format.spec.ts`（5 例：JSON/JSONL/Markdown/混合日志/diff/大小上限）。
+- `pnpm typecheck` 0；`pnpm test` **522 例 / 22 文件**；`pnpm build` 通过。实机截图见 `docs/assets/v0100-*.jpg`。
+
 ## [0.9.9] - 2026-11-06
 
 ### Changed

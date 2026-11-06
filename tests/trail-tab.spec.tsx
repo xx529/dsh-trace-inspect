@@ -1105,3 +1105,26 @@ describe('TrailTab — parallel tool-call batches (v0.8.0)', () => {
     }
   })
 })
+
+/** A tool whose result is whole-document JSON (the interrupt_agent shape). */
+const jsonOutputTurn = (): Ev[] => [
+  user(1, 'check the agent'),
+  turnStart(2, 1),
+  toolCall(3, 'mcp__agent__interrupt_agent', '{"target":"x"}', 'c3'),
+  toolResult(4, 'c3', '{"previousStatus":"running","id":7}'),
+  turnEnd(5, 1),
+]
+
+describe('tool output formatting (JSON → Markdown → text)', () => {
+  it('pretty-prints JSON in the summary preview and renders JsonPretty in 结果', async () => {
+    renderTab(jsonOutputTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    const out = await screen.findByTestId('ttl-outBlock')
+    // Pretty-printed: multiple rows with indented keys, not one raw JSON line.
+    const rows = out.querySelectorAll('.ttl-outLine')
+    expect(rows.length).toBeGreaterThan(1)
+    expect(out.textContent).toContain('"previousStatus": "running"')
+    openDetailTab('result')
+    expect(document.querySelector('.ttl-jsonPretty')).not.toBeNull()
+  })
+})

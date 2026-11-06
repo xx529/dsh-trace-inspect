@@ -53,6 +53,7 @@ import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type Session
 import { splitMcpName, summarizeToolCall, type ToolIconKind, type ToolTone } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
+import { detectOutputKind } from './output-format'
 import { markdownLabels } from './markdown-labels'
 import { formatClock, formatDuration, toolFamily, turnDuration, type ToolFamily } from './format'
 import { StepDetail } from './StepDetail'
@@ -298,6 +299,12 @@ function stepMatches(step: TrailStep, filter: StepFilter, query: string): boolea
 }
 
 // ── Family helpers (colors come from the chip class in styles.ts) ────────
+
+/** Default pane: JSON/Markdown results prefer rendered, plain logs stay raw. */
+function initialResultView(step: TrailStep): ResultView {
+  if (step.result !== undefined && detectOutputKind(step.result.text) !== 'text') return 'rendered'
+  return defaultViewForTool(step.name)
+}
 
 /** Glyph family for one tool family (reuse ToolIcon, no new icon sets). */
 function familyIconKind(family: ToolFamily): ToolIconKind {
@@ -584,7 +591,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
       step={step}
       turn={turn}
       open={openSeqs.has(step.seq)}
-      view={resultView.get(step.seq) ?? defaultViewForTool(step.name)}
+      view={resultView.get(step.seq) ?? initialResultView(step)}
       lang={lang}
       sessionId={sessionId}
       onJump={onJump}
@@ -1068,7 +1075,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     setResultView((current) => {
       if (current.has(step.seq)) return current
       const next = new Map(current)
-      next.set(step.seq, defaultViewForTool(step.name))
+      next.set(step.seq, initialResultView(step))
       return next
     })
   }, [])

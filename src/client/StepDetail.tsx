@@ -38,6 +38,8 @@ import { t, type Lang } from './locales'
 import { markdownLabels } from './markdown-labels'
 import { MarkdownResult, RawText, looksLikeMarkdown, unwrapFileResult } from './markdown-result'
 import { JsonTree, parseJsonLoose } from './json-tree'
+import { JsonPretty } from './json-pretty'
+import { detectOutputKind, parseJsonLines, parseJsonValue, prettyJsonText } from './output-format'
 import { fileBaseName, splitMcpName, summarizeToolCall, type ToolSummary, type ToolTone } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { TrailImages, copyToClipboard } from './ui-shared'
@@ -578,9 +580,12 @@ function OutputSection(props: {
   const { text, labels, error } = props
   const [expanded, setExpanded] = React.useState(false)
   const lines = React.useMemo(() => {
-    const normalized = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
+    // JSON / JSONL results are pretty-printed first; the 3-line clamp then
+    // shows real indentation instead of one dense line.
+    const source = error ? text : (prettyJsonText(text) ?? text)
+    const normalized = source.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
     return normalized.length === 0 ? [] : normalized.split('\n')
-  }, [text])
+  }, [text, error])
   if (lines.length === 0) return null
   const shown = expanded ? lines : lines.slice(0, OUT_PREVIEW_LINES)
   return (
@@ -902,12 +907,20 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
         </>
       )
     }
-    const markdown = looksLikeMarkdown(fullText)
+    const kind = detectOutputKind(fullText)
+    const jsonValue = kind === 'json' ? parseJsonValue(fullText) : null
+    const jsonLines = kind === 'jsonl' ? parseJsonLines(fullText) : null
     return (
       <>
-        {markdown && view === 'rendered'
-          ? <MarkdownResult text={fullText} labels={markdownLabels(lang)} />
-          : fullText.length > 0 ? <RawText text={fullText} /> : null}
+        {view === 'raw'
+          ? <RawText text={fullText} />
+          : kind === 'json'
+            ? <JsonPretty value={jsonValue} lang={lang} />
+            : kind === 'jsonl'
+              ? <JsonPretty value={jsonLines} lang={lang} />
+              : kind === 'markdown'
+                ? <MarkdownResult text={fullText} labels={markdownLabels(lang)} />
+                : <RawText text={fullText} />}
         {fullImages.length > 0 ? <TrailImages images={fullImages} sessionId={sessionId} lang={lang} /> : null}
         {loadBanner()}
         {mergedNote}
@@ -1062,9 +1075,13 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
     step.startedAt !== undefined && step.endedAt !== undefined ? step.endedAt - step.startedAt : undefined,
   )
   const meta = statusMeta()
-  const markdown = looksLikeMarkdown(fullText)
+  const resultKind = detectOutputKind(fullText)
+  const markdown = resultKind === 'markdown'
+  const kindLabel = resultKind === 'json'
+    ? 'JSON'
+    : resultKind === 'jsonl' ? 'JSONL' : markdown ? labels.markdownKind : labels.textKind
   const resultMeta = fullText.length > 0
-    ? [markdown ? labels.markdownKind : labels.textKind, formatSize(utf8Bytes(fullText)), labels.lines(lineCount(fullText))].join(' · ')
+    ? [kindLabel, formatSize(utf8Bytes(fullText)), labels.lines(lineCount(fullText))].join(' · ')
     : ''
   const pillText = pillTruncated ? labels.truncatedPill : loaded ? labels.loadedPill : labels.fullPill
 
@@ -1162,7 +1179,7 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
                 <div className="ttl-resultBar" data-testid="ttl-resultBar">
                   <span className="ttl-resultLabel">{labels.result}</span>
                   {resultMeta.length > 0 ? <span className="ttl-resultMeta">{resultMeta}</span> : null}
-                  {markdown
+                  {resultKind !== 'text'
                     ? (
                       <span className="ttl-seg" role="group">
                         <button
