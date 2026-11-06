@@ -49,8 +49,8 @@ import type { ToolDetailItem, ToolDetailResult } from './useTrail'
 
 /** Wire-side caps of the preview (src/wire.ts ARGS_CAP / RESULT_CAP = 32 KiB). */
 const CAP_KIB = 32
-/** Rendered output preview lines before 「展开全文」. */
-const OUT_PREVIEW_LINES = 3
+/** Rendered output preview lines before 「展开全文」 (user: ≥20 lines). */
+const OUT_PREVIEW_LINES = 20
 /** Result rows shown in the MCP/file list before the fold note. */
 const MAX_FILE_ROWS = 3
 /** Array chips shown before `+N`. */
@@ -586,7 +586,7 @@ function OutputSection(props: {
   const { text, labels, error } = props
   const [expanded, setExpanded] = React.useState(false)
   const lines = React.useMemo(() => {
-    // JSON / JSONL results are pretty-printed first; the 3-line clamp then
+    // JSON / JSONL results are pretty-printed first; the preview clamp then
     // shows real indentation instead of one dense line.
     const source = error ? text : (prettyJsonText(text) ?? text)
     const normalized = source.replace(/\r\n?/g, '\n').replace(/\n+$/, '')

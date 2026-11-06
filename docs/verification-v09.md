@@ -306,3 +306,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话；`figma_*` 为插件工具而非 MCP，归入独立 `figma` 族（MCP figma 仍按 `mcp__figma__` 归 mcp）。
 
 ![工具族：figma 淡紫 layers、todo 薄荷清单、generic 粉色扳手](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0110-tool-families.jpg>)
+
+## 24. v0.10.11 输出预览默认 20 行
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| bash 输出默认只展示 3–4 行太少，起码 20 行 | `OUT_PREVIEW_LINES` 3 → **20**：摘要页签的「输出」折叠预览渲染前 20 行，超过 20 行仍提供「展开全文」；1280 浮层的输出预览同步 20 行 | mock 55 行输出：折叠态 `.ttl-outLine` = **20**（`line 20` 为最后一行、`line 21` 不渲染），点「展开全文」= **55** 行；`展开全文 / 收起` 状态与 meta `1.4 KB · 55 行` 正常 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **540 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-output-lines.mjs`（mock 55 行 bash 输出，折叠 / 展开两帧）。
+- 已知偏差：mock 会话；真实长输出同样按 20 行折叠。
+- 影响范围：仅预览行数；JSON 结果仍先 pretty-print 再折叠，`展开全文` 行为不变。
+
+![输出预览：默认 20 行](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0111-output-20lines.jpg>)

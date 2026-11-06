@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.11] - 2026-11-07
+
+### Changed
+
+- **输出预览默认 20 行**（此前 3 行）：摘要页签里「输出」的折叠预览改为前 20 行，仍保留「展开全文」看全部；1280 浮层里的输出预览同步改为 20 行。501 行以上的结果默认就能读到足够上下文。
+
+### Verification
+
+- 新增 1 例：55 行输出在摘要页签默认渲染 20 行（`line 20` 可见、`line 21` 不在），点「展开全文」后 55 行全部渲染。
+- `pnpm typecheck` 0、`pnpm test` **540 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，mock 55 行输出 `scripts/verify/shoot-output-lines.mjs`）：折叠 20 行 → 展开 55 行；截图 `docs/assets/v0111-output-20lines.jpg`。
+
 ## [0.10.10] - 2026-11-07
 
 ### Fixed

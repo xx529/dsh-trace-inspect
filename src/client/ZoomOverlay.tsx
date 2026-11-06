@@ -208,7 +208,9 @@ const COPY: Record<Lang, OverlayCopy> = {
 // ── Small pure helpers ───────────────────────────────────────────────────
 
 /** One-line output preview cap, matching the inline detail band. */
-const OUT_PREVIEW_LINES = 3
+/* Output preview lines before 「展开全部」 — same 20-line budget as the
+   inline detail band (v0.10.11). */
+const OUT_PREVIEW_LINES = 20
 /** Long output lines are clipped in the preview only (the 结果 tab has everything). */
 const OUT_LINE_MAX = 240
 /** Title attribute cap: never put a multi-megabyte string on an attribute. */

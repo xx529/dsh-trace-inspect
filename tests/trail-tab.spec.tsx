@@ -1292,6 +1292,26 @@ describe('tool output formatting (JSON → Markdown → text)', () => {
   })
 })
 
+describe('output preview length (v0.10.11)', () => {
+  it('the summary 输出 preview shows the first 20 lines by default, 展开全文 shows all', async () => {
+    const text = Array.from({ length: 55 }, (_, i) => `line ${i + 1}`).join('\n')
+    renderTab([
+      user(1, 'run'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', JSON.stringify({ command: 'x', description: 'long output' }), 'c3'),
+      toolResult(4, 'c3', text),
+      turnEnd(5, 1),
+    ])
+    await openStepDetail(0)
+    const out = await screen.findByTestId('ttl-outBlock')
+    expect(out.querySelectorAll('.ttl-outLine')).toHaveLength(20)
+    expect(out.textContent).toContain('line 20')
+    expect(out.textContent).not.toContain('line 21')
+    fireEvent.click(screen.getByTestId('ttl-out-toggle'))
+    expect(document.querySelectorAll('.ttl-outLine')).toHaveLength(55)
+  })
+})
+
 describe('tab visibility (React #300 regression)', () => {
   it('keeps hook order when the tab is hidden and shown again', () => {
     const props = {
