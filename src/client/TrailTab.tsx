@@ -87,26 +87,37 @@ function messageIcon(): React.ReactElement {
 
 /**
  * Inline-only Markdown for the clamped message preview: **bold** and `code`
- * are styled; block structure stays with the full MarkdownResult shown after
- * expanding. Newlines survive because the block uses white-space: pre-wrap.
+ * are styled; nested `code` inside bold works too (bold content is parsed
+ * again for code spans). Block structure stays with the full MarkdownResult
+ * shown after expanding. Newlines survive (the block is white-space: pre-wrap).
  */
 function inlineMarkdown(text: string): React.ReactNode {
   const nodes: React.ReactNode[] = []
-  const pattern = /(\*\*[^*]+\*\*|`[^`]+`)/g
+  const pattern = /\*\*([\s\S]+?)\*\*|`([^`]+)`/g
   let last = 0
   let match: RegExpExecArray | null
   let key = 0
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > last) nodes.push(text.slice(last, match.index))
-    const token = match[0]
-    if (token.startsWith('**')) {
+    if (match[1] !== undefined) {
+      const inner: React.ReactNode[] = []
+      const innerPattern = /`([^`]+)`/g
+      let innerLast = 0
+      let innerMatch: RegExpExecArray | null
+      while ((innerMatch = innerPattern.exec(match[1])) !== null) {
+        if (innerMatch.index > innerLast) inner.push(match[1].slice(innerLast, innerMatch.index))
+        key += 1
+        inner.push(React.createElement('code', { key, className: 'ttl-msgCode' }, innerMatch[1]))
+        innerLast = innerMatch.index + innerMatch[0].length
+      }
+      if (innerLast < match[1].length) inner.push(match[1].slice(innerLast))
       key += 1
-      nodes.push(React.createElement('strong', { key, className: 'ttl-msgStrong' }, token.slice(2, -2)))
+      nodes.push(React.createElement('strong', { key, className: 'ttl-msgStrong' }, inner))
     } else {
       key += 1
-      nodes.push(React.createElement('code', { key, className: 'ttl-msgCode' }, token.slice(1, -1)))
+      nodes.push(React.createElement('code', { key, className: 'ttl-msgCode' }, match[2]))
     }
-    last = match.index + token.length
+    last = match.index + match[0].length
   }
   if (last < text.length) nodes.push(text.slice(last))
   return nodes

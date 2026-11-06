@@ -2136,4 +2136,11 @@ export const trailCss = `
 .ttl-msg:hover .ttl-msgJump { display: inline-flex; }
 .ttl-msg .ttl-output-body { margin-top: 6px; }
 
+/* ══ v0.9.6: expanded message body inherits no old output indentation ════ */
+.ttl-msg .ttl-output-body {
+  padding: 0;
+  margin-top: 6px;
+  color: inherit;
+}
+
 `

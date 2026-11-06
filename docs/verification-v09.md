@@ -126,3 +126,7 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![输出引用块](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v095-output.jpg>)
 
 ![展开后的完整 Markdown](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v095-output-open.jpg>)
+
+> v0.9.6 修正：展开后的 Markdown 此前继承旧输出行 `padding-left:64px`（宽度 269），现 `.ttl-msg .ttl-output-body { padding:0 }`，与折叠正文左缘对齐、宽度恢复 ≈347（实机 1069/347）。折叠态的内联 Markdown 也支持「粗体内嵌 code」：`**改名为 \`dsh-trace-inspect\`**` 会渲染为加粗 + code chip，反引号不再外露。
+
+![粗体内嵌 code](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v095-output-code.jpg>)
