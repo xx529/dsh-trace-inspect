@@ -292,3 +292,17 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话（真实 trace-verify 历史里没有 skill 调用），组件渲染路径与真实插件一致。
 
 ![轮次头部 mix：skill 固定出现](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0109-turn-mix.jpg>)
+
+## 23. v0.10.10 灰色 / 通用扳手工具归族（figma、todo）
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 有些 tool 有颜色、有些是灰色，怀疑是 bug，且影响每轮工具统计 | 两类问题修掉：① `todo_write` / `todo_read` 是「todo 族 + 灰色 `#9ba1a7` + 通用扳手」；现改为薄荷绿 `#8fdcb8` + 清单图标，`todo_write` 详情 = `N 项`。② `figma_*`（插件原生工具，非 `mcp__figma__`）落在 generic 族的扳手上；现单独成族：淡紫 `#c4b2ff` + layers 图标，详情优先展示 `documentId` / `fileKey` / `nodeId` | figma_reconnect = layers 淡紫；todo_write = 清单薄荷 + `2 项`；custom_tool = 粉色扳手（仍是 generic，但有色）；bash/read/edit/skill/mcp 不变 |
+| 统计口径 | `toolFamily` / 概览分布 / legend / 轮次 mix 全部走同一映射，figma 与 todo 各自成段 | mock 会话 legend：`bash 3 · read 3 · edit 2 · figma 1 · skill 1 · todo 1 · 其他 2` |
+
+- 覆盖：步骤行 glyph/ink、轮次头部 mix、详情 / 浮层图标都走 `summary.icon` + `ttl-tone-*`，一处改动全链路生效。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **539 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-turnmix.mjs`（mock 两个轮次，第二帧截取 figma/todo/generic/read 行）。
+- 已知偏差：mock 会话；`figma_*` 为插件工具而非 MCP，归入独立 `figma` 族（MCP figma 仍按 `mcp__figma__` 归 mcp）。
+
+![工具族：figma 淡紫 layers、todo 薄荷清单、generic 粉色扳手](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0110-tool-families.jpg>)

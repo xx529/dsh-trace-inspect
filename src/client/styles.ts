@@ -2164,11 +2164,11 @@ export const trailCss = `
 .ttl-stepJump, .ttl-locateBtn, .ttl-msgJump, .ttl-itemJump, .ttl-output-jump { display: none !important; }
 .ttl-badgeParallel { display: none !important; }
 .ttl-tone-edit { color: #f2b45c; }
-.ttl-tone-todo { color: #9ba1a7; }
+.ttl-tone-todo { color: #8fdcb8; }
 
 .ttl-distSeg.ttl-tone-edit, .ttl-legendDot.ttl-tone-edit { background: #f2b45c; }
 .ttl-distSeg.ttl-tone-mcp, .ttl-legendDot.ttl-tone-mcp { background: #34d399; }
-.ttl-distSeg.ttl-tone-todo, .ttl-legendDot.ttl-tone-todo { background: #9ba1a7; }
+.ttl-distSeg.ttl-tone-todo, .ttl-legendDot.ttl-tone-todo { background: #8fdcb8; }
 
 /* ══ v0.9.9: generic tool glyph gets its own hue (not grey) ══════════════ */
 .ttl-tone-generic { color: #f472b6; }
@@ -2187,4 +2187,8 @@ export const trailCss = `
 /* ══ v0.10.6: skill tool gets its own family glyph (sparkle) + teal ink ══ */
 .ttl-tone-skill { color: #63c9d1; }
 .ttl-distSeg.ttl-tone-skill, .ttl-legendDot.ttl-tone-skill { background: #63c9d1; }
+
+/* ══ v0.10.10: figma plugin + todo get real colours (no grey glyphs) ══════ */
+.ttl-tone-figma { color: #c4b2ff; }
+.ttl-distSeg.ttl-tone-figma, .ttl-legendDot.ttl-tone-figma { background: #c4b2ff; }
 `

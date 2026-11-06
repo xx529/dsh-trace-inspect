@@ -31,6 +31,8 @@ export type ToolIconKind =
   | 'folder'
   | 'mcp'
   | 'skill'
+  | 'todo'
+  | 'figma'
   | 'alert'
   | 'generic'
 
@@ -204,6 +206,21 @@ export function summarizeToolCall(
       const path = str(args, 'path') ?? str(args, 'file_path')
       return { label: name, detail: path !== undefined ? clip(path) : clip(firstLine(argsPreview)), icon: 'folder' }
     }
+    case 'todo_write': {
+      // `todo_write {todos:[…]}` — the list size is the useful one-liner.
+      const todos = args?.todos
+      const count = Array.isArray(todos) ? todos.length : null
+      return {
+        label: name,
+        detail: count !== null ? `${count} 项` : clip(firstLine(argsPreview)),
+        icon: 'todo',
+      }
+    }
+    case 'todo_read': {
+      const todos = args?.todos
+      const count = Array.isArray(todos) ? todos.length : null
+      return { label: name, detail: count !== null ? `${count} 项` : '', icon: 'todo' }
+    }
     case 'skill': {
       // `skill {name: "figma-workbench"}` — the skill name IS the row detail;
       // the generic fallback would prefix it with the raw `name` key.
@@ -216,6 +233,14 @@ export function summarizeToolCall(
     }
     default:
       break
+  }
+
+  if (name.startsWith('figma_')) {
+    // Native Figma-plugin tools (not MCP): keep the wire name, show one useful
+    // id when present so `figma_select_document` is not just a bare label.
+    const detail = str(args, 'documentId') ?? str(args, 'fileKey') ?? str(args, 'nodeId')
+      ?? str(args, 'name') ?? (args === null ? clip(firstLine(argsPreview)) : '')
+    return { label: name, detail, icon: 'figma' }
   }
 
   if (args !== null) {

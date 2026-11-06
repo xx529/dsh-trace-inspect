@@ -57,7 +57,11 @@ const MOCK_EVENTS = [
   { type: 'user/message', seq: 12, data: { content: 'next turn', message: { source: { kind: 'user' } } } },
   { type: 'turn/start', seq: 13, data: { turn: 2 } },
   { type: 'tool/call', seq: 14, data: { name: 'bash', arguments: '{"command":"c","description":"second turn"}', callId: 'c14', turn: 2 } },
-  { type: 'turn/end', seq: 15, data: { turn: 2 } },
+  { type: 'tool/call', seq: 15, data: { name: 'figma_reconnect', arguments: '{}', callId: 'c15', turn: 2 } },
+  { type: 'tool/call', seq: 16, data: { name: 'todo_write', arguments: '{"todos":[{"id":1},{"id":2}]}', callId: 'c16', turn: 2 } },
+  { type: 'tool/call', seq: 17, data: { name: 'custom_tool', arguments: '{"x":1}', callId: 'c17', turn: 2 } },
+  { type: 'tool/call', seq: 18, data: { name: 'read', arguments: '{"file_path":"README.md"}', callId: 'c18', turn: 2 } },
+  { type: 'turn/end', seq: 19, data: { turn: 2 } },
 ]
 const sleep = (page, ms) => page.waitForTimeout(ms)
 const t0 = Date.now()
@@ -87,7 +91,18 @@ const probe = () => page.evaluate(() => {
     count: el.querySelector('.ttl-mixCount')?.textContent ?? null,
   }))
   const legend = [...document.querySelectorAll('.ttl-legend')].map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim())
+  const rows = [...document.querySelectorAll('[data-testid="ttl-step"]')].map((row) => {
+    const icon = row.querySelector('.ttl-stepIcon')
+    return {
+      name: (row.querySelector('.ttl-stepName')?.textContent ?? '').trim(),
+      desc: (row.querySelector('.ttl-stepDesc')?.textContent ?? '').trim(),
+      tone: String(icon?.className ?? ''),
+      ink: icon === null ? null : getComputedStyle(icon).color,
+      glyph: icon?.querySelector('svg path')?.getAttribute('d')?.slice(0, 40) ?? null,
+    }
+  })
   return {
+    rows,
     cards: cards.length,
     mixCount: items.length,
     items,
@@ -161,6 +176,26 @@ try {
   await sleep(page, 500)
   await card.screenshot({ path: path.join(OUT_DIR, 'panel-turnmix.png'), animations: 'disabled' })
   log('shot panel-turnmix.png')
+
+  // Expanded turn 2 rows: figma (lavender layers) / todo (mint checklist) /
+  // custom (pink wrench) / read (blue) — no grey glyphs left.
+  const list = page.locator('[data-testid="ttl-list"]')
+  await page.evaluate(() => {
+    const row = document.querySelectorAll('[data-testid="ttl-turn"]')[1]?.querySelector('[data-testid="ttl-step"]')
+    row?.scrollIntoView({ block: 'center' })
+  })
+  await sleep(page, 600)
+  await park()
+  const rowBox = await page.locator('[data-testid="ttl-turn"]').nth(1).locator('[data-testid="ttl-step"]').first().boundingBox()
+  if (rowBox !== null) {
+    const top = Math.max(0, Math.round(rowBox.y) - 40)
+    await page.screenshot({
+      path: path.join(OUT_DIR, 'panel-toolfamilies.png'),
+      clip: { x: Math.max(0, Math.round(rowBox.x) - 4), y: top, width: 400, height: Math.min(320, page.viewportSize().height - top - 20) },
+      animations: 'disabled',
+    })
+    log('shot panel-toolfamilies.png')
+  }
   const metrics = await probe()
   fs.writeFileSync(path.join(OUT_DIR, 'turnmix-metrics.json'), JSON.stringify({ ...metrics, consoleErrors }, null, 2))
   log('mix:', JSON.stringify(metrics.items), 'legend:', JSON.stringify(metrics.legend))

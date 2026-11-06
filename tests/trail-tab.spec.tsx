@@ -572,6 +572,25 @@ describe('TrailTab', () => {
     expect(mix?.querySelectorAll('.ttl-mixItem.ttl-tone-shell').length).toBe(1)
   })
 
+  it('figma plugin + todo tools get their own coloured families, no grey glyph (v0.10.10)', async () => {
+    renderTab([
+      user(1, 'figma + todo'),
+      turnStart(2, 1),
+      toolCall(3, 'figma_reconnect', '{}', 'c3'),
+      toolCall(4, 'todo_write', JSON.stringify({ todos: [{ id: 1 }, { id: 2 }] }), 'c4'),
+      turnEnd(5, 1),
+    ])
+    const rows = await screen.findAllByTestId('ttl-step')
+    const figmaRow = rows.find((row) => row.querySelector('.ttl-stepName')?.textContent === 'figma_reconnect')
+    const todoRow = rows.find((row) => row.querySelector('.ttl-stepName')?.textContent === 'todo_write')
+    expect(figmaRow?.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-figma')
+    expect(todoRow?.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-todo')
+    // Dedicated glyphs instead of the generic wrench path.
+    expect(figmaRow?.querySelector('.ttl-stepIcon svg path')?.getAttribute('d') ?? '').toContain('m12.83 2.18')
+    expect(todoRow?.querySelector('.ttl-stepIcon svg path')?.getAttribute('d') ?? '').toContain('m3 17 2 2 4-4')
+    expect(todoRow?.querySelector('.ttl-stepDesc')?.textContent).toBe('2 项')
+  })
+
   it('draws && / ; at the end of the previous command line (v0.10.7)', async () => {
     renderTab([
       user(1, 'run it'),

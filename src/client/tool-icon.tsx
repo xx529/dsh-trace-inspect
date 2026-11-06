@@ -62,6 +62,19 @@ function pathsOf(kind: ToolIconKind): React.ReactNode {
         d: 'm12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z',
         ...stroke,
       })
+    case 'todo':
+      return React.createElement(React.Fragment, null,
+        React.createElement('path', { key: 'a', d: 'm3 17 2 2 4-4', ...stroke }),
+        React.createElement('path', { key: 'b', d: 'm3 7 2 2 4-4', ...stroke }),
+        React.createElement('path', { key: 'c', d: 'M13 6h8', ...stroke }),
+        React.createElement('path', { key: 'd', d: 'M13 12h8', ...stroke }),
+        React.createElement('path', { key: 'e', d: 'M13 18h8', ...stroke }))
+    case 'figma':
+      // Stacked layers: the Figma plugin's design-document tools.
+      return React.createElement(React.Fragment, null,
+        React.createElement('path', { key: 'a', d: 'm12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z', ...stroke }),
+        React.createElement('path', { key: 'b', d: 'm22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65', ...stroke }),
+        React.createElement('path', { key: 'c', d: 'm22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65', ...stroke }))
     case 'alert':
       return React.createElement(React.Fragment, null,
         React.createElement('path', { key: 'a', d: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z', ...stroke }),

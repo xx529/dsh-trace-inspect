@@ -44,6 +44,19 @@ describe('tool-summary — known tools', () => {
     expect(summarizeToolCall('ls', JSON.stringify({ path: '/tmp/x' }), '…')).toEqual({ label: 'ls', detail: '/tmp/x', icon: 'folder' })
   })
 
+  it('todo_write counts the list; todo_read keeps the todo glyph', () => {
+    const write = summarizeToolCall('todo_write', JSON.stringify({ todos: [{ id: 1 }, { id: 2 }] }), '…')
+    expect(write).toEqual({ label: 'todo_write', detail: '2 项', icon: 'todo' })
+    expect(summarizeToolCall('todo_read', '{}', '…').icon).toBe('todo')
+  })
+
+  it('figma plugin tools get the figma glyph and show the document id when present', () => {
+    expect(summarizeToolCall('figma_status', '{}', '…')).toEqual({ label: 'figma_status', detail: '', icon: 'figma' })
+    const select = summarizeToolCall('figma_select_document', JSON.stringify({ documentId: 'doc-1' }), '…')
+    expect(select.detail).toBe('doc-1')
+    expect(select.icon).toBe('figma')
+  })
+
   it('skill shows the bare skill name (never the raw `name` key) and the skill glyph', () => {
     expect(summarizeToolCall('skill', JSON.stringify({ name: 'figma-workbench' }), '…'))
       .toEqual({ label: 'skill', detail: 'figma-workbench', icon: 'skill' })

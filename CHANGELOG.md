@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.10] - 2026-11-07
+
+### Fixed
+
+- **figma 插件工具不再显示成通用扳手**：`figma_*`（`figma_status` / `figma_reconnect` / `figma_select_document` …）此前落在 generic 族（粉色扳手），现在单独成族：淡紫 `#c4b2ff` + layers（层叠）图标；`figma_select_document` 等会显示 `documentId` / `fileKey` 作为行详情。
+- **todo 不再用灰色**：`todo_write` / `todo_read` 此前是灰色（`#9ba1a7`）+ 通用扳手；现在改成薄荷绿 `#8fdcb8` + 清单（list-checks）图标，`todo_write` 的详情直接显示 `N 项`（不再是 `todos · N 项`）。
+- 两者的概览分布 / legend / 轮次 mix 现在分别统计 `figma`、`todo`（mock 会话 legend：`bash 3 · read 3 · edit 2 · figma 1 · skill 1 · todo 1 · 其他 2`）。
+
+### Verification
+
+- 新增 4 例：tool-summary 2 例（todo 计数 / figma 图标与 documentId）、trail-tab 1 例（族 class + 专用 glyph，无灰色）、detail-styles 1 例（todo 薄荷 / figma 淡紫，且无灰色 todo 规则）。
+- `pnpm typecheck` 0、`pnpm test` **539 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，mock 事件 `scripts/verify/shoot-turnmix.mjs`）：figma_reconnect = layers 淡紫、todo_write = 清单薄荷 + `2 项`、custom_tool = 粉色扳手（generic）、bash/read 保持原色；截图 `docs/assets/v0110-tool-families.jpg`。
+
 ## [0.10.9] - 2026-11-07
 
 ### Fixed

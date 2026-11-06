@@ -187,6 +187,18 @@ describe('v0.10.2: 统一 ICON 底色 + 图标间竖线（原型 2-02）', () =>
   })
 })
 
+describe('v0.10.10: 工具族不再有灰色字形', () => {
+  it('todo 用薄荷色、figma 用淡紫色，二者都有 dist/legend 底色', () => {
+    expect(trailCss).toContain('.ttl-tone-todo { color: #8fdcb8; }')
+    expect(trailCss).toContain('.ttl-tone-figma { color: #c4b2ff; }')
+    expect(trailCss).toContain('.ttl-distSeg.ttl-tone-todo, .ttl-legendDot.ttl-tone-todo { background: #8fdcb8; }')
+    expect(trailCss).toContain('.ttl-distSeg.ttl-tone-figma, .ttl-legendDot.ttl-tone-figma { background: #c4b2ff; }')
+    // The old grey todo ink must be gone from the final cascade.
+    const todoRules = [...trailCss.matchAll(/\.ttl-tone-todo\s*\{[^}]*\}/g)].map((m) => m[0])
+    expect(todoRules.some((rule) => rule.includes('#9ba1a7'))).toBe(false)
+  })
+})
+
 describe('v0.10.8: 展开轮次体缩进（tree）', () => {
   it('只对展开态给 turnBody 加 14px 左缩进，折叠卡保持满宽', () => {
     const expanded = rule('.ttl-turn[data-collapsed="false"] .ttl-turnBody {')
