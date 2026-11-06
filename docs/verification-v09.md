@@ -178,3 +178,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 问题 | 根因 | 修复 |
 | --- | --- | --- |
 | 切到其他侧栏 tab 再切回「轮次轨迹」时报 `dsh-better-sidebar: Minified React error #300`（Rendered fewer hooks than expected） | v0.9.2 新增的 `stepNameWidth` `React.useMemo` 放在 `if (!visible) return null` **之后**；`visible=false` 时该 hook 被跳过，hooks 数量变化触发 React #300 | 把 `stepNameWidth` 移到 early return 之前，hooks 顺序恒定；新增回归测试「隐藏 → 显示」 |
+
+### 实机复验（19487 / 0.10.1）
+
+- 真实会话：打开轨迹 tab → 新增「文件」tab → 文件 ↔ 轮次轨迹切换 **3 轮**；每次切回都正常渲染 11 轮，`windowErrors=0`、`pageErrors=0`、`react300Seen=false`。
+- 交互：展开轮次 → 打开步骤 → 四页签切换 → 打开/关闭浮层 → 再切 tab 两次：无报错。
+- mock JSON 会话：打开步骤 → 结果 tab → 浮层 → 切换 tab 3 轮：无报错。
+- console 仅既有静态资源 404。
+
+![切换 tab 后正常](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0101-hookfix.jpg>)
