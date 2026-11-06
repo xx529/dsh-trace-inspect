@@ -1128,3 +1128,19 @@ describe('tool output formatting (JSON → Markdown → text)', () => {
     expect(document.querySelector('.ttl-jsonPretty')).not.toBeNull()
   })
 })
+
+describe('tab visibility (React #300 regression)', () => {
+  it('keeps hook order when the tab is hidden and shown again', () => {
+    const props = {
+      ctx: { get: () => undefined },
+      scope: { sessionId: 's1' },
+      tab: { id: 'trace-inspect' },
+      fetchEventsOverride: async (): Promise<{ events: SessionEventLike[] }> => ({ events: oneTurn() as SessionEventLike[] }),
+    }
+    const { rerender } = render(<TrailTab {...props} visible={false} />)
+    // hidden tab renders nothing, but must not skip hooks
+    expect(screen.queryByTestId('ttl-root')).toBeNull()
+    rerender(<TrailTab {...props} visible />)
+    expect(screen.getByTestId('ttl-root')).toBeTruthy()
+  })
+})

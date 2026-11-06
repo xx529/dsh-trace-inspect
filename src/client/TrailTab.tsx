@@ -1274,6 +1274,25 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     setQuery('')
   }, [])
 
+  /**
+   * Width of the tool-name column, sized to the longest visible label so names
+   * like `open-computer-use` render in full instead of `open-...`. MCP labels
+   * are the server name (no JSON parsing here); everything else is the wire
+   * tool name. Capped so the description keeps enough room.
+   */
+  const stepNameWidth = React.useMemo(() => {
+    let max = 0
+    for (const turn of turns) {
+      for (const item of turn.items) {
+        if (item.kind !== 'tool') continue
+        const mcp = splitMcpName(item.step.name)
+        const label = mcp !== null ? mcp.server : item.step.name
+        if (label.length > max) max = label.length
+      }
+    }
+    return Math.min(132, Math.max(52, Math.round(max * 6.5) + 8))
+  }, [turns])
+
   if (!visible) return null
 
   // ── Render pieces ──────────────────────────────────────────────────────
@@ -1536,24 +1555,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     ? ui.syncing
     : error !== null ? ui.syncFailed : ui.synced
 
-  /**
-   * Width of the tool-name column, sized to the longest visible label so names
-   * like `open-computer-use` render in full instead of `open-...`. MCP labels
-   * are the server name (no JSON parsing here); everything else is the wire
-   * tool name. Capped so the description keeps enough room.
-   */
-  const stepNameWidth = React.useMemo(() => {
-    let max = 0
-    for (const turn of turns) {
-      for (const item of turn.items) {
-        if (item.kind !== 'tool') continue
-        const mcp = splitMcpName(item.step.name)
-        const label = mcp !== null ? mcp.server : item.step.name
-        if (label.length > max) max = label.length
-      }
-    }
-    return Math.min(132, Math.max(52, Math.round(max * 6.5) + 8))
-  }, [turns])
 
   const statusBar = showStatusBar
     ? (

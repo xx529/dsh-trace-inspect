@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1] - 2026-11-06
+
+### Fixed
+
+- **侧栏 tab 报 React error #300**（`Rendered fewer hooks than expected`）：`TrailTab` 的 `stepNameWidth` `useMemo` 位于 `if (!visible) return null` 之后，切换侧栏 tab（visible=false）时少执行一个 hook，再切回即崩溃。已把该 hook 移到 early return 之前，并新增「隐藏 → 再显示」回归测试。
+- 验证：`tests/trail-tab.spec.tsx` 新增 1 例，`pnpm test` **523 例 / 22 文件**；typecheck/build 通过。
+
 ## [0.10.0] - 2026-11-06
 
 **工具输出自动格式化**：结果按「JSON → JSONL → Markdown → 原文」启发式选择渲染方式，不再一律显示原始字符串。

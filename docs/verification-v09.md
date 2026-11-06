@@ -172,3 +172,9 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![结果：JsonPretty + 渲染/原文分段](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0100-json-result.jpg>)
 
 ![切到原文](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0100-json-raw.jpg>)
+
+## 15. v0.10.1 修复 tab 切换崩溃（React #300）
+
+| 问题 | 根因 | 修复 |
+| --- | --- | --- |
+| 切到其他侧栏 tab 再切回「轮次轨迹」时报 `dsh-better-sidebar: Minified React error #300`（Rendered fewer hooks than expected） | v0.9.2 新增的 `stepNameWidth` `React.useMemo` 放在 `if (!visible) return null` **之后**；`visible=false` 时该 hook 被跳过，hooks 数量变化触发 React #300 | 把 `stepNameWidth` 移到 early return 之前，hooks 顺序恒定；新增回归测试「隐藏 → 显示」 |
