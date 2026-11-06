@@ -187,3 +187,23 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - console 仅既有静态资源 404。
 
 ![切换 tab 后正常](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0101-hookfix.jpg>)
+
+## 16. v0.10.2 步骤行图标底色与竖线对齐原型 2-02
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 1. 当前 ICON 每个工具族各一个底色，设计稿里是统一颜色（只有报错是红底） | 删除 `.ttl-stepIcon.ttl-tone-{shell,read,edit,mcp,todo,generic}` 的底色覆盖；`.ttl-stepIcon` 统一用 `var(--dsw-alias-bg-layer-2)`（深色主题 `#2c2c2e`），字形仍走族色。报错 chip 保留红底但改为不透明 `color-mix(...)`，防止竖线透出 | `.ttl-stepIcon` 计算值 `rgb(44,44,46)`，与原型 2-02 chip `rgb(44,44,47)` 一致；bash/read/edit/MCP/通用 全部同底色；error chip `color(srgb 0.267137 0.171765 0.175059)` |
+| 1（续）. 报错改用设计稿的 ICON | `StepRow` 的 `iconKind` 判断改为 `errored`：wire `error` 行和 `result.isError` 的工具行都显示警示三角，不再显示被染红的家族图标（终端 `/` 文件 / 扳手） | 用例：`result.isError` 的 bash 行渲染 `M10.29 3.86`（alert triangle）且无 terminal `<polyline>`；实机失败行截图三角 + 红 chip |
+| 2. 保留「ICON 与 ICON 之间竖着的那条线」 | 撤销 v0.9.3 的 `.ttl-stepRail { display:none }`；1px `rgba(255,255,255,.08)`、`left:23px`（= 14px 内边距 + 18px chip 中心）；chip 不透明 → 线只在 chip 上下 7px 空隙可见；并行组内同样显示（琥珀分组竖线保留） | `.ttl-stepRail` 计算值 `1×32 @ x=1064`（行 x=1041 → +23）、全部行 `display:block`；空隙像素 `rgb(52,52,53)`，原型 2-02 `rgb(52,52,52)`；dock 400、行高 32、chip 18×18 不变 |
+
+- 覆盖声明：并行批次的「归属」仍由琥珀色分组竖线（`.ttl-parallel::before`）表达，灰线只负责连接相邻 chip；error 行整行红晕（`rgba(242,114,111,.08)`）是 v0.9 既有口径，本版未改。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **527 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-iconrail.mjs`（普通行 / 失败行 / 并行组三段 + `iconrail-metrics.json`）。
+
+![原型 2-02 vs 实机：中性 chip + chip 间灰线 + 红色三角报错](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/prototype/compare/02b-icon-rail.jpg>)
+
+![实机失败行：红 chip 三角 + 中性 chip + 竖线](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0102-icon-rail.jpg>)
+
+![并行组：琥珀分组竖线 + 组内灰线](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0102-parallel.jpg>)
+
+![展开轮次全景：统一 chip + chip 间竖线](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0102-expanded.jpg>)

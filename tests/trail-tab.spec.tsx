@@ -524,6 +524,29 @@ describe('TrailTab', () => {
     expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
   })
 
+  it('a failed tool result leads with the prototype alert glyph, not its family glyph (v0.10.2)', async () => {
+    renderTab([
+      user(1, 'run tests'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', 'npm test', 'c3'),
+      // An isError tool/result keeps the step a `tool` step (no wire `error`),
+      // which is exactly the case the prototype draws as ⚠ on the red chip.
+      ev('tool/result', 4, {
+        callId: 'c3',
+        message: { isError: true },
+        content: [{ type: 'text', text: 'exit 1' }],
+      }),
+      turnEnd(5, 1),
+    ])
+    const step = await screen.findByTestId('ttl-step')
+    // The row still marks itself failed (red chip, ✗) but the leading glyph is
+    // the prototype's ⚠ triangle — the terminal family glyph must be gone.
+    expect(step.getAttribute('data-step-kind')).toBe('error')
+    const glyph = step.querySelector('.ttl-stepIcon .ttl-rowIcon.ttl-icon-red svg path')
+    expect(glyph?.getAttribute('d') ?? '').toContain('M10.29 3.86')
+    expect(step.querySelector('.ttl-stepIcon svg polyline')).toBeNull()
+  })
+
   it('an orphan result renders a placeholder row with the orphan hint', async () => {
     renderTab([
       user(1, 'go'),

@@ -989,7 +989,10 @@ export const trailCss = `
   width: 18px;
   height: 18px;
   border-radius: 4px;
-  background: #2c2c2f;
+  /* v0.10.2: every family shares one neutral chip (prototype 2-02). The fill
+     stays opaque so the restored rail shows only between chips, never through
+     them; the token is the theme's surface fill, i.e. the frame's exact chip. */
+  background: var(--dsw-alias-bg-layer-2, #2c2c2f);
   color: var(--dsw-alias-label-tertiary, #9ba1a7);
 }
 .ttl-stepIcon svg { display: block; }
@@ -1045,9 +1048,14 @@ export const trailCss = `
 .ttl-step[data-step-kind="error"] .ttl-stepName,
 .ttl-step[data-step-kind="error"] .ttl-stepStatus,
 .ttl-step[data-step-kind="error"] .ttl-stepDur { color: var(--dsw-alias-state-error-primary, #f2726f); }
-.ttl-step[data-step-kind="error"] .ttl-stepIcon { background: rgba(242, 114, 111, 0.16); color: var(--dsw-alias-state-error-primary, #f2726f); }
+.ttl-step[data-step-kind="error"] .ttl-stepIcon {
+  /* Opaque red chip: the rail must not bleed through a failing row's icon. */
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #f2726f) 16%, var(--dsw-alias-bg-layer-1, #232324));
+  color: var(--dsw-alias-state-error-primary, #f2726f);
+}
 
-/* tool families */
+/* tool families — glyph ink only; v0.10.2 unifies the chip fill
+   (.ttl-stepIcon), the failing row keeps a red chip */
 .ttl-tone-shell { color: #a78bfa; }
 .ttl-tone-read { color: #60a5fa; }
 .ttl-tone-edit { color: #34d399; }
@@ -1055,13 +1063,9 @@ export const trailCss = `
 .ttl-tone-todo { color: #f2b45c; }
 .ttl-tone-error { color: #f2726f; }
 .ttl-tone-generic { color: #9ba1a7; }
-.ttl-stepIcon.ttl-tone-shell { background: rgba(167, 139, 250, 0.14); }
-.ttl-stepIcon.ttl-tone-read { background: rgba(96, 165, 250, 0.14); }
-.ttl-stepIcon.ttl-tone-edit { background: rgba(52, 211, 153, 0.13); }
-.ttl-stepIcon.ttl-tone-mcp { background: rgba(240, 143, 184, 0.14); }
-.ttl-stepIcon.ttl-tone-todo { background: rgba(242, 180, 92, 0.14); }
-.ttl-stepIcon.ttl-tone-error { background: rgba(242, 114, 111, 0.16); }
-.ttl-stepIcon.ttl-tone-generic { background: rgba(255, 255, 255, 0.06); }
+.ttl-stepIcon.ttl-tone-error {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #f2726f) 16%, var(--dsw-alias-bg-layer-1, #232324));
+}
 .ttl-stepIcon .ttl-rowIcon, .ttl-stepIcon svg, .ttl-detailIcon .ttl-rowIcon, .ttl-detailIcon svg { color: inherit; }
 
 /* dots */
@@ -1106,7 +1110,6 @@ export const trailCss = `
   font-size: 9.5px;
 }
 .ttl-parallelBody { position: relative; }
-.ttl-parallelBody .ttl-stepRail { display: none; }
 
 /* ── input / output items ───────────────────────────────── */
 .ttl-item {
@@ -2039,7 +2042,6 @@ export const trailCss = `
 .ttl-parallelHint { display: none; }
 .ttl-parallelAgg { font-size: 9px; color: var(--dsw-alias-label-quaternary, #7b8086); }
 .ttl-tone-mcp { color: #34d399; }
-.ttl-stepIcon.ttl-tone-mcp { background: rgba(52, 211, 153, 0.13); }
 
 /* ══ v0.9.2 polish: full tool names, content-sized column ════════════════ */
 .ttl-stepName {
@@ -2047,8 +2049,8 @@ export const trailCss = `
   min-width: 0;
 }
 
-/* ══ v0.9.3: parallel batches are marked by a bracket only ═══════════════ */
-.ttl-stepRail { display: none; }
+/* ══ v0.9.3: parallel batches are marked by a bracket only (the between-chip
+   rail returned in v0.10.2, see the section at the end of this sheet) ══════ */
 .ttl-parallel { padding: 0; background: transparent; }
 .ttl-parallel::before {
   left: 3px;
@@ -2147,9 +2149,7 @@ export const trailCss = `
 .ttl-stepJump, .ttl-locateBtn, .ttl-msgJump, .ttl-itemJump, .ttl-output-jump { display: none !important; }
 .ttl-badgeParallel { display: none !important; }
 .ttl-tone-edit { color: #f2b45c; }
-.ttl-stepIcon.ttl-tone-edit { background: rgba(242, 180, 92, 0.14); }
 .ttl-tone-todo { color: #9ba1a7; }
-.ttl-stepIcon.ttl-tone-todo { background: rgba(255, 255, 255, 0.06); }
 
 .ttl-distSeg.ttl-tone-edit, .ttl-legendDot.ttl-tone-edit { background: #f2b45c; }
 .ttl-distSeg.ttl-tone-mcp, .ttl-legendDot.ttl-tone-mcp { background: #34d399; }
@@ -2157,7 +2157,15 @@ export const trailCss = `
 
 /* ══ v0.9.9: generic tool glyph gets its own hue (not grey) ══════════════ */
 .ttl-tone-generic { color: #f472b6; }
-.ttl-stepIcon.ttl-tone-generic { background: rgba(244, 114, 182, 0.14); }
 .ttl-distSeg.ttl-tone-generic, .ttl-legendDot.ttl-tone-generic { background: #f472b6; }
+
+/* ══ v0.10.2: unified chip + rail between chips (prototype 2-02) ═════════ */
+/* The rail is the connector SEEN BETWEEN ICONS only: every chip is opaque, so
+   the 1px line is clipped to the 7px gaps above/below it. It sits under the
+   chip (chip z-index 1) and leaves the parallel bracket untouched. */
+.ttl-turn .ttl-stepRail {
+  left: 23px;
+  background: rgba(255, 255, 255, 0.08);
+}
 
 `

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.2] - 2026-11-06
+
+**步骤行图标与连线对齐原型 2-02**：ICON 统一中性底色、恢复图标之间的 1px 竖线、失败行统一用告警三角。
+
+### Changed
+
+- **统一 ICON 底色**：所有工具族共用同一个中性 chip（`var(--dsw-alias-bg-layer-2)`，深色主题 `#2c2c2e`，与原型 2-02 实测 `rgb(44,44,47)` 一致），不再按 bash / read / edit / MCP / 通用各染一层；字形仍保留家族色。报错行保留红底，并改成不透明 `color-mix(...)`，避免竖线透过 chip。
+- **恢复「ICON 与 ICON 之间竖着的那条线」**：1px、`rgba(255,255,255,.08)`、对齐图标中心（`left:23px`）+ chip 不透明 → 只在图标上下 7px 空隙可见（实测空隙色 `rgb(52,52,53)`，原型 2-02 为 `rgb(52,52,52)`）；并行组的琥珀色分组竖线保留，组内同样有灰线连接。
+- **失败行统一告警图标**：`result.isError` 的工具行不再显示被染红的工具家族图标，与 wire `error` 行一样显示警示三角（原型 2-02 / 6-06「失败」）。
+
+### Verification
+
+- 新增样式回归 `tests/detail-styles.spec.ts` 3 例（chip 统一 / 报错红底不透明 / 竖线恢复且居中）、行为回归 `tests/trail-tab.spec.tsx` 1 例（isError 工具行 → ⚠ path）。
+- `pnpm typecheck` 0；`pnpm test` **527 例 / 22 文件**；`pnpm build` 通过。
+- 实机（`trace-verify` / 19487 / dock 400 / dsf2）：`.ttl-stepIcon` bg `rgb(44,44,46)`、`.ttl-stepRail` `1×32 @ left 23px`、全部行 `display:block`、error chip `color(srgb 0.267 0.172 0.175)`；对比图 `docs/prototype/compare/02b-icon-rail.jpg`，截图 `docs/assets/v0102-*.jpg`。
+
 ## [0.10.1] - 2026-11-06
 
 ### Fixed

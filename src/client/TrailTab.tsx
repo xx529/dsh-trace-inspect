@@ -361,7 +361,8 @@ interface StepRowProps {
 }
 
 /**
- * One 32px timeline step row: rail + 16px family-tinted icon chip (ToolIcon),
+ * One 32px timeline step row: rail + 18px neutral icon chip (ToolIcon, glyph
+ * keeps its family ink; failing rows show the alert triangle on a red chip),
  * mono name, single-line description, ✓/✗ status and the wire duration.
  * Click toggles the inline `StepDetail`; `↗` keeps the locate action.
  * Error rows turn the whole line red (`data-kind="error"`); hover / open are
@@ -379,7 +380,9 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
   const errored = step.kind === 'error' || step.result?.isError === true
   const family = toolFamily(step.name, errored)
   const tone: ToolTone = family === 'error' ? 'red' : 'neutral'
-  const iconKind: ToolIconKind = step.kind === 'error' ? 'alert' : summary.icon
+  // v0.10.2: every failing row leads with the prototype's alert triangle, not
+  // with the tool's own glyph tinted red (prototype 2-02 / 6-06「失败」).
+  const iconKind: ToolIconKind = errored ? 'alert' : summary.icon
   const desc = step.kind === 'error' ? step.error : summary.detail
   const status = errored ? '✗' : '✓'
   const duration = stepDuration(step)

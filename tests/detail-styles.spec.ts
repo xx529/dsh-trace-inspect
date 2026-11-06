@@ -163,6 +163,30 @@ describe('§10.4.2 新增文案键', () => {
   })
 })
 
+describe('v0.10.2: 统一 ICON 底色 + 图标间竖线（原型 2-02）', () => {
+  it('ICON 底色统一为中性面，不再按工具家族着色', () => {
+    const chip = rule('.ttl-stepIcon {')
+    expect(chip).toContain('var(--dsw-alias-bg-layer-2')
+    // 只有报错家族还允许自己的 chip 底色；其余家族只保留字形颜色。
+    const tinted = [...trailCss.matchAll(/\.ttl-stepIcon\.ttl-tone-(shell|read|edit|mcp|todo|generic)\s*\{[^}]*background/gi)]
+    expect(tinted).toEqual([])
+  })
+
+  it('报错 chip 仍是红底（不透明，避免竖线透出）', () => {
+    const err = rule('.ttl-step[data-step-kind="error"] .ttl-stepIcon')
+    expect(err).toContain('color-mix')
+    expect(err).toContain('--dsw-alias-state-error-primary')
+  })
+
+  it('竖线恢复，且只显示在图标之间（图标不透明、竖线居中对齐图标中心）', () => {
+    expect(trailCss).not.toMatch(/^\.ttl-stepRail\s*\{\s*display:\s*none/m)
+    const rail = rule('.ttl-turn .ttl-stepRail {')
+    expect(rail).toContain('left: 23px;')
+    // 18px chip + 14px 左内边距 → 图标中心 23px；chip 自身 z-index 1 盖住穿过部分。
+    expect(rule('.ttl-stepIcon {')).toContain('z-index: 1;')
+  })
+})
+
 describe('向后兼容：v0.4.0 的类与键没有被删改', () => {
   it('既有 ttl- 类仍然在 CSS 里', () => {
     const legacy = [
