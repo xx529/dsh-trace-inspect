@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.10.7] - 2026-11-07
+
+### Changed
+
+- **命令分段换行更整齐**：详情「命令」区的 `&&` / `;` 连接符从「下一行行首」移到「上一行行尾」，每一行都以命令词开头：
+  ```
+  cd /Users/lzx/.../dsh-trace-inspect &&
+  pnpm install 2>&1 | tail -4 &&
+  echo "=== BUILD ===" &&
+  pnpm build 2>&1 | tail -3
+  ```
+- 渲染层用 `shown[i+1].connector` 把连接符附加到当前行末尾，`&nbsp;` 粘住最后一个词（软换行时不会单独掉到下一行）；内联详情带与 1280 浮层使用同一规则；`splitCommand` 数据模型不变（连接符仍记录在它所引入的段上）。
+
+### Verification
+
+- 新增 1 例：3 段命令的行文本为 `cd /tmp &&` / `sed -n 1p a.ts ;` / `echo done`，没有行以 `&&` / `;` 开头，且恰好 2 个 trailing connector。
+- `pnpm typecheck` 0、`pnpm test` **533 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2）：4 段命令的 4 行分别以连接符结尾、下一行以命令词开头；截图 `docs/assets/v0107-command-tail.jpg`。
+
 ## [0.10.6] - 2026-11-07
 
 ### Changed

@@ -163,7 +163,7 @@ div.ttl-detail[data-testid=ttl-detail][data-tab]
 ```
 
 ### 3.3 摘要 tab（按工具类型）
-- `bash/shell`：`section.ttl-section`（label「命令」+ hint「按 && / ; 分段 · 自动换行」+ 复制）→ `div.ttl-code`（每行 `ttl-codeLine > ttl-codeGutter + ttl-codeText`，段间 `&&/;` 用 op 色；语法高亮：命令蓝/子命令常规/flag 琥珀/字符串绿/路径青/hash 紫）→ `ttl-codeFoot`；`参数` 键值表（`ttl-kv`）展示工作目录/描述等非命令字段；`输出` 折叠预览（`ttl-outBlock` + 展开全文）。
+- `bash/shell`：`section.ttl-section`（label「命令」+ hint「按 && / ; 分段 · 自动换行」+ 复制）→ `div.ttl-code`（每行 `ttl-codeLine > ttl-codeGutter + ttl-codeText`，段间 `&&/;` 用 op 色、画在上一行行尾（v0.10.7）；语法高亮：命令蓝/子命令常规/flag 琥珀/字符串绿/路径青/hash 紫）→ `ttl-codeFoot`；`参数` 键值表（`ttl-kv`）展示工作目录/描述等非命令字段；`输出` 折叠预览（`ttl-outBlock` + 展开全文）。
 - `read/write/edit`：`ttl-fileBlock`（文件路径 mono + 行号/增删行 chip）。
 - `mcp`：`ttl-mcpBlock`（MCP 徽标 + 「已连接」+ transport，数据不可得时只显示 server/tool）→ `参数` 键值表（key 值 + 类型徽标 `ttl-kvType`：string/number/boolean/array；数组折叠 chips + `+N`）→ `结果` 文件列表 `ttl-files > ttl-fileRow`（图标+文件名+大小）。
 - 其他：参数键值表 + 输出预览。

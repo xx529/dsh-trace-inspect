@@ -251,3 +251,15 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话（真实 trace-verify 历史里没有 `skill` 调用），字形 / 颜色与真实插件渲染一致。
 
 ![skill 行：青色四角星 + 仅 skill 名称](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0106-skill-row.jpg>)
+
+## 20. v0.10.7 命令连接符移到上一行行尾
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 分段命令里 `&&` / `;` 落在下一行行首，每行起始参差不齐 | 连接符由「下一行的 leading op」改为「上一行的 trailing op」：渲染层把 `shown[i+1].connector` 追加到当前行末尾，前面用 NBSP 粘住最后一个词（软换行时不会单独掉行）；内联详情带与 1280 浮层共用同一规则；`splitCommand` 数据模型不变（连接符仍挂在它引入的段上） | 4 段命令渲染为 `cd … &&` / `pnpm install … &&` / `echo … &&` / `pnpm build …`；行首不再出现 `&&` / `;`；新增回归断言行文本与 2 个 trailing connector |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **533 例 / 22 文件**；`pnpm build` 通过。
+- 采集：`scripts/verify/shoot.mjs --mode after`（`panel-03-command.png` / `panel-03-detail.png`）。
+- 已知偏差：软换行仍可能把一行折成多视觉行（命令本来就很长），但折行末尾的连接符不会单独成行。
+
+![命令：连接符在上一行行尾](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0107-command-tail.jpg>)

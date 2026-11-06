@@ -541,27 +541,33 @@ function CommandSection(props: {
         <CopyButton text={command} testid="ttl-cmd-copy" label={labels.copy} className="ttl-sectionAction" />
       </div>
       <div className="ttl-code" data-testid="ttl-code">
-        {shown.map((segment, index) => (
-          <div className="ttl-codeLine" key={index}>
-            <span className="ttl-codeGutter" aria-hidden="true">{index + 1}</span>
-            <span className="ttl-codeText">
-              {segment.connector !== null
-                ? (
-                  <React.Fragment>
-                    <span className="ttl-tok-op">{segment.connector}</span>
-                    {' '}
+        {shown.map((segment, index) => {
+          // v0.10.7: the `&&` / `;` connector trails the PREVIOUS line, so every
+          // line starts with a command word and the gutter column stays tidy.
+          // The NBSP keeps the operator glued to the last word on soft wrap.
+          const trailing = shown[index + 1]?.connector ?? null
+          return (
+            <div className="ttl-codeLine" key={index}>
+              <span className="ttl-codeGutter" aria-hidden="true">{index + 1}</span>
+              <span className="ttl-codeText">
+                {segment.tokens.map((token, tokenIndex) => (
+                  <React.Fragment key={tokenIndex}>
+                    {tokenIndex > 0 ? ' ' : null}
+                    <span className={`ttl-tok-${token.kind}`}>{token.text}</span>
                   </React.Fragment>
-                )
-                : null}
-              {segment.tokens.map((token, tokenIndex) => (
-                <React.Fragment key={tokenIndex}>
-                  {tokenIndex > 0 ? ' ' : null}
-                  <span className={`ttl-tok-${token.kind}`}>{token.text}</span>
-                </React.Fragment>
-              ))}
-            </span>
-          </div>
-        ))}
+                ))}
+                {trailing !== null
+                  ? (
+                    <React.Fragment>
+                      {'\u00A0'}
+                      <span className="ttl-tok-op ttl-tok-tail" data-testid="ttl-cmd-connector">{trailing}</span>
+                    </React.Fragment>
+                  )
+                  : null}
+              </span>
+            </div>
+          )
+        })}
         <div className="ttl-codeFoot" data-testid="ttl-code-foot">
           <span>{`${labels.segments(stats.segments)} · ${labels.chars(stats.chars)}`}</span>
           <span className="ttl-codeTool">{toolName}</span>

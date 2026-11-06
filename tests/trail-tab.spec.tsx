@@ -542,6 +542,25 @@ describe('TrailTab', () => {
     expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
   })
 
+  it('draws && / ; at the end of the previous command line (v0.10.7)', async () => {
+    renderTab([
+      user(1, 'run it'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', JSON.stringify({ command: 'cd /tmp && sed -n 1p a.ts ; echo done' }), 'c3'),
+      turnEnd(4, 1),
+    ])
+    await openStepDetail(0)
+    const code = await screen.findByTestId('ttl-code')
+    const lines = [...code.querySelectorAll('.ttl-codeLine')]
+      .map((line) => (line.querySelector('.ttl-codeText')?.textContent ?? '').replace(/\u00A0/g, ' ').trim())
+    expect(lines).toEqual(['cd /tmp &&', 'sed -n 1p a.ts ;', 'echo done'])
+    // No line may start with a connector any more.
+    expect(lines.every((line) => !/^(?:&&|;)/.test(line))).toBe(true)
+    // Exactly two trailing connectors, in command order.
+    const tails = [...code.querySelectorAll('[data-testid="ttl-cmd-connector"]')].map((el) => el.textContent)
+    expect(tails).toEqual(['&&', ';'])
+  })
+
   it('a skill call reads as its skill name and draws the sparkle family glyph (v0.10.6)', async () => {
     renderTab([
       user(1, 'load the skills'),

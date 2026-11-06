@@ -686,27 +686,32 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
     return (
       <section className="ttl-section" data-testid="ttl-zoom-command">
         <div className="ttl-code">
-          {commandSegments.map((segment, index) => (
-            <div className="ttl-codeLine" key={index}>
-              <span className="ttl-codeGutter" aria-hidden="true">{index + 1}</span>
-              <span className="ttl-codeText">
-                {segment.connector !== null
-                  ? (
-                    <React.Fragment>
-                      <span className="ttl-tok-op">{segment.connector}</span>
-                      {' '}
+          {commandSegments.map((segment, index) => {
+            // v0.10.7: `&&` / `;` trail the previous line so every line starts
+            // with a command word (same rule as the inline detail band).
+            const trailing = commandSegments[index + 1]?.connector ?? null
+            return (
+              <div className="ttl-codeLine" key={index}>
+                <span className="ttl-codeGutter" aria-hidden="true">{index + 1}</span>
+                <span className="ttl-codeText">
+                  {segment.tokens.map((token, tokenIndex) => (
+                    <React.Fragment key={tokenIndex}>
+                      {tokenIndex > 0 ? ' ' : null}
+                      <span className={`ttl-tok-${token.kind}`}>{token.text}</span>
                     </React.Fragment>
-                  )
-                  : null}
-                {segment.tokens.map((token, tokenIndex) => (
-                  <React.Fragment key={tokenIndex}>
-                    {tokenIndex > 0 ? ' ' : null}
-                    <span className={`ttl-tok-${token.kind}`}>{token.text}</span>
-                  </React.Fragment>
-                ))}
-              </span>
-            </div>
-          ))}
+                  ))}
+                  {trailing !== null
+                    ? (
+                      <React.Fragment>
+                        {'\u00A0'}
+                        <span className="ttl-tok-op ttl-tok-tail" data-testid="ttl-cmd-connector">{trailing}</span>
+                      </React.Fragment>
+                    )
+                    : null}
+                </span>
+              </div>
+            )
+          })}
           <div className="ttl-codeFoot" data-testid="ttl-zoom-command-foot">
             <span>
               {`${copy.segments(commandStatsValue.segments)} · ${copy.chars(commandStatsValue.chars)} · ${copy.softWrap}`}

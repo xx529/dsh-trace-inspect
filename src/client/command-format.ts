@@ -41,10 +41,11 @@ export type CommandConnector = '&&' | ';' | '|' | '||'
 /** One command segment, rendered as one gutter-numbered line. */
 export interface CommandSegment {
   /**
-   * The `&&` / `;` that preceded this segment, or `null` for the first one
-   * (and for a segment started by a newline). The renderer draws it as a
-   * leading `op` token; it is NOT repeated inside `tokens`, whose first entry
-   * is always the `cmd` word when the segment has any.
+   * The `&&` / `;` that separated this segment from the previous one, or
+   * `null` for the first one (and for a segment started by a newline). The
+   * renderer draws it at the END of the PREVIOUS line (v0.10.7) so every line
+   * begins with a command word; it is NOT repeated inside `tokens`, whose first
+   * entry is always the `cmd` word when the segment has any.
    */
   connector: CommandConnector | null
   tokens: CommandToken[]
