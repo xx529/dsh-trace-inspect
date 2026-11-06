@@ -72,3 +72,20 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - `pnpm test` → **516 passed / 21 files**
 - `pnpm build` → `lib/index.js` + `lib/client.js`，bundle 契约自检 ok
 - 浏览器 console：仅既有静态资源 404（v0.8 基线同样存在），无 JS 报错/裸 DOM
+
+## 6. v0.9.1 视觉修正（实机反馈）
+
+| 反馈 | 修正 | 实测 |
+| --- | --- | --- |
+| 「并行的条太难看」 | 去掉整行浅底与 2px 粗紫轨 → 1px 发丝轨（rgba(167,139,250,.32)）；组头 20px、`∥ 并行 ×N` 9.5px、隐藏重复 hint；右侧合计 9px muted | `.ttl-parallel` background 透明；`::before` 1px；label 9.5px `#b9a7ee` |
+| 「没有专用 icon 的 tool 用通用图标」 | `generic` 从不可见的 6px 圆点改为统一 cube 图标；`step.kind='error'` 行改用红色告警三角 | 未知工具 chip `ttl-tone-generic` + 3-path cube；error 行 `ttl-icon-red` + alert svg |
+| 「MCP 成功/失败的图标颜色对比不明显」 | MCP 成功 = 绿色插头（`rgb(52,211,153)` + 绿色底），失败 = 红色（沿用 error tone） | 成功行 `ttl-tone-mcp` 绿色；失败 MCP 行红插头 + 红底 |
+| 失败结果行仍显示 ✓（连带发现） | `result.isError` 的 tool 行整行按 error 渲染：`data-step-kind=error`、✗、淡红底、红描述 | status `✗` rgb(242,90,90)、背景 rgba(242,114,111,.08) |
+
+![并行组减重](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v091-parallel.jpg>)
+
+![MCP 绿/红](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v091-mcp.jpg>)
+
+![通用图标与错误图标](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v091-generic.jpg>)
+
+![失败结果行](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v091-mcp-error.jpg>)

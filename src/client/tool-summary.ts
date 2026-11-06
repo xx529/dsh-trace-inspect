@@ -30,6 +30,7 @@ export type ToolIconKind =
   | 'search'
   | 'folder'
   | 'mcp'
+  | 'alert'
   | 'generic'
 
 export interface ToolSummary {

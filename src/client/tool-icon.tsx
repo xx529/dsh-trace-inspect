@@ -55,6 +55,17 @@ function pathsOf(kind: ToolIconKind): React.ReactNode {
         React.createElement('line', { key: 'b', x1: 15, y1: 2, x2: 15, y2: 7, ...stroke }),
         React.createElement('path', { key: 'c', d: 'M6 7h12v5a6 6 0 0 1-12 0z', ...stroke }),
         React.createElement('line', { key: 'd', x1: 12, y1: 18, x2: 12, y2: 22, ...stroke }))
+    case 'alert':
+      return React.createElement(React.Fragment, null,
+        React.createElement('path', { key: 'a', d: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z', ...stroke }),
+        React.createElement('line', { key: 'b', x1: 12, y1: 9, x2: 12, y2: 13, ...stroke }),
+        React.createElement('line', { key: 'c', x1: 12, y1: 17, x2: 12.01, y2: 17, ...stroke }))
+    case 'generic':
+      // Unknown tool: a neutral cube reads as "some tool" without implying family.
+      return React.createElement(React.Fragment, null,
+        React.createElement('path', { key: 'a', d: 'M21 8l-9-5-9 5v8l9 5 9-5z', ...stroke }),
+        React.createElement('path', { key: 'b', d: 'M3 8l9 5 9-5', ...stroke }),
+        React.createElement('path', { key: 'c', d: 'M12 13v8', ...stroke }))
     default:
       return null
   }
@@ -71,8 +82,12 @@ export interface ToolIconProps {
  * @returns The inline element for the row's leading slot.
  */
 export function ToolIcon({ kind, tone }: ToolIconProps): React.ReactElement {
-  if (kind === 'generic') {
-    return React.createElement('span', { className: `ttl-rowDot ttl-dot-${tone}`, 'aria-hidden': 'true' })
+  if (kind === 'generic' || kind === 'alert') {
+    return React.createElement(
+      'span',
+      { className: `ttl-rowIcon ttl-icon-${tone}`, 'aria-hidden': 'true' },
+      React.createElement('svg', { viewBox: '0 0 24 24', width: 13, height: 13, focusable: 'false' }, pathsOf(kind)),
+    )
   }
   return React.createElement(
     'span',

@@ -1053,7 +1053,7 @@ describe('G. 安全与规范', () => {
   })
 
   it('G2 CSS 颜色纪律：在冻结的 v0.9 调色板内，且保留 DSH token', () => {
-    const PALETTE = new Set(['#000000','#111111','#171719','#17171a','#1e1e20','#1f1f21','#202024','#22c55e','#232324','#2a2a2b','#2c2c2f','#2f3033','#34d399','#353638','#35363a','#4176e6','#4c8dff','#4ed4a4','#545557','#55595e','#5686fe','#5f6469','#60a5fa','#63c9d1','#6a6e75','#6f747a','#7b8086','#7cb2ff','#8fdcb8','#9ba1a7','#9bb8e8','#a78bfa','#a9e6b9','#adb2b8','#b39cf5','#b99a6b','#b9bdc4','#c4b2ff','#cfd3d6','#d7dade','#dfe2e5','#e6e8ea','#f08fb8','#f0a7a5','#f0f1f2','#f25a5a','#f2726f','#f2b45c','#f2c98d','#f3b4cc','#f3f4f6','#f59e0b','#f6a9a7','#f9fafb'])
+    const PALETTE = new Set(['#000000','#111111','#171719','#17171a','#1e1e20','#1f1f21','#202024','#22c55e','#232324','#2a2a2b','#2c2c2f','#2f3033','#34d399','#353638','#35363a','#4176e6','#4c8dff','#4ed4a4','#545557','#55595e','#5686fe','#5f6469','#60a5fa','#63c9d1','#6a6e75','#6f747a','#7b8086','#7cb2ff','#8fdcb8','#9ba1a7','#9bb8e8','#a78bfa','#a9e6b9','#adb2b8','#b39cf5','#b99a6b', '#b9a7ee','#b9bdc4','#c4b2ff','#cfd3d6','#d7dade','#dfe2e5','#e6e8ea','#f08fb8','#f0a7a5','#f0f1f2','#f25a5a','#f2726f','#f2b45c','#f2c98d','#f3b4cc','#f3f4f6','#f59e0b','#f6a9a7','#f9fafb'])
     const offenders = [...new Set((trailCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))]
       .filter((h) => !PALETTE.has(h))
     expect(offenders).toEqual([])

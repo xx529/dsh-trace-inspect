@@ -307,7 +307,7 @@ describe('TrailTab', () => {
     const errorSteps = steps.filter((el) => el.getAttribute('data-step-kind') === 'error')
     expect(errorSteps.length).toBeGreaterThan(0)
     // Failure is carried by the red family glyph inside the icon chip.
-    expect(errorSteps[0].querySelector('.ttl-dot-red')).toBeTruthy()
+    expect(errorSteps[0].querySelector('.ttl-stepIcon .ttl-rowIcon.ttl-icon-red')).toBeTruthy()
     expect(steps.every((el) => el.getAttribute('data-step-kind') === 'error')).toBe(true)
   })
 
@@ -515,7 +515,7 @@ describe('TrailTab', () => {
     const errorStep = steps.find((el) => el.getAttribute('data-step-kind') === 'error') as HTMLElement
     expect(errorStep).toBeTruthy()
     // The error row leads with the red family glyph.
-    expect(errorStep.querySelector('.ttl-dot-red')).toBeTruthy()
+    expect(errorStep.querySelector('.ttl-stepIcon .ttl-rowIcon.ttl-icon-red')).toBeTruthy()
     fireEvent.click(errorStep)
     await screen.findByTestId('ttl-detail')
     openDetailTab('result')

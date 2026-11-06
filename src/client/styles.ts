@@ -2019,4 +2019,26 @@ export const trailCss = `
 .ttl-turn[data-collapsed="false"] .ttl-itemInput { display: none; }
 .ttl-detail { margin-left: 13.5px; margin-right: 13.5px; }
 
+/* ══ v0.9.1 polish: quieter parallel groups, green MCP success ═══════════ */
+.ttl-parallel {
+  background: transparent;
+  padding: 2px 0;
+}
+.ttl-parallel::before {
+  width: 1px;
+  background: rgba(167, 139, 250, 0.32);
+}
+.ttl-parallelHead {
+  height: 20px;
+  gap: 6px;
+}
+.ttl-parallelMark, .ttl-parallelLabel {
+  color: #b9a7ee;
+  font-size: 9.5px;
+}
+.ttl-parallelHint { display: none; }
+.ttl-parallelAgg { font-size: 9px; color: var(--dsw-alias-label-quaternary, #7b8086); }
+.ttl-tone-mcp { color: #34d399; }
+.ttl-stepIcon.ttl-tone-mcp { background: rgba(52, 211, 153, 0.13); }
+
 `

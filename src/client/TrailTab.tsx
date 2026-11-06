@@ -322,11 +322,12 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
     () => summarizeToolCall(step.name, step.args, step.argsPreview, lang),
     [step.name, step.args, step.argsPreview, lang],
   )
-  const family = toolFamily(step.name, step.kind === 'error' || step.result?.isError === true)
+  const errored = step.kind === 'error' || step.result?.isError === true
+  const family = toolFamily(step.name, errored)
   const tone: ToolTone = family === 'error' ? 'red' : 'neutral'
-  const iconKind: ToolIconKind = step.kind === 'error' ? 'generic' : summary.icon
+  const iconKind: ToolIconKind = step.kind === 'error' ? 'alert' : summary.icon
   const desc = step.kind === 'error' ? step.error : summary.detail
-  const status = step.kind === 'error' ? '✗' : '✓'
+  const status = errored ? '✗' : '✓'
   const duration = stepDuration(step)
   const detailId = `ttl-detail-${step.kind}-${step.seq}`
   const title = step.kind === 'error'
@@ -343,14 +344,14 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
     <div
       className="ttl-stepWrap"
       data-open={open ? 'true' : undefined}
-      data-kind={step.kind}
+      data-kind={errored ? 'error' : step.kind}
       data-testid="ttl-step-wrap"
     >
       <button
         type="button"
         className="ttl-step"
         data-testid="ttl-step"
-        data-step-kind={step.kind}
+        data-step-kind={errored ? 'error' : step.kind}
         aria-expanded={open}
         aria-controls={detailId}
         title={clipTitle(title)}
