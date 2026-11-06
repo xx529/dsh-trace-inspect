@@ -98,3 +98,13 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 空参数工具显示 `{}` | 解析成功但无字段的工具不再输出 `{}` 描述 | `team_task_create` 等行只显示名字（desc 为审计内容而非 `{}`） |
 
 ![工具名完整显示](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v092-names.jpg>)
+
+## 8. v0.9.3 并行表达极简
+
+| 反馈 | 修正 | 实测 |
+| --- | --- | --- |
+| 「∥ 并行 ×N 这个文案的一行都不要了」 | 并行组不再渲染 head 行；语义移到 group 的 `aria-label`/`title`，轮次头 `∥N` 保留 | `.ttl-parallelHead` / `.ttl-parallelMark` 数量 = 0；`aria-label="并行 ×2"` |
+| 「并行的 tool 前面多一个黄色竖线连起来」 | 组左侧 2px 琥珀线（`#f2b45c`，top/bottom 6px，圆角 2px，opacity .8） | 组高 64 → 线高 52px；5 组同屏可辨 |
+| 「每行 icon 有灰色竖线穿插，不需要」 | `.ttl-stepRail` `display:none`；普通行无任何竖线 | 221/221 行 rail 不可见；并行/普通 icon x 均 1047，name x 均 1073 |
+
+![并行黄色连接线](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v093-parallel.jpg>)

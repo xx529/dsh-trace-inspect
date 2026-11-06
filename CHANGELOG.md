@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.3] - 2026-11-06
+
+**并行表达进一步极简**：不再有「∥ 并行 ×N」文字行，改由一条黄色连接线表达同一批调用；同时去掉贯穿图标的灰色时间线。
+
+### Changed
+
+- 并行组不再渲染 `.ttl-parallelHead`（`∥ 并行 ×N` / hint / 合计时长整行移除）；语义保留在 group 的 `aria-label` 与 `title`（悬停可读「同一助手步骤内下发的 N 个工具调用…」），轮次头部 `∥N` 徽标不变。
+- 并行组左侧新增 **2px 琥珀色连接线**（`#f2b45c`，上下各内缩 6px、圆角），把同批 tool 连成一个视觉单元。
+- 普通步骤行不再有贯穿 icon 的灰色竖线（`.ttl-stepRail` 保留 DOM 但 `display:none`），列表更干净；并行行与普通行 icon/name 的 x 坐标完全一致（无缩进、无错位）。
+
+### Verification
+
+- 实机（19487 / dock 400）：`.ttl-parallelHead` 数量 0；5 组同屏；黄线 2px `rgb(242,180,92)`、top/bottom 6px；`.ttl-stepRail` display none（221/221 行）；并行行与普通行 icon x=1047、name x=1073，delta 0。
+- `pnpm typecheck` 0；`pnpm test` 516 例 / 21 文件；`pnpm build` 通过。截图 `docs/assets/v093-parallel.jpg`。
+
 ## [0.9.2] - 2026-11-06
 
 **工具名完整显示**：工具/服务名列不再固定 52px 截断。

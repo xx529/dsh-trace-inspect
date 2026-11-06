@@ -556,35 +556,18 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
    * only a full-width tinted row and a violet rail (styles.ts).
    */
   const renderParallelGroup = (group: TrailParallelGroup): React.ReactElement => {
-    const size = group.steps.length
-    const label = (t(lang, 'parallelGroup') as (n: number) => string)(size)
-    const hint = (t(lang, 'parallelGroupHint') as (n: number) => string)(size)
-    let known = 0
-    let totalMs = 0
-    for (const step of group.steps) {
-      if (step.startedAt === undefined || step.endedAt === undefined) continue
-      const span = step.endedAt - step.startedAt
-      if (span < 0) continue
-      known += 1
-      totalMs += span
-    }
-    const aggParts = [ui.calls(size)]
-    if (known === size && totalMs > 0) aggParts.push(formatDuration(totalMs))
+    const label = (t(lang, 'parallelGroup') as (n: number) => string)(group.steps.length)
+    const hint = (t(lang, 'parallelGroupHint') as (n: number) => string)(group.steps.length)
     return (
       <div
         className="ttl-parallel"
         key={group.key}
         role="group"
         aria-label={label}
+        title={hint}
         data-testid="ttl-parallel-group"
         data-step={group.step}
       >
-        <div className="ttl-parallelHead" data-testid="ttl-parallel-head" title={hint}>
-          <span className="ttl-parallelMark" aria-hidden="true">∥</span>
-          <span className="ttl-parallelLabel">{label}</span>
-          <span className="ttl-parallelHint">{ui.parallelHint}</span>
-          <span className="ttl-parallelAgg">{aggParts.join(' · ')}</span>
-        </div>
         <div className="ttl-parallelBody">
           {group.steps.map((step) => renderStep(step, `seq:${step.seq}`))}
         </div>

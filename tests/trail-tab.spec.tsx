@@ -1008,13 +1008,11 @@ describe('TrailTab — parallel tool-call batches (v0.8.0)', () => {
     expect(groups[0].getAttribute('data-step')).toBe('1')
     // Same-level layout: the batch holds its rows directly (no nested wrapper indent).
     expect(groups[0].querySelector('.ttl-parallelBody')?.querySelectorAll('[data-testid="ttl-step"]')).toHaveLength(2)
-    const head = within(groups[0]).getByTestId('ttl-parallel-head')
-    expect(head.querySelector('.ttl-parallelMark')?.textContent).toBe('∥')
-    expect(head.querySelector('.ttl-parallelLabel')?.textContent).toBe('Parallel ×2')
-    expect(head.querySelector('.ttl-parallelHint')?.textContent).toBe('Issued together within one assistant step')
-    // No wire timestamps → the aggregate shows the call count only.
-    expect(head.querySelector('.ttl-parallelAgg')?.textContent).toBe('2 calls')
-    expect(head.getAttribute('title')).toContain('2 tool calls issued in one assistant step')
+    // v0.9.3: the batch has no visible caption row — semantics live on the
+    // group itself (aria-label + title) and the amber bracket in styles.ts.
+    expect(within(groups[0]).queryByTestId('ttl-parallel-head')).toBeNull()
+    expect(groups[0].getAttribute('aria-label')).toBe('Parallel ×2')
+    expect(groups[0].getAttribute('title')).toContain('2 tool calls issued in one assistant step')
     // The batch holds exactly its two rows; the later bash row is outside it.
     expect(within(groups[0]).getAllByTestId('ttl-step')).toHaveLength(2)
     expect(screen.getAllByTestId('ttl-step')).toHaveLength(3)
@@ -1097,10 +1095,10 @@ describe('TrailTab — parallel tool-call batches (v0.8.0)', () => {
     document.documentElement.lang = 'zh'
     try {
       renderTab(mixedTurn())
-      const head = await screen.findByTestId('ttl-parallel-head')
-      expect(head.querySelector('.ttl-parallelLabel')?.textContent).toBe('并行 ×2')
-      expect(head.querySelector('.ttl-parallelHint')?.textContent).toBe('同一助手步骤内并行下发')
-      expect(head.querySelector('.ttl-parallelAgg')?.textContent).toBe('2 个调用')
+      const groups = await screen.findAllByTestId('ttl-parallel-group')
+      expect(groups).toHaveLength(1)
+      expect(groups[0].getAttribute('aria-label')).toBe('并行 ×2')
+      expect(groups[0].getAttribute('title')).toContain('同一助手步骤内下发的 2 个工具调用')
       expect(screen.getByTestId('ttl-turn-parallel').getAttribute('title')).toBe('1 组并行调用 · 共 2 次')
     } finally {
       document.documentElement.lang = previous

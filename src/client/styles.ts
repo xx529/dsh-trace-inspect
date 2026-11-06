@@ -2047,4 +2047,18 @@ export const trailCss = `
   min-width: 0;
 }
 
+/* ══ v0.9.3: parallel batches are marked by a bracket only ═══════════════ */
+.ttl-stepRail { display: none; }
+.ttl-parallel { padding: 0; background: transparent; }
+.ttl-parallel::before {
+  left: 3px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: #f2b45c;
+  opacity: 0.8;
+  border-radius: 2px;
+}
+.ttl-parallelHead { display: none; }
+
 `
