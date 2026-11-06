@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.8] - 2026-11-06
+
+### Changed
+
+- 未知工具的 `generic` 图标由方块改为**同风格扳手（wrench）**：与 terminal/file/search/mcp 等图标同为 1.7 stroke 线性语言，避免「方块」被误读为模块/包；错误行仍用红色告警三角。
+
+### Verification
+
+- 实机（19487 / dock 400）：`send_message` / `wait_agent` / `team_*` 等行显示扳手；其它族图标与错误三角不变。截图 `docs/assets/v098-wrench.jpg`。
+- `pnpm typecheck` 0；`pnpm test` 516 例 / 21 文件；`pnpm build` 通过。
+
 ## [0.9.7] - 2026-11-06
 
 **列表静音 + 配色去重**：去掉定位箭头与并行次数徽标，edit 与 MCP 不再撞色。

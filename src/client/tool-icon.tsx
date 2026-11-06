@@ -61,11 +61,13 @@ function pathsOf(kind: ToolIconKind): React.ReactNode {
         React.createElement('line', { key: 'b', x1: 12, y1: 9, x2: 12, y2: 13, ...stroke }),
         React.createElement('line', { key: 'c', x1: 12, y1: 17, x2: 12.01, y2: 17, ...stroke }))
     case 'generic':
-      // Unknown tool: a neutral cube reads as "some tool" without implying family.
-      return React.createElement(React.Fragment, null,
-        React.createElement('path', { key: 'a', d: 'M21 8l-9-5-9 5v8l9 5 9-5z', ...stroke }),
-        React.createElement('path', { key: 'b', d: 'M3 8l9 5 9-5', ...stroke }),
-        React.createElement('path', { key: 'c', d: 'M12 13v8', ...stroke }))
+      // Unknown tool: a wrench (same stroke language as the family glyphs) reads
+      // as "some tool" without implying terminal/file/search semantics.
+      return React.createElement('path', {
+        key: 'a',
+        d: 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.77 3.77z',
+        ...stroke,
+      })
     default:
       return null
   }

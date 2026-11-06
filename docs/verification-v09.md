@@ -142,3 +142,11 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![静音后的列表](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v097-quiet.jpg>)
 
 ![概览图例与分布条跟随新配色](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v097-legend.jpg>)
+
+## 12. v0.9.8 通用工具图标改为扳手
+
+| 反馈 | 修正 | 实测 |
+| --- | --- | --- |
+| 通用工具 icon 用「类似 🔧 的同风格图标」 | `generic` 由方块改为 Lucide **wrench**（1 path、stroke 1.7、currentColor），与 terminal/file/search/mcp 同一线性语言；错误行仍用红色告警三角 | 未知工具行 SVG `d=M14.7 6.3…`，chip 灰 `#9ba1a7`；error 行 `M10.29 3.86…` 未变 |
+
+![通用工具改用扳手](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v098-wrench.jpg>)
