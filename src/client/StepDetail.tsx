@@ -269,7 +269,16 @@ function chipText(value: unknown): string {
 
 /** Does a token look like a file path (used only by the MCP result heuristic)? */
 function looksLikeFilePath(token: string): boolean {
-  if (token.includes('/') || token.includes('\\')) return true
+  // v0.10.13: structured text is never a path. A JSON error object such as
+  // `{"err":"... Property \"width\" failed ..."}` used to leak its escaped
+  // quotes into a bogus one-file list (`"`), so quotes/braces/brackets/commas
+  // disqualify a token before the prefix checks.
+  if (/["'{}[\],;]/.test(token)) return false
+  if (token.includes('/')) return true
+  if (token.includes('\\')) {
+    // A backslash alone is not a separator: accept Windows drives / UNC only.
+    return /^[A-Za-z]:[\\/]/.test(token) || token.startsWith('\\\\')
+  }
   return FILE_EXT.test(token)
 }
 
@@ -319,6 +328,8 @@ function totalSizeOf(entries: readonly FileEntry[]): string | null {
 function fileEntriesOf(text: string): FileEntry[] | null {
   const trimmed = text.trim()
   if (trimmed.length === 0 || trimmed.length > 20_000) return null
+  // A JSON object is a payload, not a path list; only arrays/flat lines qualify.
+  if (trimmed.startsWith('{')) return null
   if (trimmed.startsWith('[')) {
     const parsed = parseJsonLoose(trimmed)
     if (!parsed.ok || !Array.isArray(parsed.value)) return null

@@ -332,3 +332,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：卡片与行之间保留 4px 间距，与详情带的「行 → 带」间距一致。
 
 ![输出展开：卡片式正文](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0112-output-card.jpg>)
+
+## 26. v0.10.13 修复 MCP 摘要「假文件行」
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 摘要的「结果」出现 1 个文件、文件名只有一个 `"` | 根因：文件列表启发式把带转义引号的 JSON 结果（`{"err":"… Property \"width\" failed …"}`）按行 token 化，token `\"` 里的反斜杠被当成路径分隔符 → `fileBaseName('\"')` = `"`。修复：① 结果以 `{` 开头（JSON 对象）直接不走文件列表；② 含 `" ' { } [ ] , ;` 的 token 不算路径；③ 反斜杠只接受 `C:\` / `\\server` 形式 | mock `mcp__figma__use_figma` + 同款 resize 错误 JSON：`ttl-files = 0`，摘要改回正常「输出」预览（`177 B · 14 行`，pretty JSON） |
+| 别误伤真实文件列表 | 只收紧 token 判定；数组 / 行式路径列表逻辑不变 | `/tmp/assets/01.png 74 KB` 两行 → 仍渲染 2 个文件行（新增用例覆盖） |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **543 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-filesfix.mjs`（mock 同款 figma 结果，截图摘要 + `ttl-files` 计数）。
+- 已知偏差：mock 会话；真实 figma use_figma 结果形状与此一致（seq #210/#211）。
+
+![MCP 摘要：恢复为正常输出预览，不再有假文件行](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0113-mcp-files-fix.jpg>)

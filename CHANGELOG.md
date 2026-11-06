@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.13] - 2026-11-07
+
+### Fixed
+
+- **MCP 摘要把 JSON 结果误判成「1 个文件」**：`use_figma` 这类工具返回带转义引号的 JSON（`{"err":"... Property \"width\" failed ..."}`）时，文件列表启发式把 token `\"` 里的反斜杠当成路径分隔符，渲染出一个文件名是 `"` 的假文件行。修复：① 整个结果是 JSON 对象（以 `{` 开头）时不再走路径列表；② 含引号 / 花括号 / 方括号 / 逗号 / 分号 的 token 一律不算路径；③ 反斜杠只在 `C:\` / `\\server` 这类 Windows 路径里才算分隔符。
+- 真正的路径列表（如 `/tmp/assets/01.png  74 KB`）仍然按文件行渲染。
+
+### Verification
+
+- 新增 2 例：带转义引号的 JSON 结果不再出现 `ttl-files`（并正常显示 输出预览），真实路径列表仍渲染文件行。
+- `pnpm typecheck` 0、`pnpm test` **543 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，mock `mcp__figma__use_figma` + 同款 resize 错误 JSON）：`ttl-files = 0`、输出预览 14 行、meta `177 B · 14 行`；截图 `docs/assets/v0113-mcp-files-fix.jpg`。
+
 ## [0.10.12] - 2026-11-07
 
 ### Changed

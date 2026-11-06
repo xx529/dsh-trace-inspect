@@ -1312,6 +1312,37 @@ describe('output preview length (v0.10.11)', () => {
   })
 })
 
+describe('MCP result file-list heuristic (v0.10.13)', () => {
+  const mcpTurn = (resultText: string): Ev[] => [
+    user(1, 'figma'),
+    turnStart(2, 1),
+    toolCall(3, 'mcp__figma__use_figma', '{"code":"x"}', 'c3'),
+    toolResult(4, 'c3', resultText),
+    turnEnd(5, 1),
+  ]
+
+  it('a JSON object with escaped quotes is not mistaken for a one-file list', async () => {
+    const text = JSON.stringify({
+      stage: 'line',
+      err: 'Error: in resize: Property "width" failed validation: Required value missing',
+      info: { band0: { w: 372, h: 100 } },
+    })
+    renderTab(mcpTurn(text))
+    await openStepDetail(0)
+    expect(screen.queryByTestId('ttl-files')).toBeNull()
+    // The value still shows up as the normal 输出 preview.
+    expect(await screen.findByTestId('ttl-outBlock')).toBeTruthy()
+  })
+
+  it('a genuine path list still renders file rows', async () => {
+    renderTab(mcpTurn('/tmp/assets/01.png  74 KB\n/tmp/assets/02.png  12 KB'))
+    await openStepDetail(0)
+    const files = await screen.findByTestId('ttl-files')
+    expect(files.textContent).toContain('01.png')
+    expect(files.textContent).toContain('02.png')
+  })
+})
+
 describe('tab visibility (React #300 regression)', () => {
   it('keeps hook order when the tab is hidden and shown again', () => {
     const props = {
