@@ -2155,4 +2155,9 @@ export const trailCss = `
 .ttl-distSeg.ttl-tone-mcp, .ttl-legendDot.ttl-tone-mcp { background: #34d399; }
 .ttl-distSeg.ttl-tone-todo, .ttl-legendDot.ttl-tone-todo { background: #9ba1a7; }
 
+/* ══ v0.9.9: generic tool glyph gets its own hue (not grey) ══════════════ */
+.ttl-tone-generic { color: #f472b6; }
+.ttl-stepIcon.ttl-tone-generic { background: rgba(244, 114, 182, 0.14); }
+.ttl-distSeg.ttl-tone-generic, .ttl-legendDot.ttl-tone-generic { background: #f472b6; }
+
 `

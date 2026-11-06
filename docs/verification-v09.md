@@ -150,3 +150,11 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 通用工具 icon 用「类似 🔧 的同风格图标」 | `generic` 由方块改为 Lucide **wrench**（1 path、stroke 1.7、currentColor），与 terminal/file/search/mcp 同一线性语言；错误行仍用红色告警三角 | 未知工具行 SVG `d=M14.7 6.3…`，chip 灰 `#9ba1a7`；error 行 `M10.29 3.86…` 未变 |
 
 ![通用工具改用扳手](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v098-wrench.jpg>)
+
+## 13. v0.9.9 通用工具图标配色
+
+| 反馈 | 修正 | 实测 |
+| --- | --- | --- |
+| 通用扳手不要灰色 | 通用工具色改**粉色 `#f472b6`**，与 bash 紫 / read 蓝 / edit 琥珀 / MCP 绿 / error 红区分；图例「其他」与分布条同步 | chip color rgb(244,114,182)、bg rgba(244,114,182,.14)；legend/dist 同色；其它族未变 |
+
+![通用工具粉色扳手](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v099-wrench-color.jpg>)

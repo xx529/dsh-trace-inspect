@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.9] - 2026-11-06
+
+### Changed
+
+- 通用工具（未知工具）的扳手图标不再使用灰色，改为**粉色 `#f472b6`**：与 bash 紫 / read 蓝 / edit 琥珀 / MCP 绿 / error 红区分开；概览的「其他」legend 点与分布条同步为粉色。
+
+### Verification
+
+- 实机（19487 / dock 400）：`.ttl-stepIcon.ttl-tone-generic` color rgb(244,114,182)、bg rgba(244,114,182,.14)，扳手 path 不变；legend/分布条同色。截图 `docs/assets/v099-wrench-color.jpg`。
+- `pnpm typecheck` 0；`pnpm test` 516 例 / 21 文件；`pnpm build` 通过。
+
 ## [0.9.8] - 2026-11-06
 
 ### Changed
