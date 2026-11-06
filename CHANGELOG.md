@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.14] - 2026-11-07
+
+### Changed
+
+- **skill 图标换成「打开的书」**：四角星（sparkle）改为 Lucide book-open 书页图形，和 DSH 自身的 skill 统计图标一致；青色 `#63c9d1` 家族色不变，`skill` 行的名称/详情、图例、mix 都沿用同一字形。
+
+### Verification
+
+- 更新面板回归断言：`skill` 行 glyph 含 `M12 7v14`（书脊线），不再是 sparkle 路径。
+- `pnpm typecheck` 0、`pnpm test` **543 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，mock 两个 skill 调用）：行 label `skill`、desc `figma-workbench` / `ui-ux-pro-max`、书本字形 ink `rgb(99,201,209)`；截图 `docs/assets/v0114-skill-book.jpg`。
+
 ## [0.10.13] - 2026-11-07
 
 ### Fixed

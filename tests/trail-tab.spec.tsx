@@ -622,8 +622,9 @@ describe('TrailTab', () => {
     expect(row.querySelector('.ttl-stepDesc')?.textContent).toBe('figma-workbench')
     expect(row.querySelector('.ttl-stepDesc')?.textContent).not.toContain('name ')
     expect(row.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-skill')
+    // v0.10.14: open-book glyph (the spine line) replaced the sparkle.
     const path = row.querySelector('.ttl-stepIcon .ttl-rowIcon svg path')
-    expect(path?.getAttribute('d') ?? '').toContain('m12 3-1.9 5.8')
+    expect(path?.getAttribute('d') ?? '').toContain('M12 7v14')
   })
 
   it('a failed tool result leads with the prototype alert glyph, not its family glyph (v0.10.2)', async () => {

@@ -56,12 +56,19 @@ function pathsOf(kind: ToolIconKind): React.ReactNode {
         React.createElement('path', { key: 'c', d: 'M6 7h12v5a6 6 0 0 1-12 0z', ...stroke }),
         React.createElement('line', { key: 'd', x1: 12, y1: 18, x2: 12, y2: 22, ...stroke }))
     case 'skill':
-      // Sparkle/star: "a loaded capability", deliberately not the wrench.
-      return React.createElement('path', {
-        key: 'a',
-        d: 'm12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z',
-        ...stroke,
-      })
+      // Open book: loading a skill = opening its instructions (v0.10.14;
+      // matches DSH's own skill metric glyph, the former sparkle is gone).
+      return React.createElement(React.Fragment, null,
+        React.createElement('path', {
+          key: 'a',
+          d: 'M12 7v14',
+          ...stroke,
+        }),
+        React.createElement('path', {
+          key: 'b',
+          d: 'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z',
+          ...stroke,
+        }))
     case 'todo':
       return React.createElement(React.Fragment, null,
         React.createElement('path', { key: 'a', d: 'm3 17 2 2 4-4', ...stroke }),

@@ -345,3 +345,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话；真实 figma use_figma 结果形状与此一致（seq #210/#211）。
 
 ![MCP 摘要：恢复为正常输出预览，不再有假文件行](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0113-mcp-files-fix.jpg>)
+
+## 27. v0.10.14 skill 图标改为「打开的书」
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| skill 的四角星换成图2那种「打开一本书」的 icon | `ToolIcon` 的 `skill` 字形从 sparkle 换成 Lucide book-open（书页 + `M12 7v14` 书脊），青色 `#63c9d1` 家族色不变；行、图例、mix 共用同字形 | skill 行 glyph 含 `M12 7v14`；书本 ink `rgb(99,201,209)`；label `skill`、desc `figma-workbench` / `ui-ux-pro-max` 不变 |
+
+- 覆盖：步骤行、轮次 mix、图例、详情 / 浮层图标都复用 `ToolIcon`，一处改动全链路生效。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **543 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-skillrow.mjs`（mock 两个 skill 调用）。
+- 已知偏差：mock 会话；字形与 DSH 题目图标一致（非同一 SVG 源）。
+
+![skill 行：打开的书图标](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0114-skill-book.jpg>)
