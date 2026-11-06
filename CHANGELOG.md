@@ -10,6 +10,8 @@
 - 摘要 tab 的「输出」预览：JSON/JSONL 先 `JSON.stringify(…, 2)` 再走 3 行折叠，缩进可读。
 - 结果 tab：JSON → `JsonPretty` 结构化渲染（沿用长值折叠/查看器）；JSONL → 按数组渲染；Markdown → `MarkdownResult`；其余 → `RawText`。
 - 默认页签策略：检测到 JSON / Markdown 的结果**默认走渲染**（不再因为 bash 默认 raw 而先显示原始串）；显式点「原文」仍可切回。
+- 结果栏 meta 的类型标签按检测显示 JSON / JSONL / Markdown / 文本；JSON/JSONL 结果也提供「渲染 / 原文」分段（此前只有 Markdown 有）。
+- 修复 JsonPretty 与旧 .ttl-jsonKey::after 冲突导致的双冒号：伪元素收窄为 .ttl-jsonRow .ttl-jsonKey::after，只作用于 JsonTree。
 
 ### Verification
 

@@ -158,3 +158,17 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 通用扳手不要灰色 | 通用工具色改**粉色 `#f472b6`**，与 bash 紫 / read 蓝 / edit 琥珀 / MCP 绿 / error 红区分；图例「其他」与分布条同步 | chip color rgb(244,114,182)、bg rgba(244,114,182,.14)；legend/dist 同色；其它族未变 |
 
 ![通用工具粉色扳手](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v099-wrench-color.jpg>)
+
+## 14. v0.10.0 工具输出自动格式化
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 输出大多 JSON/Markdown，希望先格式化 JSON，再 Markdown，最后原文 | 新增 output-format.ts：整段 JSON → JSONL（逐行都 JSON）→ Markdown（既有结构检测）→ 原文；摘要预览先 pretty 再 3 行折叠，结果 tab JSON 用 JsonPretty、Markdown 用 MarkdownResult、其余 RawText | mock {"previousStatus":"running"}：摘要 3 行缩进；结果 tab JSON · 28 B · 1 行、JsonPretty 单冒号、渲染/原文可切；普通文本仍 RawText |
+| 防止误判 | 只有整段能 parse 才算 JSON；JSONL 要求每一行都能 parse；ANSI 日志/diff/混合文本一律原文 | 混合日志 → text；diff → text；Markdown → rendered |
+| 默认显示 | 检测到 JSON/Markdown 的结果默认 rendered（bash 也生效），显式切「原文」仍可 | renderPressed=true 初始；切原文后 JsonPretty=0、RawText=1 |
+
+![摘要：JSON 缩进预览](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0100-json-summary.jpg>)
+
+![结果：JsonPretty + 渲染/原文分段](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0100-json-result.jpg>)
+
+![切到原文](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0100-json-raw.jpg>)
