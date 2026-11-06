@@ -86,42 +86,29 @@ function messageIcon(): React.ReactElement {
   )
 }
 
+/** One-line character budget of the collapsed assistant-message row. */
+const OUTPUT_PREVIEW_CHARS = 32
+
 /**
- * Inline-only Markdown for the clamped message preview: **bold** and `code`
- * are styled; nested `code` inside bold works too (bold content is parsed
- * again for code spans). Block structure stays with the full MarkdownResult
- * shown after expanding. Newlines survive (the block is white-space: pre-wrap).
+ * One-line preview of an assistant message: flattened to a single line with the
+ * noisiest Markdown markers removed, then cut to `OUTPUT_PREVIEW_CHARS` so the
+ * row can show "first N chars + how many are left" like a tool step.
  */
-function inlineMarkdown(text: string): React.ReactNode {
-  const nodes: React.ReactNode[] = []
-  const pattern = /\*\*([\s\S]+?)\*\*|`([^`]+)`/g
-  let last = 0
-  let match: RegExpExecArray | null
-  let key = 0
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > last) nodes.push(text.slice(last, match.index))
-    if (match[1] !== undefined) {
-      const inner: React.ReactNode[] = []
-      const innerPattern = /`([^`]+)`/g
-      let innerLast = 0
-      let innerMatch: RegExpExecArray | null
-      while ((innerMatch = innerPattern.exec(match[1])) !== null) {
-        if (innerMatch.index > innerLast) inner.push(match[1].slice(innerLast, innerMatch.index))
-        key += 1
-        inner.push(React.createElement('code', { key, className: 'ttl-msgCode' }, innerMatch[1]))
-        innerLast = innerMatch.index + innerMatch[0].length
-      }
-      if (innerLast < match[1].length) inner.push(match[1].slice(innerLast))
-      key += 1
-      nodes.push(React.createElement('strong', { key, className: 'ttl-msgStrong' }, inner))
-    } else {
-      key += 1
-      nodes.push(React.createElement('code', { key, className: 'ttl-msgCode' }, match[2]))
-    }
-    last = match.index + match[0].length
-  }
-  if (last < text.length) nodes.push(text.slice(last))
-  return nodes
+function outputPreviewText(text: string): string {
+  const flat = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/(^|\s)[#>*+-]\s+/g, '$1')
+    .replace(/(^|\s)\d+[.)]\s+/g, '$1')
+    .replace(/\*\*|__|~~|`/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .trim()
+  return flat.slice(0, OUTPUT_PREVIEW_CHARS).trimEnd()
+}
+
+/** `12345` → `12,345` (stable across environments; no Intl grouping). */
+function groupThousands(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
 type StepFilter = 'all' | 'failed' | string
@@ -160,6 +147,8 @@ interface UiStrings {
   others: string
   totalDuration: string
   toolDist: string
+  /** Trailing meta of a collapsed assistant message: how many chars are hidden. */
+  charsLeft: (n: number) => string
   shownAll: (turns: number, steps: number) => string
   shownFiltered: (turns: number, steps: number) => string
 }
@@ -186,6 +175,7 @@ const ZH_UI: UiStrings = {
   others: '其他',
   totalDuration: '总时长',
   toolDist: '工具分布',
+  charsLeft: (n) => `还有 ${groupThousands(n)} 字符`,
   shownAll: (turns, steps) => `已显示全部 ${turns} 轮 · ${steps} 步`,
   shownFiltered: (turns, steps) => `已筛选 ${turns} 轮 · ${steps} 步`,
 }
@@ -212,6 +202,7 @@ const EN_UI: UiStrings = {
   others: 'Others',
   totalDuration: 'Total duration',
   toolDist: 'Tool distribution',
+  charsLeft: (n) => `${groupThousands(n)} more chars`,
   shownAll: (turns, steps) => `Showing all ${turns} turns · ${steps} steps`,
   shownFiltered: (turns, steps) => `Filtered to ${turns} turns · ${steps} steps`,
 }
@@ -636,12 +627,14 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     if (item.kind === 'tool') return renderStep(item.step, key)
     if (item.kind === 'input') return null // shown as the body's first row
     if (item.kind === 'output') {
-      // Assistant prose is a MESSAGE, not a tool row: a quote-style block with a
-      // green accent, a tiny role label, inline **bold** / `code`, and a 3-line
-      // clamp. Expanding swaps in the full Markdown rendering.
+      // Assistant prose is a MESSAGE row on the same 32px grid as tool steps:
+      // neutral chip + role label + one-line preview + `还有 N 字符` meta; a
+      // click opens the full Markdown body right below the row.
       const open = openOutputs.has(key)
       const text = item.text
-      const long = text.length > 90 || text.includes('\n')
+      const preview = outputPreviewText(text)
+      const expandable = text.length > OUTPUT_PREVIEW_CHARS || text.includes('\n')
+      const rest = expandable ? Math.max(0, text.length - OUTPUT_PREVIEW_CHARS) : 0
       return (
         <div
           className="ttl-msg"
@@ -649,44 +642,36 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
           data-open={open ? 'true' : undefined}
           data-testid="ttl-output-wrap"
         >
-          <div
-            className="ttl-msgMain"
+          <button
+            type="button"
+            className="ttl-msgRow"
             data-testid="ttl-item-output"
-            role="button"
-            tabIndex={0}
-            aria-expanded={open}
+            aria-expanded={expandable ? open : undefined}
             title={clipTitle(text)}
-            onClick={() => { toggleOutput(key) }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                toggleOutput(key)
-              }
-            }}
+            onClick={() => { if (expandable) toggleOutput(key) }}
           >
-            <div className="ttl-msgHead">
-              <span className="ttl-msgIcon" aria-hidden="true">{messageIcon()}</span>
-              <span className="ttl-msgRole">{t(lang, 'output') as string}</span>
-              <span className="ttl-msgRule" aria-hidden="true" />
-            </div>
-            {open
+            <span className="ttl-stepIcon ttl-msgIcon" aria-hidden="true">{messageIcon()}</span>
+            <span className="ttl-msgRole">{t(lang, 'output') as string}</span>
+            <span className="ttl-msgPreview" data-testid="ttl-output-preview">{rest > 0 ? `${preview}…` : preview}</span>
+            {rest > 0
+              ? <span className="ttl-msgRest" data-testid="ttl-output-rest">{ui.charsLeft(rest)}</span>
+              : null}
+            {expandable
               ? (
-                <div className="ttl-output-body" data-testid="ttl-output-body">
-                  {looksLikeMarkdown(text)
-                    ? <MarkdownResult text={text} labels={markdownLabels(lang)} />
-                    : <div className="ttl-msgText ttl-msgTextOpen">{inlineMarkdown(text)}</div>}
-                </div>
+                <span
+                  className={`ttl-msgChevron${open ? ' ttl-msgChevronOpen' : ''}`}
+                  aria-hidden="true"
+                >{chevronIcon()}</span>
               )
-              : <div className="ttl-msgText">{inlineMarkdown(text)}</div>}
-          </div>
-          {long
+              : null}
+          </button>
+          {open && expandable
             ? (
-              <button
-                type="button"
-                className="ttl-msgMore"
-                data-testid="ttl-output-toggle"
-                onClick={() => { toggleOutput(key) }}
-              >{open ? (t(lang, 'collapseLabel') as string) : (lang === 'zh' ? '展开全文' : 'Show full')}</button>
+              <div className="ttl-msgBody" data-testid="ttl-output-body">
+                {looksLikeMarkdown(text)
+                  ? <MarkdownResult text={text} labels={markdownLabels(lang)} />
+                  : <div className="ttl-msgFull">{text}</div>}
+              </div>
             )
             : null}
           <button

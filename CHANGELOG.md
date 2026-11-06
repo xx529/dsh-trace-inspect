@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.3] - 2026-11-06
+
+**输出消息改为单行行式**：助手消息不再用「引用块 + 3 行截断」，改为与工具步骤同一套 32px 行——消息图标 + 「输出」+ 前 32 字预览 + 「还有 N 字符」+ chevron，点开就地展开完整 Markdown 全文。
+
+### Changed
+
+- 输出行重写为 `.ttl-msgRow`：32px 行高、`padding: 0 22px 0 14px`、8px 间距，与 `.ttl-step` 同一栅格；chip 复用步骤的 18px 中性 chip，字形保持消息绿 `#4ed4a4`。
+- 预览取原文前 32 字：压平换行、去掉最常见的 Markdown 标记（标题/列表/粗斜体/行内 code/链接），截断时补 `…`；右侧 meta 显示「还有 N 字符」（zh）/「N more chars」（en），数字带千分位。
+- 点击/键盘展开完整正文：有 Markdown 结构走 `MarkdownResult`，否则原文 `white-space: pre-wrap`；展开体 `.ttl-msgBody` 只在打开时挂载。
+- 删除旧的引用块实现与内联 Markdown 预览（`inlineMarkdown`、`.ttl-msgText`、`.ttl-msgMore`、`.ttl-msgRule` 等）；短消息（≤32 字且单行）保持单行，无 chevron / 字符数、点击不动作。
+
+### Verification
+
+- 新增 2 例：长输出单行 + 「还有 N 字符」+ 点击展开全文；短输出无展开 affordance。`pnpm typecheck` 0、`pnpm test` **529 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2，`scripts/verify/shoot-outputrow.mjs`）：输出行 `399×32`、chip `18×18 @ x=1055`（与工具行同列）、预览 `194` 宽、meta `还有 558 字符`、chevron `12`；展开后 body `399×398`、渲染完整 Markdown；截图 `docs/assets/v0103-output-collapsed.jpg` / `v0103-output-open.jpg`。
+
 ## [0.10.2] - 2026-11-06
 
 **步骤行图标与连线对齐原型 2-02**：ICON 统一中性底色、恢复图标之间的 1px 竖线、失败行统一用告警三角。

@@ -207,3 +207,18 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![并行组：琥珀分组竖线 + 组内灰线](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0102-parallel.jpg>)
 
 ![展开轮次全景：统一 chip + chip 间竖线](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0102-expanded.jpg>)
+
+## 17. v0.10.3 输出消息改为单行行式
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 「输出」要跟上面工具行一样一行一行；点开才展示全文；icon 旁的文本 = 前 n 个字符 + 还有多少字符 | 输出行重写为 `.ttl-msgRow`：32px 行高、`padding: 0 22px 0 14px`、8px gap，与 `.ttl-step` 同栅格；18px 中性 chip + 消息绿字形 + 「输出」+ 前 32 字预览（压平换行、去 Markdown 标记、截断补 `…`）+「还有 N 字符」+ chevron；点击/键盘展开 `.ttl-msgBody` 完整 Markdown（无结构则原文换行）。短消息（≤32 字且单行）无 chevron / 字符数、点击不动作 | 行 `399×32`；chip `18×18 @ x=1055`（与工具行同列）；预览宽 `194`；meta `还有 558 字符`（千分位）；chevron `12`；展开后 body `399×398` 渲染完整 Markdown；短消息用例无 `ttl-output-rest` |
+| 旧实现的取舍 | 删除引用块（绿竖条 + 淡底 + 3 行截断 + 内联 Markdown 预览）；展开体只在打开时挂载 | `ttl-item-output` / `ttl-output-body` / `ttl-output-jump` testid 与既有用例不变；本版覆盖 §13 的输出行口径 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **529 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-outputrow.mjs`（折叠 / 展开两帧 + `outputrow-metrics.json`）。
+- 已知偏差：预览固定 32 字，中英混排时视觉上约 13–16 个字符；「还有 N 字符」按原文长度计算（含换行 / Markdown 标记），不是可见字符数。
+
+![输出行：单行（前 32 字 + 还有 558 字符）](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0103-output-collapsed.jpg>)
+
+![点开：完整 Markdown 全文](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0103-output-open.jpg>)

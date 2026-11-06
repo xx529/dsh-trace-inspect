@@ -962,6 +962,44 @@ describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
     expect(screen.getByTestId('ttl-output-jump')).toBeTruthy()
   })
 
+  it('a long output collapses to one row: first chars + 「还有 N 字符」, click opens the full text (v0.10.3)', async () => {
+    const long = `第一段：这是一条比较长的助手消息，用来验证单行输出行。\n${'细节内容 '.repeat(80)}`
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      assistant(3, long),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-output')
+    expect(row.getAttribute('aria-expanded')).toBe('false')
+    const preview = screen.getByTestId('ttl-output-preview')
+    expect(preview.textContent?.length ?? 0).toBeLessThanOrEqual(33)
+    expect(preview.textContent).toContain('第一段')
+    expect(preview.textContent?.endsWith('…')).toBe(true)
+    const rest = screen.getByTestId('ttl-output-rest')
+    expect(Number((rest.textContent ?? '').replace(/[^\d]/g, ''))).toBe(long.length - 32)
+    expect(screen.queryByTestId('ttl-output-body')).toBeNull()
+    fireEvent.click(row)
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    const body = await screen.findByTestId('ttl-output-body')
+    expect(body.textContent?.length ?? 0).toBeGreaterThan(long.length * 0.9)
+  })
+
+  it('a short single-line output stays one plain row (no expand affordance)', async () => {
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      assistant(3, 'all green'),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-output')
+    expect(row.getAttribute('aria-expanded')).toBeNull()
+    expect(screen.queryByTestId('ttl-output-rest')).toBeNull()
+    expect(screen.getByTestId('ttl-output-preview').textContent).toBe('all green')
+    fireEvent.click(row)
+    expect(screen.queryByTestId('ttl-output-body')).toBeNull()
+  })
+
   it('the toolbar opens the centered viewer on the tab that is active', async () => {
     renderTab(oneTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
