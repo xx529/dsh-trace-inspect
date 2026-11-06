@@ -97,7 +97,7 @@ const PALETTE = new Set([
   '#545557', '#55595e', '#5686fe', '#5f6469', '#60a5fa', '#63c9d1', '#6a6e75', '#6f747a', '#7b8086',
   '#7cb2ff', '#8fdcb8', '#9ba1a7', '#9bb8e8', '#a78bfa', '#a9e6b9', '#adb2b8', '#b39cf5', '#b99a6b', '#b9a7ee',
   '#b9bdc4', '#c4b2ff', '#cfd3d6', '#d7dade', '#dfe2e5', '#e6e8ea', '#f08fb8', '#f0a7a5', '#f0f1f2',
-  '#f25a5a', '#f2726f', '#f2b45c', '#f2c98d', '#f3b4cc', '#f3f4f6', '#f59e0b', '#f6a9a7', '#f9fafb',
+  '#f25a5a', '#f2726f', '#f2b45c', '#f2c98d', '#f3b4cc', '#f472b6', '#f3f4f6', '#f59e0b', '#f6a9a7', '#f9fafb',
 ])
 
 describe('v0.9 palette discipline', () => {

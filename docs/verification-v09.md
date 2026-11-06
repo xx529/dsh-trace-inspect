@@ -130,3 +130,15 @@ node scripts/verify/shoot-extra.mjs --port 19487
 > v0.9.6 修正：展开后的 Markdown 此前继承旧输出行 `padding-left:64px`（宽度 269），现 `.ttl-msg .ttl-output-body { padding:0 }`，与折叠正文左缘对齐、宽度恢复 ≈347（实机 1069/347）。折叠态的内联 Markdown 也支持「粗体内嵌 code」：`**改名为 \`dsh-trace-inspect\`**` 会渲染为加粗 + code chip，反引号不再外露。
 
 ![粗体内嵌 code](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v095-output-code.jpg>)
+
+## 11. v0.9.7 静音与配色
+
+| 反馈 | 修正 | 实测 |
+| --- | --- | --- |
+| 图1 箭头符号不要了 | `.ttl-stepJump` / `.ttl-locateBtn` / `.ttl-msgJump` / `.ttl-itemJump` 全部 `display:none`（DOM 保留）；chevron 保留 | computed display=none；chevron 11/11 可见 |
+| edit 与 MCP 颜色重复 | edit/write 改琥珀 `#f2b45c`，MCP 保持绿 `#34d399`，todo 改灰；mix/详情/legend/分布条同步 | edit rgb(242,180,92)、mcp rgb(52,211,153)、todo rgb(155,161,167) |
+| 并行次数 `∥N` 不需要 | 轮次头 `.ttl-badgeParallel` 隐藏；错误徽标保留 | `∥N` display none，`✗1` 仍显示 |
+
+![静音后的列表](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v097-quiet.jpg>)
+
+![概览图例与分布条跟随新配色](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v097-legend.jpg>)

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.7] - 2026-11-06
+
+**列表静音 + 配色去重**：去掉定位箭头与并行次数徽标，edit 与 MCP 不再撞色。
+
+### Changed
+
+- 移除定位 `↗`：步骤行、轮次头、消息块、输出行的箭头全部隐藏（DOM 保留供键盘/后续入口），chevron 保留。
+- 移除轮次头部的 `∥N` 徽标；错误徽标 `✗N` 保留。
+- 工具族配色：bash 紫、read 蓝、**edit/write 琥珀 `#f2b45c`**、**MCP 绿 `#34d399`**、todo 灰 `#9ba1a7`；mix、详情图标、概览 legend 与分布条全部跟随同一套色（此前 legend/分布条仍用旧绿/粉）。
+
+### Verification
+
+- 实机（19487 / dock 400）：箭头与 `∥N` computed display=none，chevron 11/11 可见；edit/write rgb(242,180,92)、mcp rgb(52,211,153)、todo rgb(155,161,167)；legend/分布条同色；无横向滚动。截图 `docs/assets/v097-quiet.jpg`、`docs/assets/v097-legend.jpg`。
+- `pnpm typecheck` 0；`pnpm test` 516 例 / 21 文件；`pnpm build` 通过。
+
 ## [0.9.6] - 2026-11-06
 
 ### Fixed

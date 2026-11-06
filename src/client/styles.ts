@@ -2143,4 +2143,16 @@ export const trailCss = `
   color: inherit;
 }
 
+/* ══ v0.9.7: no locate arrows, no ∥N badge, edit/mcp colours split ═════════ */
+.ttl-stepJump, .ttl-locateBtn, .ttl-msgJump, .ttl-itemJump, .ttl-output-jump { display: none !important; }
+.ttl-badgeParallel { display: none !important; }
+.ttl-tone-edit { color: #f2b45c; }
+.ttl-stepIcon.ttl-tone-edit { background: rgba(242, 180, 92, 0.14); }
+.ttl-tone-todo { color: #9ba1a7; }
+.ttl-stepIcon.ttl-tone-todo { background: rgba(255, 255, 255, 0.06); }
+
+.ttl-distSeg.ttl-tone-edit, .ttl-legendDot.ttl-tone-edit { background: #f2b45c; }
+.ttl-distSeg.ttl-tone-mcp, .ttl-legendDot.ttl-tone-mcp { background: #34d399; }
+.ttl-distSeg.ttl-tone-todo, .ttl-legendDot.ttl-tone-todo { background: #9ba1a7; }
+
 `
