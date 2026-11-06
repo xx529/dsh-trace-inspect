@@ -2102,7 +2102,9 @@ export const trailCss = `
 .ttl-msgIcon { color: #4ed4a4; }
 .ttl-msgRole {
   flex: none;
-  width: 40px;
+  /* Same name column as the tool name, so the message text starts exactly
+     under the tool descriptions (user-requested alignment). */
+  width: var(--ttl-step-name-w, 52px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

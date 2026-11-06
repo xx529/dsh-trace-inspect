@@ -141,11 +141,13 @@ async function metrics() {
     const rest = row?.querySelector('[data-testid="ttl-output-rest"]')
     const step = document.querySelector('[data-testid="ttl-step"]')
     const stepChip = step?.querySelector('.ttl-stepIcon')
+    const stepDesc = document.querySelector('[data-testid="ttl-step"] .ttl-stepDesc')
     const body = document.querySelector('[data-testid="ttl-output-body"]')
     return {
       row: r(row),
       rowStyle: style(row, ['height', 'paddingLeft', 'paddingRight', 'gap', 'fontSize']),
       rowExpanded: row?.getAttribute('aria-expanded') ?? null,
+      stepDesc: r(stepDesc),
       chip: r(chip),
       chipBg: style(chip, ['backgroundColor']),
       stepChip: r(stepChip),

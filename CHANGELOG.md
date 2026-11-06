@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.4] - 2026-11-07
+
+### Fixed
+
+- **输出行文本列与工具描述列对齐**：v0.10.3 为了多留预览宽度把「输出」角色列压到 40px，导致输出消息的正文比工具描述左移约 92px。现在 `.ttl-msgRole` 恢复为 `var(--ttl-step-name-w, 52px)`（与 `.ttl-stepName` 同列），输出预览从工具描述同一 x 起排。
+
+### Verification
+
+- 实机（19487 / dock 400 / dsf2）：`.ttl-stepDesc` x=1221，`[data-testid="ttl-output-preview"]` x=1221（严格同列）；行仍为 `399×32`，chip `18×18 @ x=1055`，预览宽 102、meta `还有 558 字符`、chevron 12。
+- `pnpm typecheck` 0；`pnpm test` **529 例 / 22 文件**；`pnpm build` 通过。截图 `docs/assets/v0104-output-aligned.jpg`。
+
 ## [0.10.3] - 2026-11-06
 
 **输出消息改为单行行式**：助手消息不再用「引用块 + 3 行截断」，改为与工具步骤同一套 32px 行——消息图标 + 「输出」+ 前 32 字预览 + 「还有 N 字符」+ chevron，点开就地展开完整 Markdown 全文。
