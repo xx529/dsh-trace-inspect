@@ -187,6 +187,19 @@ describe('v0.10.2: 统一 ICON 底色 + 图标间竖线（原型 2-02）', () =>
   })
 })
 
+describe('v0.10.12: 展开的输出是卡片', () => {
+  it('展开体与详情带同款 surface / 圆角 / 边框 / 内边距 / 13.5px 内缩', () => {
+    const body = rule('.ttl-msgBody {')
+    expect(body).toContain('margin: 4px 13.5px 10px;')
+    expect(body).toContain('padding: 12px;')
+    expect(body).toContain('border-radius: 8px;')
+    expect(body).toContain('background: color-mix(')
+    expect(body).toContain('border: 1px solid var(--dsw-alias-border-l1')
+    // The old bare-text padding must be gone.
+    expect(body).not.toContain('padding: 6px 22px 10px 14px;')
+  })
+})
+
 describe('v0.10.10: 工具族不再有灰色字形', () => {
   it('todo 用薄荷色、figma 用淡紫色，二者都有 dist/legend 底色', () => {
     expect(trailCss).toContain('.ttl-tone-todo { color: #8fdcb8; }')

@@ -319,3 +319,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 影响范围：仅预览行数；JSON 结果仍先 pretty-print 再折叠，`展开全文` 行为不变。
 
 ![输出预览：默认 20 行](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0111-output-20lines.jpg>)
+
+## 25. v0.10.12 展开的输出改为卡片
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 图1 输出点开后是裸露纯文本，图2 的详情带是卡片样式 | `.ttl-msgBody` 从裸文本 `padding: 6px 22px 10px 14px` 改为与 `.ttl-detail` 同款卡片：`margin: 4px 13.5px 10px`、`padding: 12px`、`border-radius: 8px`、1px 边框、`color-mix(bg-layer-1 86%, #000)` 深色 surface | 展开体 `358×412`、`padding: 12px`、左缘 1069 = 行左 1055 + 13.5；与详情带（358 宽、27.5 内缩）完全同宽同位置；折叠行不变 |
+| 影响 | 只改展开态容器，正文仍是 Markdown / 原文渲染；短输出（无 chevron）不展开，保持单行 | 输出行 `399×32` 不变；`还有 558 字符` + chevron 行为不变 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **541 例 / 22 文件**；`pnpm build` 通过。
+- 采集：重跑 `scripts/verify/shoot-outputrow.mjs`（折叠 / 展开两帧 + 几何度量）。
+- 已知偏差：卡片与行之间保留 4px 间距，与详情带的「行 → 带」间距一致。
+
+![输出展开：卡片式正文](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0112-output-card.jpg>)

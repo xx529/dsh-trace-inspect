@@ -2135,7 +2135,16 @@ export const trailCss = `
   transition: transform 120ms ease;
 }
 .ttl-msgChevronOpen { transform: rotate(-90deg); }
-.ttl-msgBody { padding: 6px 22px 10px 14px; }
+.ttl-msgBody {
+  box-sizing: border-box;
+  /* v0.10.12: expanded message reads as a card, same surface/radius/border as
+     the inline detail band, aligned to the same 13.5px inset. */
+  margin: 4px 13.5px 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1, #232324) 86%, #000000);
+  border: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.08));
+}
 .ttl-msgFull {
   color: #dfe2e5;
   font-size: 12.5px;

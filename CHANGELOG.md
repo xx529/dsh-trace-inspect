@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.12] - 2026-11-07
+
+### Changed
+
+- **展开的「输出」改为卡片式**：点开「输出」行后，正文不再裸露在行下，而是放进与详情带同款的卡片：`border-radius: 8px`、12px 内边距、1px 边框、`color-mix` 深色 surface、`margin: 4px 13.5px 10px`（与 `.ttl-detail` 同宽 358、同左内缩 27.5）。
+- 折叠态不变（仍是单行 + 前 32 字 + 还有 N 字符 + chevron）。
+
+### Verification
+
+- 新增 1 例样式回归：`.ttl-msgBody` 卡片几何（margin / padding / radius / border / surface），并断言旧的裸文本 padding 已移除。
+- `pnpm typecheck` 0、`pnpm test` **541 例 / 22 文件**、`pnpm build` 通过。
+- 实机（19487 / dock 400 / dsf2）：展开后 body `358×412`、`padding: 12px`、左缘 1069（= 行左 1055 + 13.5），与详情带同宽；截图 `docs/assets/v0112-output-card.jpg`。
+
 ## [0.10.11] - 2026-11-07
 
 ### Changed
