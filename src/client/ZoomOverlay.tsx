@@ -21,8 +21,10 @@
  * The four tabs are 摘要 / 结果 / 参数 / 原始 (`DetailTab`). 摘要 is the
  * redesigned default: a wide, line-numbered command block for shell tools
  * (segments + token spans come from `command-format.ts`, the same module the
- * inline detail band uses, so both surfaces read identically), a key/value
- * table for MCP/other tools, and an output preview.
+ * inline detail band uses, so both surfaces read identically), then ONE
+ * uniform 参数 block for every tool family — the full argument object as
+ * formatted JSON (v0.10.18; the old key/value table with folded chips hid the
+ * actual arguments) — and an output preview.
  *
  * Behaviour kept from v0.5.0: Esc closes, ↑/↓ walk the (filtered) outline,
  * ⌘F/Ctrl+F focuses the search box, ⌘C/Ctrl+C copies the active pane, plus the
@@ -122,7 +124,6 @@ interface OverlayCopy {
   fullContent: string
   truncatedContent: string
   emptyResult: string
-  noParams: string
   unparsable: string
   chars: (n: number) => string
   lines: (n: number) => string
@@ -161,7 +162,6 @@ const COPY: Record<Lang, OverlayCopy> = {
     fullContent: '完整内容',
     truncatedContent: '已截断',
     emptyResult: '该调用没有返回内容',
-    noParams: '该调用没有参数',
     unparsable: '参数无法解析，已按原文显示',
     chars: (n) => `${n} 字符`,
     lines: (n) => `${n} 行`,
@@ -198,7 +198,6 @@ const COPY: Record<Lang, OverlayCopy> = {
     fullContent: 'Full content',
     truncatedContent: 'Truncated',
     emptyResult: 'This call returned no content',
-    noParams: 'This call has no arguments',
     unparsable: 'Arguments could not be parsed — showing raw text',
     chars: (n) => `${n} chars`,
     lines: (n) => `${n} lines`,
@@ -266,11 +265,6 @@ function firstLine(text: string): string {
     if (value.length > 0) return value
   }
   return ''
-}
-
-function clipInline(text: string, max: number): string {
-  const flat = text.replace(/\s+/g, ' ').trim()
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
 }
 
 function titleOf(text: string): string {
@@ -346,51 +340,6 @@ function exportPayloadOf(step: TrailStep): Record<string, unknown> {
     errorCode: step.errorCode ?? null,
     result: step.result ?? null,
   }
-}
-
-// ── Key/value table (same leaf classes as StepDetail) ────────────────────
-
-const KV_TEXT_CAP = 240
-
-interface KvViewRow {
-  key: string
-  text: string
-  full: string
-  typeLabel: string
-}
-
-function valueSummary(value: unknown): { text: string; full: string; typeLabel: string } {
-  if (value === null) return { text: 'null', full: 'null', typeLabel: 'null' }
-  if (typeof value === 'string') {
-    return { text: clipInline(value, KV_TEXT_CAP), full: value, typeLabel: 'string' }
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    const text = String(value)
-    return { text, full: text, typeLabel: typeof value }
-  }
-  if (Array.isArray(value)) {
-    const primitive = value.every((item) => item === null || ['string', 'number', 'boolean'].includes(typeof item))
-    if (primitive) {
-      const items = value.map((item) => String(item))
-      const head = items.slice(0, 3).join(' · ')
-      const text = items.length > 3 ? `${head} +${items.length - 3}` : head
-      return { text, full: items.join(', '), typeLabel: `array · ${items.length}` }
-    }
-    const json = JSON.stringify(value) ?? ''
-    return { text: clipInline(json, KV_TEXT_CAP), full: json, typeLabel: `array · ${value.length}` }
-  }
-  const json = JSON.stringify(value) ?? ''
-  return { text: clipInline(json, KV_TEXT_CAP), full: json, typeLabel: 'object' }
-}
-
-function kvRowsOf(args: Record<string, unknown>, omit: ReadonlySet<string>): KvViewRow[] {
-  const rows: KvViewRow[] = []
-  for (const key of Object.keys(args)) {
-    if (omit.has(key)) continue
-    const summary = valueSummary(args[key])
-    rows.push({ key, ...summary })
-  }
-  return rows
 }
 
 // ── Chrome glyphs (stroke paths on a 24 grid, Lucide-derived) ────────────
@@ -642,10 +591,6 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
     () => (commandText.length > 0 ? commandStats(commandText) : { segments: 0, chars: 0 }),
     [commandText],
   )
-  const kvRows = React.useMemo(() => {
-    if (argsObj === null) return []
-    return kvRowsOf(argsObj, family === 'shell' ? new Set(['command']) : new Set<string>())
-  }, [argsObj, family])
   const argKeys = argsObj === null ? 0 : Object.keys(argsObj).length
   const outputLines = React.useMemo(() => {
     const normalized = resultText.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
@@ -725,6 +670,7 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
     )
   }
 
+  /** 摘要 的 参数 block: the FULL argument object as formatted JSON (v0.10.18). */
   const renderParamsSection = (): React.ReactElement | null => {
     if (argsObj === null) {
       if (argsText.trim().length === 0) return null
@@ -744,19 +690,7 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
           <span className="ttl-sectionLabel">{copy.params}</span>
           <span className="ttl-sectionMeta">{copy.allParams(argKeys)}</span>
         </div>
-        {kvRows.length === 0
-          ? <div className="ttl-detailHint">{copy.noParams}</div>
-          : (
-            <div className="ttl-kv">
-              {kvRows.map((row) => (
-                <div className="ttl-kvRow" key={row.key}>
-                  <span className="ttl-kvKey" title={row.key}>{row.key}</span>
-                  <span className="ttl-kvVal" title={titleOf(row.full)}>{row.text}</span>
-                  {family === 'mcp' ? <span className="ttl-kvType">{row.typeLabel}</span> : null}
-                </div>
-              ))}
-            </div>
-          )}
+        <JsonPretty value={argsObj} lang={lang} />
       </section>
     )
   }

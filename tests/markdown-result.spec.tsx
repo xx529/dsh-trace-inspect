@@ -408,7 +408,7 @@ describe('detail stylesheet (契约 §4.5)', () => {
   const REQUIRED = [
     '.ttl-stepWrap', '.ttl-step', '.ttl-stepIcon', '.ttl-stepName', '.ttl-stepDesc', '.ttl-stepJump',
     '.ttl-detail', '.ttl-detailHead', '.ttl-detailBody', '.ttl-detailFoot', '.ttl-tabs', '.ttl-tab',
-    '.ttl-code', '.ttl-codeLine', '.ttl-codeText', '.ttl-kv', '.ttl-section', '.ttl-outBlock',
+    '.ttl-code', '.ttl-codeLine', '.ttl-codeText', '.ttl-section', '.ttl-outBlock',
     '.ttl-pill', '.ttl-pillWarn', '.ttl-pillOk', '.ttl-detailHint', '.ttl-json', '.ttl-jsonRow',
     '.ttl-jsonKey', '.ttl-jsonToggle', '.ttl-jsonStr', '.ttl-jsonNum', '.ttl-jsonBool', '.ttl-jsonNull',
     '.ttl-jsonMore', '.ttl-jsonCapped', '.ttl-strbox', '.ttl-md', '.ttl-mdTableWrap', '.ttl-mdTruncated',

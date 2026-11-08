@@ -24,7 +24,7 @@ import type { Dict } from '../src/client/locales'
 /** Contract §10.4.1 — 20 entries, names verbatim (the last one is a full selector). */
 const CONTRACT_CLASSES = [
   '.ttl-step', '.ttl-stepWrap', '.ttl-stepIcon', '.ttl-detail', '.ttl-detailHead', '.ttl-detailBody',
-  '.ttl-detailFoot', '.ttl-tabs', '.ttl-tab', '.ttl-code', '.ttl-codeLine', '.ttl-codeText', '.ttl-kv',
+  '.ttl-detailFoot', '.ttl-tabs', '.ttl-tab', '.ttl-code', '.ttl-codeLine', '.ttl-codeText',
   '.ttl-section', '.ttl-parallel', '.ttl-zoom', '.ttl-zoomBackdrop', '.ttl-zoomPanel', '.ttl-zoomTop',
   '.ttl-zoomBody', '.ttl-zoomOutline', '.ttl-zoomOutlineRow', '.ttl-zoomMain', '.ttl-zoomHead', '.ttl-zoomFoot',
   '.ttl-imgThumbWrap', '.ttl-imgThumb',

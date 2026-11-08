@@ -692,6 +692,62 @@ describe('TrailTab', () => {
     expect(screen.getByTestId('ttl-md-raw').textContent).toBe('not json at all')
   })
 
+  it('the summary 参数 block is the FULL argument object as formatted JSON for every family (v0.10.18)', async () => {
+    renderTab([
+      user(1, 'mixed'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', JSON.stringify({ command: 'ls -la', description: 'list files' }), 'c3'),
+      toolCall(4, 'ask_user_question', JSON.stringify({
+        questions: [{ id: 'release2', header: '发版', options: ['main'] }],
+      }), 'c4'),
+      toolCall(5, 'read', JSON.stringify({ file_path: 'README.md', limit: 10 }), 'c5'),
+      toolCall(6, 'mcp__figma__get_metadata', JSON.stringify({ nodeIds: ['1:2'], format: 'PNG' }), 'c6'),
+      turnEnd(7, 1),
+    ])
+    const steps = await screen.findAllByTestId('ttl-step')
+    const openStep = async (index: number): Promise<HTMLElement> => {
+      fireEvent.click(steps[index])
+      const band = await screen.findByTestId('ttl-detail')
+      expect(within(band).getByTestId('ttl-params')).toBeTruthy()
+      return band
+    }
+
+    // shell: the command block stays, and the 参数 block shows the same JSON.
+    const shell = await openStep(0)
+    expect(within(shell).getByTestId('ttl-code')).toBeTruthy()
+    const shellJson = within(shell).getByTestId('ttl-params').querySelector('[data-testid="ttl-json-pretty"]')
+    expect(shellJson).toBeTruthy()
+    expect(shellJson?.textContent).toContain('"command"')
+    expect(shellJson?.textContent).toContain('ls -la')
+    expect(shellJson?.textContent).toContain('"description"')
+    // v0.10.18: no folded key/value table (or array chips) anywhere in the band.
+    expect(shell.querySelector('[data-testid="ttl-kv"]')).toBeNull()
+    expect(shell.querySelector('.ttl-kv')).toBeNull()
+
+    // Unknown tool (ask_user_question): the array is real JSON, not a chip.
+    const generic = await openStep(1)
+    const genericParams = within(generic).getByTestId('ttl-params')
+    expect(genericParams.textContent).toContain('"questions"')
+    expect(genericParams.textContent).toContain('"release2"')
+    expect(genericParams.textContent).not.toContain('array · 1 项')
+    expect(generic.querySelector('.ttl-chipTag')).toBeNull()
+
+    // read: the path block stays; the path is also visible inside the JSON.
+    const read = await openStep(2)
+    expect(within(read).getByTestId('ttl-fileBlock')).toBeTruthy()
+    expect(within(read).getByTestId('ttl-params').textContent).toContain('"file_path"')
+    expect(within(read).getByTestId('ttl-params').textContent).toContain('README.md')
+
+    // MCP: the badge stays; the args render as JSON, not a typed table.
+    const mcp = await openStep(3)
+    expect(within(mcp).getByTestId('ttl-mcpBlock')).toBeTruthy()
+    expect(within(mcp).getByTestId('ttl-params').textContent).toContain('"nodeIds"')
+
+    // The 参数 tab keeps its interactive JSON tree (unchanged by this round).
+    openDetailTab('params')
+    expect(within(mcp).getByTestId('ttl-json')).toBeTruthy()
+  })
+
   it('a filter that hides an expanded step drops its detail band', async () => {
     renderTab(threeSteps())
     const steps = await screen.findAllByTestId('ttl-step')

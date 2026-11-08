@@ -11,16 +11,19 @@
  *   body    one pane per tab (see below)
  *   foot    完整度 pill + seq + 「在中央查看」
  *
- * The 摘要 pane is the redesigned default (契约 §3.3) and is tool-family
- * specific:
+ * The 摘要 pane is the redesigned default (契约 §3.3): it keeps the
+ * tool-family blocks, but the argument block itself has ONE uniform shape
+ * (v0.10.18): the FULL argument object pretty-printed as JSON, never a
+ * per-family key/value table with folded chips.
  *   - shell:  `args.command` split into `&&` / `;` / newline segments (pipes
  *     stay inline as `op` tokens), syntax-highlighted (command-format.ts),
- *     soft-wrapped, plus the argument key/value table and a collapsed output
+ *     soft-wrapped; then the uniform 参数 JSON block and a collapsed output
  *     preview;
- *   - mcp:    MCP badge + connection line, typed key/value table (arrays fold
- *     into chips + `+N`) and a path-list result, else a text preview;
- *   - file:   path block with line/diff chips, key/value table, output preview;
- *   - other:  key/value table + output preview.
+ *   - mcp:    MCP badge + connection line, the 参数 JSON block, and a
+ *     path-list result, else a text preview;
+ *   - file:   path block with line/diff chips, the 参数 JSON block, output
+ *     preview;
+ *   - other:  the 参数 JSON block + output preview.
  *
  * Data/behaviour is unchanged from the v0.5-v0.8 band: a clipped preview asks
  * the host for the untruncated detail once (retry allowed once), results go
@@ -53,10 +56,6 @@ const CAP_KIB = 32
 const OUT_PREVIEW_LINES = 20
 /** Result rows shown in the MCP/file list before the fold note. */
 const MAX_FILE_ROWS = 3
-/** Array chips shown before `+N`. */
-const MAX_CHIPS = 3
-/** Strings longer than this fold into `N 字符 · M 行`. */
-const LONG_VALUE_CHARS = 160
 /** Long commands (heredoc etc.) render only this many segments until expanded. */
 const MAX_CODE_SEGMENTS = 12
 /** One path-list line is only accepted when the token looks like a file. */
@@ -107,8 +106,6 @@ interface StepLabels {
   chars: (n: number) => string
   allItems: (n: number) => string
   lines: (n: number) => string
-  charsLines: (chars: number, lines: number) => string
-  items: (n: number) => string
   files: (n: number) => string
   moreFiles: (n: number) => string
   truncatedResult: (cap: string) => string
@@ -164,8 +161,6 @@ function labelsFor(lang: Lang): StepLabels {
     chars: (n) => (zh ? `${n} 字符` : `${n} chars`),
     allItems: (n) => (zh ? `全部 ${n} 项` : `All ${n}`),
     lines: (n) => (zh ? `${n} 行` : `${n} lines`),
-    charsLines: (chars, lines) => (zh ? `${chars} 字符 · ${lines} 行` : `${chars} chars · ${lines} lines`),
-    items: (n) => (zh ? `${n} 项` : `${n} items`),
     files: (n) => (zh ? `${n} 个文件` : `${n} files`),
     moreFiles: (n) => (zh ? `+${n} 个文件已折叠` : `+${n} more files`),
     truncatedResult: (cap) => (zh ? `结果被截断至 ${cap}` : `Result truncated to ${cap}`),
@@ -232,39 +227,6 @@ function iconToneOf(family: ToolFamily): ToolTone {
     case 'error': return 'red'
     default: return 'neutral'
   }
-}
-
-/** Human labels of well-known argument keys (unknown keys keep their wire name). */
-const KEY_LABELS: Record<string, { zh: string; en: string }> = {
-  cwd: { zh: '工作目录', en: 'Working dir' },
-  description: { zh: '描述', en: 'Description' },
-  command: { zh: '命令', en: 'Command' },
-  file_path: { zh: '文件路径', en: 'File path' },
-  path: { zh: '路径', en: 'Path' },
-  content: { zh: '内容', en: 'Content' },
-  old_string: { zh: '原内容', en: 'Old text' },
-  new_string: { zh: '新内容', en: 'New text' },
-  timeout: { zh: '超时', en: 'Timeout' },
-  offset: { zh: '起始行', en: 'Offset' },
-  limit: { zh: '行数上限', en: 'Limit' },
-  append: { zh: '追加', en: 'Append' },
-  pattern: { zh: '模式', en: 'Pattern' },
-  query: { zh: '查询', en: 'Query' },
-  url: { zh: '地址', en: 'URL' },
-  encoding: { zh: '编码', en: 'Encoding' },
-}
-
-function keyLabel(key: string, lang: Lang): string {
-  const known = KEY_LABELS[key]
-  return known === undefined ? key : known[lang]
-}
-
-/** One wrapped chip text of an array value. */
-function chipText(value: unknown): string {
-  const text = typeof value === 'string'
-    ? value
-    : typeof value === 'number' || typeof value === 'boolean' ? String(value) : '…'
-  return text.length > 20 ? `${text.slice(0, 19)}…` : text
 }
 
 /** Does a token look like a file path (used only by the MCP result heuristic)? */
@@ -431,93 +393,31 @@ function CopyButton(props: {
   )
 }
 
-/** Key/value table of one call's arguments (契约 §3.3 `ttl-kv`). */
-function ParamSection(props: {
-  entries: ReadonlyArray<readonly [string, unknown]>
+/**
+ * The 参数 block of the 摘要 pane (契约 §3.3).
+ *
+ * v0.10.18: every tool family renders the FULL argument object here, as
+ * formatted JSON — the same `JsonPretty` the JSON result pane and the zoom
+ * overlay's 参数 tab use. The old per-family key/value table (friendly key
+ * labels, array→chip folding, long strings → `N 字符 · M 行`) hid the actual
+ * argument content, so it was removed: one uniform JSON shape, always showing
+ * what the model actually sent.
+ */
+function ParamsJsonSection(props: {
+  value: unknown
   total: number
   lang: Lang
   labels: StepLabels
-  showTypes: boolean
-}): React.ReactElement | null {
-  const { entries, total, lang, labels, showTypes } = props
-  if (entries.length === 0) return null
+}): React.ReactElement {
+  const { value, total, lang, labels } = props
   return (
-    <section className="ttl-section">
+    <section className="ttl-section" data-testid="ttl-params">
       <div className="ttl-sectionHead">
         <span className="ttl-sectionLabel">{labels.params}</span>
         <span className="ttl-sectionMeta">{labels.allItems(total)}</span>
       </div>
-      <div className="ttl-kv" data-testid="ttl-kv">
-        {entries.map(([key, value]) => (
-          <div className="ttl-kvRow" key={key}>
-            <span className="ttl-kvKey" title={key}>{keyLabel(key, lang)}</span>
-            <KvValue value={value} labels={labels} showTypes={showTypes} />
-          </div>
-        ))}
-      </div>
+      <JsonPretty value={value} lang={lang} />
     </section>
-  )
-}
-
-/** One argument value: typed badge, array chips or folded long-string meta. */
-function KvValue(props: { value: unknown; labels: StepLabels; showTypes: boolean }): React.ReactElement {
-  const { value, labels, showTypes } = props
-  if (Array.isArray(value)) {
-    const chips = value.slice(0, MAX_CHIPS)
-    const rest = value.length - chips.length
-    return (
-      <>
-        <span className="ttl-kvVal ttl-kvChips">
-          {chips.map((item, index) => (
-            <span className="ttl-chipTag" key={index}>{chipText(item)}</span>
-          ))}
-          {rest > 0 ? <span className="ttl-chipTag ttl-chipMore">{`+${rest}`}</span> : null}
-        </span>
-        <span className="ttl-kvType">{`array · ${labels.items(value.length)}`}</span>
-      </>
-    )
-  }
-  if (isPlainObject(value)) {
-    const count = Object.keys(value).length
-    return (
-      <>
-        <span className="ttl-kvVal">{`{${count}}`}</span>
-        <span className="ttl-kvType">{`object · ${labels.items(count)}`}</span>
-      </>
-    )
-  }
-  if (value === null) {
-    return (
-      <>
-        <span className="ttl-kvVal ttl-kvMuted">null</span>
-        {showTypes ? <span className="ttl-kvType">null</span> : null}
-      </>
-    )
-  }
-  if (typeof value === 'boolean' || typeof value === 'number') {
-    return (
-      <>
-        <span className="ttl-kvVal">{String(value)}</span>
-        <span className="ttl-kvType">{typeof value}</span>
-      </>
-    )
-  }
-  const text = typeof value === 'string' ? value : String(value)
-  if (text.includes('\n') || text.length > LONG_VALUE_CHARS) {
-    return (
-      <>
-        <span className="ttl-kvVal ttl-kvLong" title={text}>
-          {labels.charsLines(text.length, lineCount(text))}
-        </span>
-        {showTypes ? <span className="ttl-kvType">string</span> : null}
-      </>
-    )
-  }
-  return (
-    <>
-      <span className="ttl-kvVal" title={text}>{text}</span>
-      {showTypes ? <span className="ttl-kvType">string</span> : null}
-    </>
   )
 }
 
@@ -976,11 +876,16 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
     </>
   )
 
-  /** The 摘要 pane: tool-family specific composition (契约 §3.3). */
+  /** The 摘要 pane: the tool-family blocks + one uniform 参数 JSON block (契约 §3.3). */
   const renderSummary = (): React.ReactElement => {
-    const entries = parsedArgs !== null ? Object.entries(parsedArgs) : []
-    const total = entries.length
-    const sections: React.ReactElement[] = []
+    /** The parsed arguments as JSON (v0.10.18: one shape for every tool family). */
+    const paramsValue: unknown = parsed.ok ? parsed.value : null
+    const paramsTotal = Array.isArray(paramsValue)
+      ? paramsValue.length
+      : isPlainObject(paramsValue) ? Object.keys(paramsValue).length : 0
+    const params = (): React.ReactElement | null => parsed.ok
+      ? <ParamsJsonSection value={paramsValue} total={paramsTotal} lang={lang} labels={labels} />
+      : null
     const outputText = ((): string => {
       if (isError && fullText.length === 0) return step.error
       if (family === 'read' || family === 'edit') {
@@ -990,51 +895,30 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
       return fullText
     })()
     const output = (): React.ReactElement | null => (
-      <OutputSection key="output" text={outputText} labels={labels} error={isError} />
+      <OutputSection text={outputText} labels={labels} error={isError} />
     )
 
-    if (family === 'shell') {
-      const command = commandText
-      if (command.length > 0) {
-        sections.push(
-          <CommandSection key="command" command={command} toolName={summary.label} labels={labels} />,
-        )
-        const rest = entries.filter(([key]) => key !== 'command')
-        sections.push(
-          <ParamSection
-            key="params"
-            entries={rest}
-            total={total}
-            lang={lang}
-            labels={labels}
-            showTypes={false}
-          />,
-        )
-        const out = output()
-        if (out !== null) sections.push(out)
-        return <>{sections}{loadBanner()}</>
-      }
+    if (family === 'shell' && commandText.length > 0) {
+      return (
+        <>
+          <CommandSection command={commandText} toolName={summary.label} labels={labels} />
+          {params()}
+          {output()}
+          {loadBanner()}
+        </>
+      )
     }
 
     if (isMcp) {
-      sections.push(<McpSection key="mcp" labels={labels} />)
-      sections.push(
-        <ParamSection
-          key="params"
-          entries={entries}
-          total={total}
-          lang={lang}
-          labels={labels}
-          showTypes
-        />,
-      )
       const files = fileEntriesOf(fullText)
-      if (files !== null) sections.push(<FilesSection key="files" entries={files} labels={labels} />)
-      else {
-        const out = output()
-        if (out !== null) sections.push(out)
-      }
-      return <>{sections}{loadBanner()}</>
+      return (
+        <>
+          <McpSection labels={labels} />
+          {params()}
+          {files !== null ? <FilesSection entries={files} labels={labels} /> : output()}
+          {loadBanner()}
+        </>
+      )
     }
 
     if (family === 'read' || family === 'edit' || family === 'todo') {
@@ -1054,38 +938,23 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
           stats.push(`+${lineCount(content)}`)
         }
       }
-      if (filePath.length > 0) {
-        sections.push(<FileSection key="file" path={filePath} stats={stats} labels={labels} />)
-      }
-      const rest = entries.filter(([key]) => key !== 'file_path' && key !== 'path')
-      sections.push(
-        <ParamSection
-          key="params"
-          entries={rest}
-          total={total}
-          lang={lang}
-          labels={labels}
-          showTypes={false}
-        />,
+      return (
+        <>
+          {filePath.length > 0 ? <FileSection path={filePath} stats={stats} labels={labels} /> : null}
+          {params()}
+          {output()}
+          {loadBanner()}
+        </>
       )
-      const out = output()
-      if (out !== null) sections.push(out)
-      return <>{sections}{loadBanner()}</>
     }
 
-    sections.push(
-      <ParamSection
-        key="params"
-        entries={entries}
-        total={total}
-        lang={lang}
-        labels={labels}
-        showTypes={false}
-      />,
+    return (
+      <>
+        {params()}
+        {output()}
+        {loadBanner()}
+      </>
     )
-    const out = output()
-    if (out !== null) sections.push(out)
-    return <>{sections}{loadBanner()}</>
   }
 
   const duration = formatDuration(

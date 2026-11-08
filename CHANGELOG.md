@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.18] - 2026-11-09
+
+### Changed
+
+- **展开后工具的「参数」统一用格式化 JSON 展示，不再按工具族特判**：内联详情带与放大浮层的「摘要」页里，「参数」区块此前是键值表——友好 key 名、数组折成 chips（`…` + `+N`）、长字符串折成「N 字符 · M 行」、MCP 加类型徽标、shell 隐藏 `command`、文件类隐藏 `file_path`，实际参数内容被藏起来。现在所有工具族统一为 `section.ttl-section[data-testid=ttl-params]` + `JsonPretty`（`ttl-json-pretty`）：**完整参数对象一次按 JSON 格式化展开**，各字段值/数组/嵌套对象原样可读（长字符串仍按既有 long-value 块折叠展开/复制/⤢）。
+- 保留的专属块：shell 的「命令」高亮分段块、文件类的 `ttl-fileBlock`、MCP 的 `ttl-mcpBlock`、结果侧的文件列表与「输出」折叠预览；相对地，专属块不再从参数 JSON 里剔除对应字段（`command` / `file_path` 仍会出现在 JSON 中）。
+- 不变：「参数」页签仍是可逐层折叠的 `JsonTree`（浮层里仍是 `JsonPretty`），「原始」页仍是 wire 原文，`结果` 渲染逻辑未改。
+- 样式清理：删除随之失效的 `.ttl-kv*`（键值表/类型徽标/数组 chips/长值）与 `.ttl-chipMore` 规则；`ZoomOverlay` 里的键值表辅助函数一并移除。
+
+### Verification
+
+- 新增 2 例回归：①内联带四种工具族（shell / `ask_user_question` / read / MCP）的「摘要」参数区块都渲染 `ttl-json-pretty`、无 `.ttl-kv`、数组不再变成 chip，专属块仍在；②浮层「摘要」参数区块同为 `JsonPretty`、shell 命令块保留；测试 547 → **549 例 / 22 文件**。
+- `pnpm typecheck` 0、`pnpm build` 通过；样式类名断言（3 处）同步去掉 `ttl-kv`。
+- 实机（独立 `trace-verify` profile，App 内置 DSH 0.2.2-rc.1 + better-sidebar 0.30.1，端口 19487，右侧 dock 560px，Playwright 路由 mock 一轮 `ask_user_question` + `bash`）：generic 详情带「参数」区块 = `ttl-json-pretty`、`.ttl-kv` 0、`.ttl-chipTag` 0，`questions` 数组完整展开；shell 详情带命令分段块保留、JSON 含 `command` / `description` / `timeout`；浮层 `ttl-zoom-params` 同为格式化 JSON、`.ttl-kv` 0；「参数」页签仍是 `ttl-json` 树；全程 0 条 console error。截图 `docs/assets/v0118-params-json.jpg`（generic）、`docs/assets/v0118-params-json-shell.jpg`（shell）、`docs/assets/v0118-params-json-zoom.jpg`（浮层），采集脚本 `scripts/verify/shoot-paramsjson.mjs`。
+
 ## [0.10.17] - 2026-11-08
 
 ### Fixed

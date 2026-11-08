@@ -757,7 +757,6 @@ export const trailCss = `
 .ttl-chipSelected .ttl-chipCount { color: var(--dsw-alias-label-tertiary, #9ba1a7); }
 .ttl-chipDot { flex: none; width: 5px; height: 5px; border-radius: 50%; }
 .ttl-chipLabel { white-space: nowrap; }
-.ttl-chipMore { padding: 0 7px; }
 .ttl-moreChip { padding: 0 7px; }
 .ttl-toolDropdown {
   position: absolute;
@@ -1515,39 +1514,6 @@ export const trailCss = `
 .ttl-tok-hash { color: #c4b2ff; }
 .ttl-tok-op { color: #6f747a; }
 .ttl-tok-muted { color: #9ba1a7; }
-.ttl-kv { display: flex; flex-direction: column; }
-.ttl-kvRow { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-.ttl-kvKey {
-  flex: none;
-  width: 112px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-tertiary, #9ba1a7);
-  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
-  font-size: 9.5px;
-}
-.ttl-kvVal {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #d7dade;
-  font-size: 11.5px;
-}
-.ttl-kvLong { white-space: normal; word-break: break-all; }
-.ttl-kvMuted { color: var(--dsw-alias-label-quaternary, #5f6469); }
-.ttl-kvType {
-  flex: none;
-  margin-left: auto;
-  width: 56px;
-  text-align: right;
-  color: var(--dsw-alias-label-quaternary, #5f6469);
-  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
-  font-size: 8.5px;
-}
-.ttl-kvChips { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; flex: 1; min-width: 0; }
 .ttl-chipTag {
   display: inline-flex;
   align-items: center;
@@ -1560,7 +1526,6 @@ export const trailCss = `
   font-size: 9px;
   white-space: nowrap;
 }
-.ttl-chipMore { color: var(--dsw-alias-label-quaternary, #5f6469); }
 .ttl-outBlock {
   margin-top: 2px;
   padding: 7px 10px;
@@ -1859,8 +1824,6 @@ export const trailCss = `
 .ttl-zoomPane .ttl-code { padding: 12px 14px; }
 .ttl-zoomPane .ttl-codeGutter { width: 18px; font-size: 9.5px; line-height: 20px; }
 .ttl-zoomPane .ttl-codeText { font-size: 12px; line-height: 20px; }
-.ttl-zoomPane .ttl-kvKey { width: 132px; font-size: 10px; }
-.ttl-zoomPane .ttl-kvVal { font-size: 12px; }
 .ttl-zoomPane .ttl-section { min-height: 26px; }
 .ttl-zoomPane .ttl-outBlock { font-size: 11px; line-height: 18px; }
 .ttl-zoomFoot {

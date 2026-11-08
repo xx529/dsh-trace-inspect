@@ -307,6 +307,29 @@ describe('ZoomOverlay', () => {
     expect(screen.getByTestId('ttl-zoom-body-result').textContent).toContain('total 0')
   })
 
+  it('the summary 参数 block is the full argument JSON, not a key/value table (v0.10.18)', () => {
+    renderOverlay([stepOf(3, 'ask_user_question', JSON.stringify({
+      questions: [{ id: 'release2', header: '发版' }],
+    }))], 3)
+    const pane = screen.getByTestId('ttl-zoom-body-summary')
+    const params = within(pane).getByTestId('ttl-zoom-params')
+    expect(params.querySelector('[data-testid="ttl-json-pretty"]')).toBeTruthy()
+    expect(params.textContent).toContain('"questions"')
+    expect(params.textContent).toContain('release2')
+    expect(params.textContent).not.toContain('array · 1')
+    // The old folded key/value table is gone.
+    expect(pane.querySelector('.ttl-kv')).toBeNull()
+    // A non-shell tool renders no command block.
+    expect(within(pane).queryByTestId('ttl-zoom-command')).toBeNull()
+
+    // shell keeps its command block AND shows the full args JSON below it.
+    cleanup()
+    renderOverlay([stepOf(4, 'bash', JSON.stringify({ command: 'ls -la', description: 'list' }))], 4)
+    const shellPane = screen.getByTestId('ttl-zoom-body-summary')
+    expect(within(shellPane).getByTestId('ttl-zoom-command')).toBeTruthy()
+    expect(within(shellPane).getByTestId('ttl-zoom-params').textContent).toContain('"command"')
+  })
+
   it('shows the empty-result hint for a step whose result has no content', () => {
     renderOverlay([stepOf(3, 'bash', 'cmd', { text: '' })], 3)
     expect(screen.getByTestId('ttl-zoom-empty').textContent).toBe('This call returned no content')
