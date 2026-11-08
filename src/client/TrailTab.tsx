@@ -50,7 +50,7 @@ import {
   type ToolDetailResult,
 } from './useTrail'
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
-import { splitMcpName, summarizeToolCall, type ToolIconKind, type ToolTone } from './tool-summary'
+import { inkOf, splitMcpName, summarizeToolCall, type ToolIconKind } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
 import { detectOutputKind } from './output-format'
@@ -315,9 +315,8 @@ function familyIconKind(family: ToolFamily): ToolIconKind {
     case 'edit': return 'file-edit'
     case 'mcp': return 'mcp'
     case 'skill': return 'skill'
-    case 'figma': return 'figma'
+    case 'figma': return 'generic'
     case 'todo': return 'todo'
-    case 'figma': return 'figma'
     default: return 'generic'
   }
 }
@@ -386,10 +385,11 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
   )
   const errored = step.kind === 'error' || step.result?.isError === true
   const family = toolFamily(step.name, errored)
-  const tone: ToolTone = family === 'error' ? 'red' : 'neutral'
   // v0.10.2: every failing row leads with the prototype's alert triangle, not
   // with the tool's own glyph tinted red (prototype 2-02 / 6-06「失败」).
   const iconKind: ToolIconKind = errored ? 'alert' : summary.icon
+  // v0.10.19: ink follows the work cluster, not the coarse statistics family.
+  const ink = inkOf(iconKind)
   const desc = step.kind === 'error' ? step.error : summary.detail
   const status = errored ? '✗' : '✓'
   const duration = stepDuration(step)
@@ -434,8 +434,8 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
         }}
       >
         <span className="ttl-stepRail" aria-hidden="true" />
-        <span className={`ttl-stepIcon ttl-tone-${family}`} aria-hidden="true">
-          <ToolIcon kind={iconKind} tone={tone} />
+        <span className={`ttl-stepIcon ttl-ink-${ink}`} aria-hidden="true">
+          <ToolIcon kind={iconKind} />
         </span>
         <span className="ttl-stepName">{summary.label}</span>
         <span className="ttl-stepDesc">{desc}</span>
@@ -775,10 +775,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                       className={`ttl-mixItem ttl-tone-${entry.family}`}
                       title={familyLabel(entry.family, ui)}
                     >
-                      <ToolIcon
-                        kind={familyIconKind(entry.family)}
-                        tone={entry.family === 'error' ? 'red' : 'neutral'}
-                      />
+                      <ToolIcon kind={familyIconKind(entry.family)} />
                       <span className="ttl-mixCount">{entry.count}</span>
                     </i>
                   ))}
@@ -793,7 +790,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                   title={(t(lang, 'error') as string)}
                 >
                   {/* v0.10.16: same alert-triangle glyph as the failed rows. */}
-                  <ToolIcon kind="alert" tone="red" />
+                  <ToolIcon kind="alert" />
                   <span className="ttl-badgeCount" data-testid="ttl-error-count">{errorCount}</span>
                 </span>
               )

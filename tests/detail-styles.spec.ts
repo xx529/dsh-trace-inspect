@@ -221,6 +221,22 @@ describe('v0.10.10: 工具族不再有灰色字形', () => {
   })
 })
 
+describe('v0.10.19: 每个工作簇一个图标与一种墨色', () => {
+  it('八种 ink 规则齐全；青色复用既有 skill 家族色，不引入新 hex', () => {
+    const inks: Array<[string, string]> = [
+      ['violet', '#a78bfa'], ['blue', '#60a5fa'], ['green', '#34d399'], ['amber', '#f2b45c'],
+      ['pink', '#f08fb8'], ['teal', '#63c9d1'], ['gray', '#9ba1a7'], ['red', '#f2726f'],
+    ]
+    for (const [ink, hex] of inks) expect(trailCss).toContain(`.ttl-ink-${ink} { color: ${hex}; }`)
+  })
+
+  it('ink 只给字形上色，不改变 chip 底色', () => {
+    expect(trailCss).not.toMatch(/\.ttl-ink-[a-z]+\s*\{[^}]*background/)
+    // 统计族色仍在（mix chip / dist / legend），并没有被 ink 取代。
+    expect(trailCss).toContain('.ttl-tone-shell { color: #a78bfa; }')
+  })
+})
+
 describe('v0.10.8: 展开轮次体缩进（tree）', () => {
   it('只对展开态给 turnBody 加 14px 左缩进，折叠卡保持满宽', () => {
     const expanded = rule('.ttl-turn[data-collapsed="false"] .ttl-turnBody {')

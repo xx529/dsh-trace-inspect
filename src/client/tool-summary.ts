@@ -14,27 +14,207 @@
  * | `mcp__srv__t`   | `mcp:srv t {…}`                                |
  * | anything else   | the previous name + clipped raw arguments      |
  *
+ * v0.10.19: every recognised *work cluster* draws its own glyph. The cluster
+ * table below follows DSH's own tool packages (`@deepseek-ai/dsh-tool-*`) and
+ * the official `detailIcon` grouping, so a row reads as "kind of work" instead
+ * of "some tool". Anything that is neither a DSH built-in nor an MCP tool
+ * (plugin-native tools such as `figma_*`, third-party tools, unknown names)
+ * deliberately falls back to the single wrench glyph.
+ *
  * Everything here is pure so the mapping is unit-testable without React.
  */
 import type { Lang } from './locales'
 
-/** Semantic tint shared by the row dot and the row icon. */
-export type ToolTone = 'success' | 'warn' | 'neutral' | 'blue' | 'violet' | 'red'
+/** Ink colour family of a cluster glyph (CSS: `.ttl-ink-*` in styles.ts). */
+export type ToolInk = 'violet' | 'blue' | 'green' | 'amber' | 'pink' | 'teal' | 'gray' | 'red'
 
 /** Glyph family drawn in front of a tool row (see `ToolIcon`). */
 export type ToolIconKind =
+  /** Command execution: `bash` / `pwsh`. */
   | 'terminal'
+  /** Long-lived terminal session: `terminal_*`. */
+  | 'terminal-session'
+  /** Background jobs: `job_*`. */
+  | 'jobs'
+  /** Code execution / language service: `run_code`, `lsp`. */
+  | 'code'
   | 'file-read'
   | 'file-write'
   | 'file-edit'
   | 'search'
-  | 'folder'
-  | 'mcp'
-  | 'skill'
+  /** Network access: `web_search` / `web_fetch`. */
+  | 'web'
   | 'todo'
-  | 'figma'
+  /** Goal loop: `create_goal` / `get_goal` / `update_goal`. */
+  | 'goal'
+  /** Scheduled tasks: `schedule_*`. */
+  | 'schedule'
+  /** Asks the user a question: `ask_user_question`. */
+  | 'ask'
+  /** Declares deliverables: `present`. */
+  | 'present'
+  /** One child agent: `subagent` / `subagent_fork` / `list_subagent_models`. */
+  | 'subagent'
+  /** Teammate coordination: `spawn_teammate` / `list_agents` / `send_message` / … */
+  | 'team'
+  /** Team task board: `team_task_*`. */
+  | 'team-task'
+  /** Orchestration / loops: `workflow` / `ralph`. */
+  | 'workflow'
+  | 'skill'
+  /** Session history: `session_*`. */
+  | 'session'
+  /** Workspace context: `working_directory` / `load_workspace_dependencies` / `create_worktree`. */
+  | 'folder'
+  /** Runtime plugin surface: `cordis_*`. */
+  | 'plugin'
+  | 'mcp'
   | 'alert'
+  /** Fallback for non-built-in, non-MCP tools (plugin tools, unknown names). */
   | 'generic'
+
+/** Glyph ink per cluster — violet 执行 / blue 读取 / green 变更 / amber 计划 / pink 协作 / teal 上下文 / gray 其他. */
+const INK_OF: Record<ToolIconKind, ToolInk> = {
+  terminal: 'violet',
+  'terminal-session': 'violet',
+  jobs: 'violet',
+  code: 'violet',
+  'file-read': 'blue',
+  'file-write': 'green',
+  'file-edit': 'green',
+  search: 'blue',
+  web: 'blue',
+  todo: 'amber',
+  goal: 'amber',
+  schedule: 'amber',
+  ask: 'blue',
+  present: 'green',
+  subagent: 'pink',
+  team: 'pink',
+  'team-task': 'pink',
+  workflow: 'violet',
+  skill: 'teal',
+  session: 'teal',
+  folder: 'gray',
+  plugin: 'gray',
+  mcp: 'pink',
+  alert: 'red',
+  generic: 'gray',
+}
+
+/** Cluster ink for one glyph family. */
+export function inkOf(kind: ToolIconKind): ToolInk {
+  return INK_OF[kind]
+}
+
+/**
+ * Exact wire name → cluster. Only DSH built-ins (and their legacy aliases)
+ * belong here; MCP names are handled by `splitMcpName` before this table.
+ */
+const CLUSTER_BY_NAME: Readonly<Record<string, ToolIconKind>> = {
+  // A · 执行
+  bash: 'terminal',
+  pwsh: 'terminal',
+  shell: 'terminal',
+  bash_output: 'terminal',
+  terminal_open: 'terminal-session',
+  terminal_send: 'terminal-session',
+  terminal_read: 'terminal-session',
+  terminal_signal: 'terminal-session',
+  terminal_close: 'terminal-session',
+  terminal_list: 'terminal-session',
+  job_list: 'jobs',
+  job_output: 'jobs',
+  job_kill: 'jobs',
+  run_code: 'code',
+  lsp: 'code',
+  // B · 文件与信息
+  read: 'file-read',
+  read_image: 'file-read',
+  write: 'file-write',
+  apply_patch: 'file-write',
+  append: 'file-write',
+  edit: 'file-edit',
+  str_replace_editor: 'file-edit',
+  glob: 'search',
+  grep: 'search',
+  search: 'search',
+  web_search: 'web',
+  web_fetch: 'web',
+  // C · 计划与调度
+  todo_write: 'todo',
+  todo_read: 'todo',
+  create_goal: 'goal',
+  get_goal: 'goal',
+  update_goal: 'goal',
+  schedule_create: 'schedule',
+  schedule_edit: 'schedule',
+  schedule_list: 'schedule',
+  schedule_view: 'schedule',
+  // D · 交互与交付
+  ask_user_question: 'ask',
+  present: 'present',
+  // E · 协作与编排
+  subagent: 'subagent',
+  subagent_fork: 'subagent',
+  list_subagent_models: 'subagent',
+  spawn_teammate: 'team',
+  list_agents: 'team',
+  send_message: 'team',
+  interrupt_agent: 'team',
+  wait_agent: 'team',
+  team_task_create: 'team-task',
+  team_task_get: 'team-task',
+  team_task_list: 'team-task',
+  team_task_update: 'team-task',
+  workflow: 'workflow',
+  ralph: 'workflow',
+  // F · 上下文与扩展
+  skill: 'skill',
+  session_search: 'session',
+  session_event_search: 'session',
+  session_trace: 'session',
+  session_event_trace: 'session',
+  session_event_read: 'session',
+  working_directory: 'folder',
+  load_workspace_dependencies: 'folder',
+  create_worktree: 'folder',
+  ls: 'folder',
+  list_directory: 'folder',
+  list_dir: 'folder',
+  cordis_inspect_list: 'plugin',
+  cordis_inspect_query: 'plugin',
+  // MCP resources are MCP-flavoured, not a separate cluster.
+  list_mcp_resources: 'mcp',
+  list_mcp_resource_templates: 'mcp',
+  read_mcp_resource: 'mcp',
+}
+
+/** Prefix (or suffix) rules for tool families that ship many names. */
+const CLUSTER_RULES: ReadonlyArray<readonly [string, ToolIconKind]> = [
+  ['terminal_', 'terminal-session'],
+  ['job_', 'jobs'],
+  ['schedule_', 'schedule'],
+  ['session_', 'session'],
+  ['team_task_', 'team-task'],
+  ['cordis_', 'plugin'],
+]
+
+/**
+ * Resolve the glyph family of a wire tool name.
+ * @param name - Tool name exactly as the event reported it.
+ * @returns The cluster glyph; `generic` (wrench) for non-built-in, non-MCP tools.
+ */
+export function toolIconKind(name: string): ToolIconKind {
+  const exact = CLUSTER_BY_NAME[name]
+  if (exact !== undefined) return exact
+  for (const [prefix, kind] of CLUSTER_RULES) {
+    if (name.startsWith(prefix)) return kind
+  }
+  // DSH groups the three goal tools by suffix (`*_goal`).
+  if (name.endsWith('_goal')) return 'goal'
+  return 'generic'
+}
 
 export interface ToolSummary {
   /** Mono label rendered in the name slot (`bash`, `read`, `figma`, …). */
@@ -171,6 +351,9 @@ export function summarizeToolCall(
     }
   }
 
+  // Cluster glyph resolved once; the switch below only shapes the detail text.
+  const icon = toolIconKind(name)
+
   switch (name) {
     case 'bash':
     case 'bash_output':
@@ -180,7 +363,7 @@ export function summarizeToolCall(
       const detail = description !== undefined
         ? clip(description)
         : command !== undefined ? clip(firstLine(command)) : clip(firstLine(argsPreview))
-      return { label: name, detail, icon: 'terminal' }
+      return { label: name, detail, icon }
     }
     case 'read':
     case 'read_image':
@@ -188,9 +371,6 @@ export function summarizeToolCall(
     case 'edit':
     case 'append': {
       const file = str(args, 'file_path') ?? str(args, 'path')
-      const icon: ToolIconKind = name === 'read' || name === 'read_image'
-        ? 'file-read'
-        : name === 'write' || name === 'append' ? 'file-write' : 'file-edit'
       if (file !== undefined) return { label: name, detail: clip(fileBaseName(file)), icon }
       return { label: name, detail: clip(firstLine(argsPreview)), icon }
     }
@@ -198,13 +378,13 @@ export function summarizeToolCall(
     case 'grep':
     case 'search': {
       const pattern = str(args, 'pattern') ?? str(args, 'query')
-      return { label: name, detail: pattern !== undefined ? clip(pattern) : clip(firstLine(argsPreview)), icon: 'search' }
+      return { label: name, detail: pattern !== undefined ? clip(pattern) : clip(firstLine(argsPreview)), icon }
     }
     case 'ls':
     case 'list_directory':
     case 'list_dir': {
       const path = str(args, 'path') ?? str(args, 'file_path')
-      return { label: name, detail: path !== undefined ? clip(path) : clip(firstLine(argsPreview)), icon: 'folder' }
+      return { label: name, detail: path !== undefined ? clip(path) : clip(firstLine(argsPreview)), icon }
     }
     case 'todo_write': {
       // `todo_write {todos:[…]}` — the list size is the useful one-liner.
@@ -213,13 +393,13 @@ export function summarizeToolCall(
       return {
         label: name,
         detail: count !== null ? `${count} 项` : clip(firstLine(argsPreview)),
-        icon: 'todo',
+        icon,
       }
     }
     case 'todo_read': {
       const todos = args?.todos
       const count = Array.isArray(todos) ? todos.length : null
-      return { label: name, detail: count !== null ? `${count} 项` : '', icon: 'todo' }
+      return { label: name, detail: count !== null ? `${count} 项` : '', icon }
     }
     case 'skill': {
       // `skill {name: "figma-workbench"}` — the skill name IS the row detail;
@@ -228,7 +408,7 @@ export function summarizeToolCall(
       return {
         label: name,
         detail: skillName !== undefined ? clip(skillName) : clip(firstLine(argsPreview)),
-        icon: 'skill',
+        icon,
       }
     }
     default:
@@ -236,35 +416,36 @@ export function summarizeToolCall(
   }
 
   if (name.startsWith('figma_')) {
-    // Native Figma-plugin tools (not MCP): keep the wire name, show one useful
-    // id when present so `figma_select_document` is not just a bare label.
+    // Native Figma-plugin tools are NOT DSH built-ins and not MCP: they keep the
+    // useful id in the detail slot but draw the shared wrench (`icon` is
+    // `generic` here — the cluster table deliberately does not list them).
     const detail = str(args, 'documentId') ?? str(args, 'fileKey') ?? str(args, 'nodeId')
       ?? str(args, 'name') ?? (args === null ? clip(firstLine(argsPreview)) : '')
-    return { label: name, detail, icon: 'figma' }
+    return { label: name, detail, icon }
   }
 
   if (args !== null) {
     for (const key of FALLBACK_KEYS) {
       const value = str(args, key)
-      if (value !== undefined) return { label: name, detail: clip(key === 'file_path' || key === 'path' ? fileBaseName(value) : firstLine(value)), icon: 'generic' }
+      if (value !== undefined) return { label: name, detail: clip(key === 'file_path' || key === 'path' ? fileBaseName(value) : firstLine(value)), icon }
     }
     // Unknown tools: never show raw JSON in the row — prefer a readable
     // `key value` pair, then an array count, then the argument count.
     for (const [key, value] of Object.entries(args)) {
       if (typeof value === 'string' && value.trim().length > 0) {
-        return { label: name, detail: clip(`${key} ${firstLine(value)}`), icon: 'generic' }
+        return { label: name, detail: clip(`${key} ${firstLine(value)}`), icon }
       }
       if (typeof value === 'number' || typeof value === 'boolean') {
-        return { label: name, detail: clip(`${key} ${String(value)}`), icon: 'generic' }
+        return { label: name, detail: clip(`${key} ${String(value)}`), icon }
       }
       if (Array.isArray(value)) {
-        return { label: name, detail: `${key} · ${value.length} 项`, icon: 'generic' }
+        return { label: name, detail: `${key} · ${value.length} 项`, icon }
       }
     }
     const count = Object.keys(args).length
-    if (count > 0) return { label: name, detail: `${count} 个参数`, icon: 'generic' }
+    if (count > 0) return { label: name, detail: `${count} 个参数`, icon }
     // Parsed object with no fields: show the name only, never the raw `{}`.
-    return { label: name, detail: '', icon: 'generic' }
+    return { label: name, detail: '', icon }
   }
-  return { label: name, detail: clip(firstLine(argsPreview)), icon: 'generic' }
+  return { label: name, detail: clip(firstLine(argsPreview)), icon }
 }

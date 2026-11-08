@@ -384,3 +384,19 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话；真实失败轮次的徽标同样只显示三角 + 数量。
 
 ![轮次头部：失败统计 = 警示三角 + 数字](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0116-error-badge.jpg>)
+
+## 30. v0.10.19 工具图标改为「每个工作簇一个图标」
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| dsh 内置的 tool，每一类工作的簇都给一个特殊的 ICON | 簇表按 DSH 工具包（`@deepseek-ai/dsh-tool-*` 的 `defineTool` 名）与官方 `dsh-client-ui-tool` 的 `detailIcon` 分组重写：22 个内置簇各一个字形（A 执行：命令执行 / 长驻终端 / 后台作业 / 代码执行；B 文件：读取 / 写入 / 编辑 / 检索 / 联网；C 计划：清单 / 目标 / 定时；D 交互：询问 / 交付；E 协作：子代理 / 团队 / 团队任务板 / 工作流；F 上下文：技能 / 会话回溯 / 工作区 / 运行时插件），MCP 保持插头 | mock 19 个工具的会话：行墨色依次为执行 `rgb(167,139,250)`、读取类 `rgb(96,165,250)`、变更类 `rgb(52,211,153)`、计划类 `rgb(242,180,92)`、协作类 `rgb(240,143,184)`、上下文类 `rgb(99,201,209)`、MCP 粉、兜底灰，与 Figma ④ 方案逐行一致 |
+| 非 dsh 内置 tool、非 MCP 的 tool 用统一 🔧 | `figma_*` 从 v0.10.10 的 layers 特例回退成 `generic` 扳手（与第三方 / 未知工具同一条路径），行详情仍保留 `documentId` / `fileKey` | `figma_status`、`acme_deploy` 都是 `ttl-ink-gray` + 扳手路径 `M14.7 6.3` |
+| 图标颜色怎么给 | 新增 `.ttl-ink-violet\|blue\|green\|amber\|pink\|teal\|gray\|red`；统计族色 `.ttl-tone-*` 只留给轮次 mix / 分布条 / 图例；青色复用既有 `#63c9d1`，不新增调色板 hex | 行、详情带头、浮层大纲/头部同一条 ink 链路；0 条 console error |
+
+- 覆盖：`ToolIcon` 25 个字形；`ToolSummary.icon` 类型扩展；`toolIconKind()` 新增 `terminal_` / `job_` / `schedule_` / `session_` / `team_task_` / `cordis_` 前缀与 `*_goal` 后缀规则，以及 `shell` / `ls` / `append` / `search` / `todo_read` / `bash_output` 历史别名。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **555 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-clusters.mjs`（mock 19 个工具的会话，逐行量 ink 色 / ink 类 / 字形 primitive）。
+- 设计稿：Figma 文件 `trace` · 页面「重设计原型 v0.9」· ④「工具图标系统」（x=1400 / y=2236，含 22 内置簇 + MCP + 兜底与 13px 真实尺寸预览）。
+- 已知偏差：mock 会话（真实会话里低频簇很少同时出现）；字形沿用 Lucide 几何，与 Figma 稿逐条对应。
+
+![每个工作簇一个图标：19 行字形与墨色](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0119-tool-clusters.jpg>)

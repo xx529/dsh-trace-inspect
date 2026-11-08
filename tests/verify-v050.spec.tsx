@@ -1250,7 +1250,7 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
     expect(row.children).toHaveLength(5)
     expect([...row.children].map((child) => child.className)).toEqual([
       'ttl-stepRail',
-      'ttl-stepIcon ttl-tone-shell', // v0.9: bash → shell family chip
+      'ttl-stepIcon ttl-ink-violet', // v0.10.19: bash → 命令执行簇墨色
       'ttl-stepName',
       'ttl-stepDesc',
       'ttl-stepStatus',

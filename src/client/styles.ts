@@ -1066,6 +1066,18 @@ export const trailCss = `
 .ttl-tone-todo { color: #f2b45c; }
 .ttl-tone-error { color: #f2726f; }
 .ttl-tone-generic { color: #9ba1a7; }
+
+/* cluster ink — one colour per work cluster (v0.10.19). The glyph family is
+   the cluster; the ttl-tone-* rules above stay for the statistics families
+   (mix chips / distribution bar / legend dots). */
+.ttl-ink-violet { color: #a78bfa; }
+.ttl-ink-blue { color: #60a5fa; }
+.ttl-ink-green { color: #34d399; }
+.ttl-ink-amber { color: #f2b45c; }
+.ttl-ink-pink { color: #f08fb8; }
+.ttl-ink-teal { color: #63c9d1; }
+.ttl-ink-gray { color: #9ba1a7; }
+.ttl-ink-red { color: #f2726f; }
 .ttl-stepIcon.ttl-tone-error {
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #f2726f) 16%, var(--dsw-alias-bg-layer-1, #232324));
 }

@@ -7,7 +7,8 @@
  * the row renders the summary.
  */
 import { describe, expect, it } from 'vitest'
-import { fileBaseName, splitMcpName, summarizeToolCall } from '../src/client/tool-summary'
+import { fileBaseName, inkOf, splitMcpName, summarizeToolCall, toolIconKind } from '../src/client/tool-summary'
+import type { ToolIconKind } from '../src/client/tool-summary'
 
 describe('tool-summary — known tools', () => {
   it('bash shows the description argument', () => {
@@ -50,11 +51,11 @@ describe('tool-summary — known tools', () => {
     expect(summarizeToolCall('todo_read', '{}', '…').icon).toBe('todo')
   })
 
-  it('figma plugin tools get the figma glyph and show the document id when present', () => {
-    expect(summarizeToolCall('figma_status', '{}', '…')).toEqual({ label: 'figma_status', detail: '', icon: 'figma' })
+  it('figma plugin tools are not DSH built-ins: shared wrench glyph, id still shown', () => {
+    expect(summarizeToolCall('figma_status', '{}', '…')).toEqual({ label: 'figma_status', detail: '', icon: 'generic' })
     const select = summarizeToolCall('figma_select_document', JSON.stringify({ documentId: 'doc-1' }), '…')
     expect(select.detail).toBe('doc-1')
-    expect(select.icon).toBe('figma')
+    expect(select.icon).toBe('generic')
   })
 
   it('skill shows the bare skill name (never the raw `name` key) and the skill glyph', () => {
@@ -113,6 +114,49 @@ describe('tool-summary — known tools', () => {
     const summary = summarizeToolCall('custom', JSON.stringify({ description: 'x'.repeat(400) }), '…')
     expect(summary.detail.length).toBeLessThanOrEqual(120)
     expect(summary.detail.endsWith('…')).toBe(true)
+  })
+})
+
+describe('tool-summary — work clusters (v0.10.19)', () => {
+  it('each DSH built-in family maps to its own cluster glyph', () => {
+    const cases: Array<[string, ToolIconKind]> = [
+      ['bash', 'terminal'], ['pwsh', 'terminal'], ['shell', 'terminal'],
+      ['terminal_open', 'terminal-session'], ['terminal_list', 'terminal-session'],
+      ['job_list', 'jobs'], ['job_output', 'jobs'],
+      ['run_code', 'code'], ['lsp', 'code'],
+      ['read_image', 'file-read'], ['apply_patch', 'file-write'], ['str_replace_editor', 'file-edit'],
+      ['glob', 'search'], ['web_search', 'web'], ['web_fetch', 'web'],
+      ['todo_write', 'todo'], ['create_goal', 'goal'], ['update_goal', 'goal'],
+      ['schedule_create', 'schedule'], ['schedule_view', 'schedule'],
+      ['ask_user_question', 'ask'], ['present', 'present'],
+      ['subagent', 'subagent'], ['subagent_fork', 'subagent'], ['list_subagent_models', 'subagent'],
+      ['spawn_teammate', 'team'], ['send_message', 'team'], ['wait_agent', 'team'],
+      ['team_task_create', 'team-task'], ['team_task_update', 'team-task'],
+      ['workflow', 'workflow'], ['ralph', 'workflow'],
+      ['skill', 'skill'],
+      ['session_search', 'session'], ['session_event_read', 'session'],
+      ['working_directory', 'folder'], ['load_workspace_dependencies', 'folder'],
+      ['cordis_inspect_query', 'plugin'], ['list_mcp_resources', 'mcp'],
+    ]
+    for (const [name, kind] of cases) expect(toolIconKind(name), name).toBe(kind)
+  })
+
+  it('non-built-in, non-MCP tools share the wrench; MCP stays on the plug', () => {
+    expect(toolIconKind('figma_status')).toBe('generic')
+    expect(toolIconKind('acme_deploy')).toBe('generic')
+    expect(summarizeToolCall('mcp__figma__get_screenshot', '{}', '…').icon).toBe('mcp')
+    expect(summarizeToolCall('list_mcp_resources', '{}', '…').icon).toBe('mcp')
+  })
+
+  it('cluster ink follows the seven-tone palette', () => {
+    expect(inkOf('terminal')).toBe('violet')
+    expect(inkOf('file-read')).toBe('blue')
+    expect(inkOf('file-edit')).toBe('green')
+    expect(inkOf('goal')).toBe('amber')
+    expect(inkOf('team')).toBe('pink')
+    expect(inkOf('session')).toBe('teal')
+    expect(inkOf('generic')).toBe('gray')
+    expect(inkOf('alert')).toBe('red')
   })
 })
 

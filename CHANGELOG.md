@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.19] - 2026-11-09
+
+### Changed
+
+- **每个工作簇一个图标，不再只有 8 个族**：`ToolIcon` 从 8 个字形族扩到 25 个 —— 22 个 DSH 内置工作簇各一个专属字形（命令执行 `>_`／长驻终端／后台作业／代码执行／读取／写入／编辑／检索／联网／计划清单／目标／定时／询问／交付／子代理／团队／团队任务板／工作流／技能／会话回溯／工作区／运行时插件），MCP 保持插头，失败行保持告警三角。簇表与 DSH 自身的工具包一一对应（`@deepseek-ai/dsh-tool-*` 的 `defineTool` 名 + 官方 `dsh-client-ui-tool` 的 `detailIcon` 分组），含 `terminal_*` / `job_*` / `schedule_*` / `session_*` / `team_task_*` / `cordis_*` / `*_goal` 的前后缀规则与历史别名（`shell` / `ls` / `append` / `search` / `todo_read` / `bash_output`）。
+- **非内置、非 MCP 一律统一扳手**：`figma_*` 等插件自带工具不再用 layers 字形（v0.10.10 的特例回退），与第三方 / 未知工具共用同一个扳手；行详情仍保留 `documentId` / `fileKey` 等有用字段。`list_mcp_resources` / `read_mcp_resource` 等 MCP 资源工具归入 MCP 簇。
+- **字形墨色与统计族色解耦**：新增 `.ttl-ink-violet|blue|green|amber|pink|teal|gray|red`，行、详情带头、浮层大纲/头部的图标改用工作簇墨色；`.ttl-tone-*` 只保留给轮次 mix、族分布条与图例。青色复用既有 `#63c9d1`（skill 家族色），不新增调色板 hex。
+- `ToolSummary.icon` 的类型扩展为 25 个 `ToolIconKind`；`ToolIcon` 不再接收 `tone`（墨色由外层 `ttl-ink-*` 决定），`ToolTone` 与 StepDetail / ZoomOverlay 的 `toneOfFamily` / `iconToneOf` 一并移除。
+
+### Verification
+
+- 新增 6 例回归：`tool-summary` 3 例（39 个工具名 → 簇的映射表、非内置非 MCP 兜底 + MCP 资源归 MCP、`inkOf` 七色表）；`trail-tab` 1 例（`create_goal` / `subagent` / `session_search` / `job_list` / `terminal_open` / 未知工具六行的 ink 类与字形几何）；`detail-styles` 2 例（8 条 `.ttl-ink-*` 规则齐全且不参与 chip 底色、统计族色仍在）。
+- 测试 **555 例 / 22 文件**（549 → 555）；`pnpm typecheck` 0；`pnpm build` 通过（产物 `lib/client.js` 已含 `ttl-ink-*` 与新增字形路径），`check-lib` 契约检查 ok。
+- 实机（独立 `trace-verify` web profile，端口 19487，右侧 dock 400px，Playwright 路由 mock 一轮 19 个工具的会话）：19 行墨色全部命中 —— 执行簇 `rgb(167,139,250)`、读取/检索/联网 `rgb(96,165,250)`、写入/编辑 `rgb(52,211,153)`、计划/目标/定时 `rgb(242,180,92)`、子代理/团队/任务板/MCP `rgb(240,143,184)`、技能/会话 `rgb(99,201,209)`、`figma_status` 与 `acme_deploy` 灰扳手 `rgb(155,161,167)`；0 条 console error。截图 `docs/assets/v0119-tool-clusters.jpg`，采集脚本 `scripts/verify/shoot-clusters.mjs`。
+- 设计依据：Figma 文件 `trace` · 页面「重设计原型 v0.9」· ④「工具图标系统」（22 内置簇 + MCP + 兜底，含 13px 真实尺寸预览）。
+
 ## [0.10.18] - 2026-11-09
 
 ### Changed

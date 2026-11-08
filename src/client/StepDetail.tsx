@@ -43,7 +43,7 @@ import { MarkdownResult, RawText, looksLikeMarkdown, unwrapFileResult } from './
 import { JsonTree, parseJsonLoose } from './json-tree'
 import { JsonPretty } from './json-pretty'
 import { detectOutputKind, parseJsonLines, parseJsonValue, prettyJsonText } from './output-format'
-import { fileBaseName, splitMcpName, summarizeToolCall, type ToolSummary, type ToolTone } from './tool-summary'
+import { fileBaseName, inkOf, splitMcpName, summarizeToolCall, type ToolSummary } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { TrailImages, copyToClipboard } from './ui-shared'
 import { commandStats, splitCommand } from './command-format'
@@ -214,19 +214,6 @@ function lineCount(text: string): number {
     if (text[index] === '\n') lines += 1
   }
   return lines
-}
-
-/** Tone handed to `ToolIcon`; the family color itself comes from `ttl-tone-*`. */
-function iconToneOf(family: ToolFamily): ToolTone {
-  switch (family) {
-    case 'shell': return 'violet'
-    case 'read': return 'blue'
-    case 'edit': return 'success'
-    case 'mcp': return 'violet'
-    case 'todo': return 'warn'
-    case 'error': return 'red'
-    default: return 'neutral'
-  }
 }
 
 /** Does a token look like a file path (used only by the MCP result heuristic)? */
@@ -587,7 +574,7 @@ function FilesSection(props: { entries: readonly FileEntry[]; labels: StepLabels
       <div className="ttl-files" data-testid="ttl-files">
         {shown.map((entry, index) => (
           <div className="ttl-fileRow" key={`${entry.path}:${index}`}>
-            <span className="ttl-fileIcon" aria-hidden="true"><ToolIcon kind="file-read" tone="neutral" /></span>
+            <span className="ttl-fileIcon" aria-hidden="true"><ToolIcon kind="file-read" /></span>
             <span className="ttl-fileName" title={entry.path}>{entry.name}</span>
             {entry.size !== undefined ? <span className="ttl-fileSize">{entry.size}</span> : null}
           </div>
@@ -981,8 +968,8 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
       data-tab={tab}
     >
       <div className="ttl-detailHead">
-        <span className={`ttl-detailIcon ttl-tone-${family}`} aria-hidden="true">
-          <ToolIcon kind={summary.icon} tone={iconToneOf(family)} />
+        <span className={`ttl-detailIcon ttl-ink-${family === 'error' ? 'red' : inkOf(summary.icon)}`} aria-hidden="true">
+          <ToolIcon kind={summary.icon} />
         </span>
         <span className="ttl-detailName">{serverName}</span>
         {isMcp && toolName.length > 0

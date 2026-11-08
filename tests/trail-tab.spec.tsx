@@ -309,7 +309,7 @@ describe('TrailTab', () => {
     const errorSteps = steps.filter((el) => el.getAttribute('data-step-kind') === 'error')
     expect(errorSteps.length).toBeGreaterThan(0)
     // Failure is carried by the red family glyph inside the icon chip.
-    expect(errorSteps[0].querySelector('.ttl-stepIcon .ttl-rowIcon.ttl-icon-red')).toBeTruthy()
+    expect(errorSteps[0].querySelector('.ttl-stepIcon.ttl-ink-red .ttl-rowIcon')).toBeTruthy()
     expect(steps.every((el) => el.getAttribute('data-step-kind') === 'error')).toBe(true)
   })
 
@@ -535,7 +535,7 @@ describe('TrailTab', () => {
     const errorStep = steps.find((el) => el.getAttribute('data-step-kind') === 'error') as HTMLElement
     expect(errorStep).toBeTruthy()
     // The error row leads with the red family glyph.
-    expect(errorStep.querySelector('.ttl-stepIcon .ttl-rowIcon.ttl-icon-red')).toBeTruthy()
+    expect(errorStep.querySelector('.ttl-stepIcon.ttl-ink-red .ttl-rowIcon')).toBeTruthy()
     fireEvent.click(errorStep)
     await screen.findByTestId('ttl-detail')
     openDetailTab('result')
@@ -585,12 +585,47 @@ describe('TrailTab', () => {
     const rows = await screen.findAllByTestId('ttl-step')
     const figmaRow = rows.find((row) => row.querySelector('.ttl-stepName')?.textContent === 'figma_reconnect')
     const todoRow = rows.find((row) => row.querySelector('.ttl-stepName')?.textContent === 'todo_write')
-    expect(figmaRow?.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-figma')
-    expect(todoRow?.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-todo')
-    // Dedicated glyphs instead of the generic wrench path.
-    expect(figmaRow?.querySelector('.ttl-stepIcon svg path')?.getAttribute('d') ?? '').toContain('m12.83 2.18')
+    // v0.10.19: figma_* is a plugin tool, not a built-in — grey wrench.
+    expect(figmaRow?.querySelector('.ttl-stepIcon')?.className).toContain('ttl-ink-gray')
+    expect(todoRow?.querySelector('.ttl-stepIcon')?.className).toContain('ttl-ink-amber')
+    expect(figmaRow?.querySelector('.ttl-stepIcon svg path')?.getAttribute('d') ?? '').toContain('M14.7 6.3')
     expect(todoRow?.querySelector('.ttl-stepIcon svg path')?.getAttribute('d') ?? '').toContain('m3 17 2 2 4-4')
     expect(todoRow?.querySelector('.ttl-stepDesc')?.textContent).toBe('2 项')
+  })
+
+  it('every work cluster draws its own glyph and ink (v0.10.19)', async () => {
+    renderTab([
+      user(1, 'clusters'),
+      turnStart(2, 1),
+      toolCall(3, 'create_goal', '{"objective":"ship"}', 'c3'),
+      toolCall(4, 'subagent', '{"prompt":"x"}', 'c4'),
+      toolCall(5, 'session_search', '{"query":"icon"}', 'c5'),
+      toolCall(6, 'job_list', '{}', 'c6'),
+      toolCall(7, 'terminal_open', '{}', 'c7'),
+      toolCall(8, 'acme_deploy', '{"url":"https://example.com"}', 'c8'),
+      turnEnd(9, 1),
+    ])
+    const rows = await screen.findAllByTestId('ttl-step')
+    const clusterOf = (name: string): Element | null =>
+      rows.find((row) => row.querySelector('.ttl-stepName')?.textContent === name)?.querySelector('.ttl-stepIcon') ?? null
+    // goal → amber target (three rings, no path)
+    expect(clusterOf('create_goal')?.className).toContain('ttl-ink-amber')
+    expect(clusterOf('create_goal')?.querySelectorAll('svg circle')).toHaveLength(3)
+    // subagent → pink robot head
+    expect(clusterOf('subagent')?.className).toContain('ttl-ink-pink')
+    expect(clusterOf('subagent')?.querySelector('svg path')?.getAttribute('d') ?? '').toContain('M12 8V4H8')
+    // session_search → teal history dial
+    expect(clusterOf('session_search')?.className).toContain('ttl-ink-teal')
+    expect(clusterOf('session_search')?.querySelector('svg path')?.getAttribute('d') ?? '').toContain('M3 12a9 9 0 1 0 9-9')
+    // job_list → violet stacked layers
+    expect(clusterOf('job_list')?.className).toContain('ttl-ink-violet')
+    expect(clusterOf('job_list')?.querySelector('svg path')?.getAttribute('d') ?? '').toContain('m12.83 2.18')
+    // terminal_open → violet square terminal
+    expect(clusterOf('terminal_open')?.className).toContain('ttl-ink-violet')
+    expect(clusterOf('terminal_open')?.querySelector('svg rect')).toBeTruthy()
+    // non-built-in, non-MCP → grey wrench
+    expect(clusterOf('acme_deploy')?.className).toContain('ttl-ink-gray')
+    expect(clusterOf('acme_deploy')?.querySelector('svg path')?.getAttribute('d') ?? '').toContain('M14.7 6.3')
   })
 
   it('draws && / ; at the end of the previous command line (v0.10.7)', async () => {
@@ -623,7 +658,7 @@ describe('TrailTab', () => {
     expect(row.querySelector('.ttl-stepName')?.textContent).toBe('skill')
     expect(row.querySelector('.ttl-stepDesc')?.textContent).toBe('figma-workbench')
     expect(row.querySelector('.ttl-stepDesc')?.textContent).not.toContain('name ')
-    expect(row.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-skill')
+    expect(row.querySelector('.ttl-stepIcon')?.className).toContain('ttl-ink-teal')
     // v0.10.14: open-book glyph (the spine line) replaced the sparkle.
     const path = row.querySelector('.ttl-stepIcon .ttl-rowIcon svg path')
     expect(path?.getAttribute('d') ?? '').toContain('M12 7v14')
@@ -647,7 +682,7 @@ describe('TrailTab', () => {
     // The row still marks itself failed (red chip, ✗) but the leading glyph is
     // the prototype's ⚠ triangle — the terminal family glyph must be gone.
     expect(step.getAttribute('data-step-kind')).toBe('error')
-    const glyph = step.querySelector('.ttl-stepIcon .ttl-rowIcon.ttl-icon-red svg path')
+    const glyph = step.querySelector('.ttl-stepIcon.ttl-ink-red .ttl-rowIcon svg path')
     expect(glyph?.getAttribute('d') ?? '').toContain('M10.29 3.86')
     expect(step.querySelector('.ttl-stepIcon svg polyline')).toBeNull()
   })

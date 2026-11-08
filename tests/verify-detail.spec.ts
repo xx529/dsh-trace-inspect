@@ -1201,7 +1201,7 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     expect(row.querySelector('.ttl-stepRail')).not.toBeNull()
     // v0.6.0: known tools draw a per-tool icon inside the family-tinted chip.
     expect(row.querySelector('.ttl-stepIcon .ttl-rowIcon, .ttl-stepIcon .ttl-rowDot')).not.toBeNull()
-    expect(row.querySelector('.ttl-stepIcon')?.className).toContain('ttl-tone-shell')
+    expect(row.querySelector('.ttl-stepIcon')?.className).toContain('ttl-ink-violet')
     expect(row.querySelector('.ttl-stepName')?.textContent).toBe('bash')
     expect(row.querySelector('.ttl-stepDesc')?.textContent).toBe('npm test')
     expect(row.querySelector('.ttl-stepStatus')?.textContent).toBe('✓')

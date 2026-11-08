@@ -49,7 +49,7 @@ import { t, type Lang } from './locales'
 import { markdownLabels } from './markdown-labels'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
 import { ToolIcon } from './tool-icon'
-import { summarizeToolCall, type ToolIconKind, type ToolSummary, type ToolTone } from './tool-summary'
+import { inkOf, summarizeToolCall, type ToolIconKind, type ToolSummary } from './tool-summary'
 import {
   TrailImages,
   copyToClipboard,
@@ -223,26 +223,10 @@ function familyOf(step: TrailStep): ToolFamily {
   return toolFamily(step.name, isFailedStep(step))
 }
 
-/**
- * Tone handed to `ToolIcon`; the family color itself comes from the wrapper
- * `ttl-tone-<family>` class (css: `.ttl-tone-*` wins over the legacy
- * `.ttl-icon-*` tone classes). ToolTone has no pink, so MCP falls back to
- * violet — the same mapping StepDetail uses.
- */
-function toneOfFamily(family: ToolFamily): ToolTone {
-  switch (family) {
-    case 'shell': return 'violet'
-    case 'read': return 'blue'
-    case 'edit': return 'success'
-    case 'mcp': return 'violet'
-    case 'todo': return 'warn'
-    case 'error': return 'red'
-    default: return 'neutral'
-  }
-}
-
 function iconKindOf(step: TrailStep, summary: ToolSummary): ToolIconKind {
-  return isFailedStep(step) ? 'generic' : summary.icon
+  // A failed step leads with the alert triangle, exactly like the inline rows
+  // (v0.10.2 / v0.10.19); only healthy rows draw their work-cluster glyph.
+  return isFailedStep(step) ? 'alert' : summary.icon
 }
 
 function durationOf(step: TrailStep): string {
@@ -872,7 +856,6 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
   const outlineRow = (step: TrailStep): React.ReactElement => {
     const selected = step.seq === current.seq
     const rowFailed = isFailedStep(step)
-    const rowFamily = familyOf(step)
     const summary = summarizeToolCall(step.name, step.args, step.argsPreview, lang)
     const rowLabel = step.kind === 'error' ? 'error' : summary.label
     const rowDesc = step.kind === 'error'
@@ -894,8 +877,8 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
         onClick={() => { setSelectedSeq(step.seq) }}
       >
         <span className="ttl-stepRail" aria-hidden="true" />
-        <span className={`ttl-stepIcon ttl-tone-${rowFamily}`} aria-hidden="true">
-          <ToolIcon kind={iconKindOf(step, summary)} tone={toneOfFamily(rowFamily)} />
+        <span className={`ttl-stepIcon ttl-ink-${inkOf(iconKindOf(step, summary))}`} aria-hidden="true">
+          <ToolIcon kind={iconKindOf(step, summary)} />
         </span>
         <span className="ttl-stepName">{rowLabel}</span>
         <span className="ttl-stepDesc">{rowDesc}</span>
@@ -1008,11 +991,11 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
           </aside>
           <main className="ttl-zoomMain" data-testid="ttl-zoom-pane" data-tab={tab}>
             <header className="ttl-zoomHead" data-testid="ttl-zoom-head">
-              <span className={`ttl-detailIcon ttl-tone-${family}`} aria-hidden="true">
-                <ToolIcon
-                  kind={currentSummary === null ? 'generic' : iconKindOf(current, currentSummary)}
-                  tone={toneOfFamily(family)}
-                />
+              <span
+                className={`ttl-detailIcon ttl-ink-${inkOf(currentSummary === null ? 'generic' : iconKindOf(current, currentSummary))}`}
+                aria-hidden="true"
+              >
+                <ToolIcon kind={currentSummary === null ? 'generic' : iconKindOf(current, currentSummary)} />
               </span>
               <div className="ttl-zoomHeadText">
                 <div className="ttl-zoomHeadLine">
