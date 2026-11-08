@@ -11,7 +11,11 @@
  *                    scrollIntoView + flash.
  *   conversation.target('trajectory').getSnapshot()  → { eventNodes,
  *                    requests } mapped to `[data-trajectory-row-key]` rows;
- *                    collapsed summaries are expanded first.
+ *                    collapsed summaries are expanded first. The trajectory
+ *                    table virtualizes past 100 records (DSH 0.2.x), so only
+ *                    the mounted window is in the DOM — the jump scrolls the
+ *                    `[data-trajectory-scroll]` pane through the ledger until
+ *                    the target row mounts (§10.3.4).
  *
  * 0.1.x fallback — the session snapshot itself used to carry both views
  * (`snapshot.chat.nodes` / `snapshot.views.get('trajectory')`); that shape is
@@ -303,6 +307,116 @@ function waitForNextFrame(): Promise<void> {
   })
 }
 
+// ── Virtualized trajectory ledger scan (DSH 0.2.2 adapted) ──────────────────
+// The trajectory table mounts only the rows inside its virtual window (plus a
+// fixed overscan) once the ledger holds more than VIRTUALIZATION_THRESHOLD
+// records — or as soon as older history has been paged in. A target far from
+// the current scroll offset therefore has no `tr[data-trajectory-row-key]`
+// node to match, which used to surface as "could not locate". The jump now
+// drives the pane itself: page through the ledger one viewport at a time,
+// expanding collapsed subcall summaries as they mount, until the row appears.
+
+/** The trajectory table's scroll pane (`div[data-trajectory-scroll]`). */
+export interface ScrollPaneLike {
+  scrollTop: number
+  clientHeight: number
+  scrollHeight?: number
+  dispatchEvent?(event: unknown): boolean
+}
+
+const TRAJECTORY_SCROLL_SELECTOR = '[data-trajectory-scroll]'
+/** Fraction of one viewport to advance per scan step (keeps overscan overlap). */
+const TRAJECTORY_SCAN_STEP_RATIO = 0.8
+/** Hard cap on scan steps per direction: bounds the worst-case traversal. */
+const TRAJECTORY_SCAN_MAX_STEPS = 200
+/** Wall-clock budget per direction, so an absent target cannot spin the UI. */
+const TRAJECTORY_SCAN_TIME_BUDGET_MS = 5000
+
+/** The virtualizing scroll pane, or null when the trajectory DOM is absent. */
+function trajectoryScrollPane(document: DocumentLike): ScrollPaneLike | null {
+  const pane = document.querySelector(TRAJECTORY_SCROLL_SELECTOR) as unknown as ScrollPaneLike | null
+  if (pane === null || typeof pane !== 'object') return null
+  if (typeof pane.scrollTop !== 'number' || typeof pane.clientHeight !== 'number') return null
+  if (!(pane.clientHeight > 0)) return null
+  return pane
+}
+
+/** Move the pane and wake the virtualizer's scroll listener. */
+function moveScrollPane(pane: ScrollPaneLike, top: number): void {
+  pane.scrollTop = Math.max(0, top)
+  if (typeof pane.dispatchEvent === 'function' && typeof Event === 'function') {
+    try {
+      pane.dispatchEvent(new Event('scroll'))
+    } catch {
+      // Event construction unavailable — the assignment still fires natively.
+    }
+  }
+}
+
+/** One mounted trajectory row (`tr[data-trajectory-row-key]`). */
+interface TrajectoryRowLike {
+  dataset: Record<string, string>
+  click?(): void
+  scrollIntoView(opts?: unknown): void
+}
+
+/** Row lookup by key candidates first, then by seq / callId. */
+function matchTrajectoryRow(document: DocumentLike, keys: string[], item: JumpTarget): TrajectoryRowLike | null {
+  return findTrajectoryRowByKeys(document, keys) ?? findTrajectoryRowBySeq(document, item)
+}
+
+/**
+ * Scroll the virtualized trajectory ledger until the target row mounts.
+ * Tries one downward pass from the current offset, then an upward pass, and
+ * restores the original offset when the target is not in the ledger at all.
+ * @returns the mounted row, or null when scrolling cannot reveal it.
+ */
+async function scanTrajectoryRows(
+  document: DocumentLike,
+  keys: string[],
+  item: JumpTarget,
+): Promise<TrajectoryRowLike | null> {
+  const pane = trajectoryScrollPane(document)
+  if (pane === null) return null
+  const original = pane.scrollTop
+  const maxTop = Math.max(0, Number(pane.scrollHeight ?? 0) - pane.clientHeight)
+  const step = Math.max(120, Math.floor(pane.clientHeight * TRAJECTORY_SCAN_STEP_RATIO))
+
+  /** One probe at the current offset: match, or expand what is folded here. */
+  const probe = async (): Promise<TrajectoryRowLike | null> => {
+    const row = matchTrajectoryRow(document, keys, item)
+    if (row !== null) return row
+    if (document.querySelector('tr[data-collapsed-summary]') === null) return null
+    expandCollapsedSummaries(document)
+    await waitForNextFrame()
+    return matchTrajectoryRow(document, keys, item)
+  }
+
+  const walk = async (from: number, direction: 1 | -1): Promise<TrajectoryRowLike | null> => {
+    let top = Math.max(0, Math.min(maxTop, from))
+    const startedAt = Date.now()
+    for (let index = 0; index < TRAJECTORY_SCAN_MAX_STEPS; index += 1) {
+      if (Date.now() - startedAt > TRAJECTORY_SCAN_TIME_BUDGET_MS) break
+      moveScrollPane(pane, top)
+      await waitForNextFrame()
+      await waitForNextFrame()
+      const row = await probe()
+      if (row !== null) return row
+      if (direction > 0 && top >= maxTop) break
+      if (direction < 0 && top <= 0) break
+      top = Math.max(0, Math.min(maxTop, top + direction * step))
+    }
+    return null
+  }
+
+  const downward = await walk(original, 1)
+  if (downward !== null) return downward
+  const upward = await walk(original - step, -1)
+  if (upward !== null) return upward
+  moveScrollPane(pane, original)
+  return null
+}
+
 /**
  * Locate the chat row for a node key. DSH 0.2.0 chat rows carry the flow key
  * on `data-chat-anchor-key` (a grouped part's key is a JSON pair, so the bare
@@ -406,6 +520,12 @@ export async function jumpToItem(
       }
       if (row === null) {
         row = findTrajectoryRowBySeq(document, item)
+      }
+      if (row === null) {
+        // 0.2.2 virtualizes the ledger past 100 records (or whenever older
+        // history is paged in): an off-window row is not in the DOM at all, so
+        // scroll the pane through the ledger until it mounts.
+        row = await scanTrajectoryRows(document, keys, item)
       }
       if (row === null) return { ok: false, error: 'trajectory-row-not-rendered' }
       row.scrollIntoView({ behavior: 'smooth', block: 'center' })

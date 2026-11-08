@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.17] - 2026-11-08
+
+### Fixed
+
+- **DSH 0.2.2-rc.1 下「轨迹」视图里跳回对话失效（提示「无法定位该消息」）**：0.2.x 的 Trajectory 表格在账本超过 100 条记录、或已向前翻过历史后启用虚拟化，只把视口内（+ overscan）的行走挂到 DOM。本插件的轨迹跳转此前只在已挂载的 `tr[data-trajectory-row-key]` 里按 `data-trajectory-row-key` 查找，目标行一旦落在窗口外就永远找不到——即使 `loadOlder()` 已把 `hasMore` 翻成 false、目标事件已在快照里（实测会话：`eventNodes` 425 条、DOM 仅 36 行，`trajectoryRecordIdsFor` 的 `tool\u0000call\u0000…` 键生成正确）。现在新增虚拟化扫描：以 `[data-trajectory-scroll]` 为滚动容器，按 0.8 视口步进先向下、再向上翻账本，每步同时按行键与 seq/callId 匹配，途中展开挂载出来的折叠子调用摘要行（`tr[data-collapsed-summary]`），命中后 `scrollIntoView({block:'center'})`；整张表都找不到时把滚动位置还原，仍如实报 `trajectory-row-not-rendered`（`src/client/trail-jump.ts`）。
+- 覆盖范围：仅轨迹视图分支；聊天视图跳转（`data-chat-anchor-key` / `data-chat-node-key` + `beforematch` 揭示）逻辑未变。
+
+### Verification
+
+- 新增 3 例虚拟化回归（`tests/trail-jump.spec.ts`）：①目标行在窗口外、滚动后才挂载 → 定位成功且 pane 滚到位；②扫描途中遇到折叠摘要 → 点击展开后命中；③目标不在账本内 → 失败并把滚动位置还原。测试 544 → **547 例 / 22 文件**，`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` profile，端口 19500，App 内置 DSH **0.2.2-rc.1** + better-sidebar 0.30.1 + Playwright，真实大会话）：修复前轨迹视图点跳转 → 状态栏「无法定位该消息」；修复后 → 「已在轨迹视图定位」，跳转后 DOM 轨迹行 36 → 38（滚动挂载）。聊天视图同一会话仍为「已定位」并给目标行加 `ttl-flash`；全程 0 条 console error。截图 `/tmp/verify-traj-fixed.png`。
+
 ## [0.10.16] - 2026-11-07
 
 ### Changed

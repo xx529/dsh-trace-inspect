@@ -442,3 +442,82 @@ describe('jumpToItem — trajectory view', () => {
     expect(expandedClick).toHaveBeenCalled()
   })
 })
+
+describe('jumpToItem — virtualized trajectory ledger (DSH 0.2.2)', () => {
+  const trajectorySnapshot = {
+    eventNodes: [{ kind: 'user', seq: 10 }],
+    requests: [],
+  }
+
+  /** A session whose only trajectory source is the legacy snapshot field. */
+  const trajectorySession = (): SessionFace => ({
+    loadOlder: async () => {},
+    getSnapshot: () => ({
+      hasMore: false,
+      views: { get: (kind: string) => (kind === 'trajectory' ? trajectorySnapshot : null) },
+    }),
+  })
+
+  /** A scroll pane that mounts its rows only inside `[scrollTop, +clientHeight]`. */
+  function virtualizedTrajectory(options: {
+    rowTop: number
+    scrollHeight?: number
+    clientHeight?: number
+    initialScrollTop?: number
+    collapsedSummaryTop?: number
+  }) {
+    const pane = {
+      scrollTop: options.initialScrollTop ?? 0,
+      clientHeight: options.clientHeight ?? 300,
+      scrollHeight: options.scrollHeight ?? 3000,
+      dispatchEvent: vi.fn(() => true),
+    }
+    const row = { scrollIntoView: vi.fn(), dataset: { trajectoryRowKey: 'user\u0000seq\u000010' } }
+    let expanded = false
+    const summaryClick = vi.fn(() => { expanded = true })
+    const inWindow = (top: number) => top >= pane.scrollTop && top < pane.scrollTop + pane.clientHeight
+    const mounted = () => inWindow(options.rowTop) && (options.collapsedSummaryTop === undefined || expanded)
+    const summaryMounted = () => options.collapsedSummaryTop !== undefined && inWindow(options.collapsedSummaryTop)
+    const document: DocumentLike = {
+      querySelector: vi.fn((selector: string) => {
+        if (selector === '[data-trajectory-scroll]') return pane
+        if (selector === 'tr[data-collapsed-summary]') return summaryMounted() ? { dataset: {} } : null
+        return null
+      }) as unknown as DocumentLike['querySelector'],
+      querySelectorAll: vi.fn((selector: string) => {
+        if (selector === 'tr[data-trajectory-row-key]') return mounted() ? [row] : []
+        if (selector === 'tr[data-collapsed-summary]') {
+          return summaryMounted() ? [{ click: summaryClick, dataset: {} }] : []
+        }
+        return []
+      }) as unknown as DocumentLike['querySelectorAll'],
+    }
+    return { document, pane, row, summaryClick, isExpanded: () => expanded }
+  }
+
+  it('scrolls the pane until an off-window row mounts', async () => {
+    const { document, pane, row } = virtualizedTrajectory({ rowTop: 1200 })
+    const outcome = await jumpToItem(trajectorySession(), { seq: 10, kind: 'user' }, { document })
+    expect(outcome).toEqual({ ok: true, mode: 'trajectory' })
+    // The row mounts as soon as the pane window covers rowTop=1200.
+    expect(pane.scrollTop).toBeGreaterThanOrEqual(900)
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+  })
+
+  it('expands a collapsed subcall summary met during the scan', async () => {
+    // The only summary (and thus the target row) shows up after one scroll step.
+    const { document, row, summaryClick } = virtualizedTrajectory({ rowTop: 240, collapsedSummaryTop: 240 })
+    const outcome = await jumpToItem(trajectorySession(), { seq: 10, kind: 'user' }, { document })
+    expect(outcome).toEqual({ ok: true, mode: 'trajectory' })
+    expect(summaryClick).toHaveBeenCalled()
+    expect(row.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('restores the original offset and fails when the row is absent from the ledger', async () => {
+    const { document, pane, row } = virtualizedTrajectory({ rowTop: 99999, initialScrollTop: 100 })
+    const outcome = await jumpToItem(trajectorySession(), { seq: 10, kind: 'user' }, { document })
+    expect(outcome).toEqual({ ok: false, error: 'trajectory-row-not-rendered' })
+    expect(pane.scrollTop).toBe(100)
+    expect(row.scrollIntoView).not.toHaveBeenCalled()
+  })
+})
