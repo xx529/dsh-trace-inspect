@@ -743,6 +743,19 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     )
   }
 
+  /**
+   * v0.10.21: a collapsed card reads as one click target — the header is a real
+   * button, and this handler lets the 2-line input preview (and the card's own
+   * padding) open the turn too. Inner controls keep their own behaviour, and a
+   * drag-select of the preview text is not treated as a click.
+   */
+  const onCardClick = React.useCallback((event: React.MouseEvent<HTMLElement>): void => {
+    const target = event.target as HTMLElement
+    if (target.closest('button, a, input, textarea, select') !== null) return
+    if ((window.getSelection()?.toString() ?? '').length > 0) return
+    onToggle(id)
+  }, [id, onToggle])
+
   const footParts = [ui.stepCount(turn.stepsCount)]
   if (parallelGroups.length > 0) footParts.push(ui.parallelGroups(parallelGroups.length))
   if (errorCount > 0) footParts.push(ui.failCount(errorCount))
@@ -753,6 +766,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
       className="ttl-turn"
       data-testid="ttl-turn"
       data-collapsed={expanded ? 'false' : 'true'}
+      onClick={expanded ? undefined : onCardClick}
       data-active={active ? 'true' : undefined}
       data-error={hasError ? 'true' : undefined}
     >

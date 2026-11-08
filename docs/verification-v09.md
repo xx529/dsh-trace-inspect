@@ -416,3 +416,19 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![轮次头部统计条：簇墨色 + 数字居中](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0120-mix.jpg>)
 
 ![会话概览：分布条与图例同一套簇墨色](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0120-summary.jpg>)
+
+## 32. v0.10.21 折叠卡整卡可点（时间行 + 输入预览）
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 鼠标移到文本地方无法打开轨迹内容，只能点时间行；期望点时间行或文本行都能打开 | `section.ttl-turn` 在折叠态挂一个整卡 click handler：命中 `button / a / input / textarea / select` 时让内层控件自己处理，选区非空（拖选复制）时不展开；展开态不挂该 handler，步进行内的点击不会把轮次折回去。同时 `.ttl-turn[data-collapsed="true"] { cursor: pointer }`、预览悬停提亮 | 折叠卡：`data-collapsed=true`、预览 `cursor: pointer`、`ttl-step` 0 条 → **点击预览行** → `data-collapsed=false`、DOM 出现 3 条步骤；点展开体内的脚注仍保持展开 |
+| 键盘 / 内层按钮不受影响 | `ttl-turnToggle` 仍是真正的 button；行尾 `↗` 定位是 button，整卡 handler 会跳过 | 点击 `↗`、步进行、脚注均不触发折叠（回归用例覆盖） |
+
+- 覆盖：所有折叠轮次卡；展开态行为、筛选态（预览作为过滤提示出现时）都不变。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **561 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-cardclick.mjs`（两轮 mock 会话：折叠 → 截图 → 点预览展开 → 截图 → 点脚注验证不折叠）。
+- 已知偏差：mock 会话；真实会话里卡片高度随预览行数变化，点击热区同样覆盖整卡。
+
+![折叠卡：预览行是点击目标](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0121-card-collapsed.jpg>)
+
+![点击预览行后：就地展开输入行 + 3 条步骤](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0121-card-expanded.jpg>)

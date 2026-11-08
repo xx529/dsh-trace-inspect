@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.21] - 2026-11-09
+
+### Changed
+
+- **折叠卡整卡可点**：以前只有头部时间行（`.ttl-turnToggle`）能展开轮次，2 行输入预览是「死文本」，鼠标移上去没有反应。现在折叠状态下整张卡都是点击目标——点时间行、点输入预览、点卡片内边距都会展开；`cursor: pointer`，预览悬停时文字提亮。
+- **交互边界**：卡片内部的按钮 / 链接 / 输入框保留自己的行为（如行尾 `↗` 定位不会被当成展开）；用鼠标拖选预览文字时不触发展开；展开后的卡片不挂整卡点击，步进行内的点击（含详情带空白处）不会把轮次折回去。
+- 键盘路径不变：`ttl-turnToggle` 仍是真正的 button（Tab / Enter / Space），整卡点击只是鼠标侧的补充。
+
+### Verification
+
+- 新增 4 例回归：点击输入预览展开、点击卡片内边距展开、拖选文字不展开（mock `getSelection`）、展开后点步进行/脚注不折叠。测试 **561 例 / 22 文件**（557 → 561）。
+- 实机（独立 `trace-verify` web profile，端口 19487，dock 400px，Playwright 路由 mock 两轮会话）：折叠卡 `data-collapsed=true` 且预览 `cursor: pointer`，`ttl-step` 0 条；**点击预览行**后 `data-collapsed=false`、DOM 出现 3 条步骤；再点展开体内的脚注仍保持展开；0 条 console error。截图 `docs/assets/v0121-card-collapsed.jpg` / `docs/assets/v0121-card-expanded.jpg`，采集脚本 `scripts/verify/shoot-cardclick.mjs`。
+
 ## [0.10.20] - 2026-11-09
 
 ### Changed

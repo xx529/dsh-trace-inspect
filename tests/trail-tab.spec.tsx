@@ -862,6 +862,41 @@ describe('TrailTab', () => {
     expect(after[1].getAttribute('data-collapsed')).toBe('false')
   })
 
+  it('clicking the collapsed input preview opens the turn (v0.10.21)', async () => {
+    renderTab(twoTurns())
+    const cards = await readyTurns(2)
+    expect(cards[0].getAttribute('data-collapsed')).toBe('true')
+    // v0.10.21: the preview line is part of the card's click target, not dead text.
+    fireEvent.click(within(cards[0]).getByTestId('ttl-turn-preview'))
+    expect(screen.getAllByTestId('ttl-turn')[0].getAttribute('data-collapsed')).toBe('false')
+  })
+
+  it('clicking the card padding also opens the collapsed turn (v0.10.21)', async () => {
+    renderTab(twoTurns())
+    const cards = await readyTurns(2)
+    fireEvent.click(cards[0])
+    expect(screen.getAllByTestId('ttl-turn')[0].getAttribute('data-collapsed')).toBe('false')
+  })
+
+  it('a drag-select of the preview text does not toggle the card (v0.10.21)', async () => {
+    renderTab(twoTurns())
+    const cards = await readyTurns(2)
+    const selection = window.getSelection
+    const spy = vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => 'deploy' } as unknown as Selection)
+    fireEvent.click(within(cards[0]).getByTestId('ttl-turn-preview'))
+    expect(screen.getAllByTestId('ttl-turn')[0].getAttribute('data-collapsed')).toBe('true')
+    spy.mockRestore()
+    expect(selection).toBeTypeOf('function')
+  })
+
+  it('a click inside the expanded body does not collapse the turn (v0.10.21)', async () => {
+    renderTab(twoTurns())
+    const cards = await readyTurns(2)
+    // Latest turn is expanded; clicking its foot / blank body must not fold it.
+    fireEvent.click(within(cards[1]).getByTestId('ttl-turn-foot'))
+    expect(screen.getAllByTestId('ttl-turn')[1].getAttribute('data-collapsed')).toBe('false')
+  })
+
   it('drains hasMore pages before settling on ready', async () => {
     const pageA = [user(1, 'first'), turnStart(2, 1), assistant(3, 'A'), turnEnd(4, 1)]
     const pageB = [user(5, 'second'), turnStart(6, 2), assistant(7, 'B'), turnEnd(8, 2)]

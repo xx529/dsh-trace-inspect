@@ -956,6 +956,9 @@ export const trailCss = `
   word-break: break-word;
 }
 .ttl-turn[data-active="true"] .ttl-turnPreview { color: #e6e8ea; }
+/* v0.10.21: the whole collapsed card is a click target (header row + preview). */
+.ttl-turn[data-collapsed="true"] { cursor: pointer; }
+.ttl-turn[data-collapsed="true"] .ttl-turnPreview:hover { color: var(--dsw-alias-label-primary, #f3f4f6); }
 .ttl-turnBody { padding-top: 2px; }
 
 /* ── steps ──────────────────────────────────────────────── */
