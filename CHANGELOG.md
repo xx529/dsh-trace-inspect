@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.20] - 2026-11-09
+
+### Changed
+
+- **轮次头部统计条与行图标统一**：轮次 mix chip、会话分布条与图例 dot 改用 v0.10.19 的簇墨色 `.ttl-ink-*`，不再用旧族色 `.ttl-tone-*` —— 于是 `edit` 从琥珀回到绿色、`mcp` 从绿回到粉色，与旁边步骤行的图标颜色一致；字形仍取该族的代表簇（terminal / 铅笔 / 插头 / 开卷 / 扳手…）。`.ttl-tone-*` 规则仅作向后兼容保留在 CSS 里，UI 不再引用。
+- **统计数字与图标垂直居中**：`.ttl-turnMeta` 显式 `line-height: 13px`。此前它继承 18px 行高，9.5px 的计数在 13px 图标的行盒里整体偏高约 1px，看起来像「上对齐」；现在图标墨迹中心与数字墨迹中心重合（badge / pill 仍用自己的 16px 行高）。
+- 覆盖范围：展开态隐藏 mix 的规则不变；错误徽标、`∥N` 并行徽标、`N 步` 共用同一条 13px 行高。
+
+### Verification
+
+- 更新/新增回归：`trail-tab` 的 mix 用例改断言 `.ttl-ink-teal|violet` 且不再出现 `ttl-tone-*`，并扩展为 violet / blue / green / teal 四色齐全；会话分布条与图例 dot 断言 `ttl-ink-violet`；`detail-styles` 新增 2 例（`.ttl-turnMeta` 含 `line-height: 13px`、dist/legend 的 ink 背景与 `[class*="ttl-ink-"]` display 规则），并把「ink 不给 chip 上底色」的断言收窄到行 / 详情 chip。测试 **557 例 / 22 文件**（555 → 557）。
+- 实机（独立 `trace-verify` web profile，端口 19487，右侧 dock 400px，Playwright 路由 mock 一轮 3×bash + 2×edit + 2×MCP + 1×read + 1×skill）：mix chips = `ttl-ink-violet` 3 / `ttl-ink-green` 2 / `ttl-ink-pink` 2 / `ttl-ink-teal` 1，计算行高均为 `13px`；图例 dot 依次为 vioet/blue/green/pink/teal 的墨色；2× 截图像素量测：图标墨迹中心 23.0、数字墨迹中心 23.0（修复前数字 24.5 vs 图标 26.5，约 1px 偏高）；0 条 console error。截图 `docs/assets/v0120-mix.jpg`（轮次头部）与 `docs/assets/v0120-summary.jpg`（会话概览分布条 + 图例），采集脚本 `scripts/verify/shoot-mix.mjs`。
+
 ## [0.10.19] - 2026-11-09
 
 ### Changed

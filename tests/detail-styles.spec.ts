@@ -221,6 +221,21 @@ describe('v0.10.10: 工具族不再有灰色字形', () => {
   })
 })
 
+describe('v0.10.20: 统计条与行图标共用墨色 + 数字与图标居中对齐', () => {
+  it('mix 行高对齐 13px 图标网格（数字不再偏上）', () => {
+    const meta = rule('.ttl-turnMeta {')
+    expect(meta).toContain('line-height: 13px;')
+    expect(meta).toContain('align-items: center;')
+  })
+
+  it('分布条 / 图例 dot 也走 .ttl-ink-*（含 display 规则）', () => {
+    expect(trailCss).toContain('.ttl-distSeg.ttl-ink-violet, .ttl-legendDot.ttl-ink-violet { background: #a78bfa; }')
+    expect(trailCss).toContain('.ttl-distSeg.ttl-ink-pink, .ttl-legendDot.ttl-ink-pink { background: #f08fb8; }')
+    expect(trailCss).toContain('.ttl-distSeg[class*="ttl-tone-"], .ttl-distSeg[class*="ttl-ink-"]')
+    expect(trailCss).toContain('.ttl-legendDot[class*="ttl-tone-"], .ttl-legendDot[class*="ttl-ink-"]')
+  })
+})
+
 describe('v0.10.19: 每个工作簇一个图标与一种墨色', () => {
   it('八种 ink 规则齐全；青色复用既有 skill 家族色，不引入新 hex', () => {
     const inks: Array<[string, string]> = [
@@ -231,8 +246,10 @@ describe('v0.10.19: 每个工作簇一个图标与一种墨色', () => {
   })
 
   it('ink 只给字形上色，不改变 chip 底色', () => {
-    expect(trailCss).not.toMatch(/\.ttl-ink-[a-z]+\s*\{[^}]*background/)
-    // 统计族色仍在（mix chip / dist / legend），并没有被 ink 取代。
+    // 行/详情 chip 的底色仍由 .ttl-stepIcon 统一给；ink 只在 dist / legend dot
+    // 这类本来就靠 background 着色的元素上补 background（v0.10.20）。
+    expect(trailCss).not.toMatch(/\.ttl-(stepIcon|detailIcon|mixItem)\.ttl-ink-[a-z]+\s*\{[^}]*background/)
+    // 统计族色仍在（向后兼容），没有被 ink 规则删掉。
     expect(trailCss).toContain('.ttl-tone-shell { color: #a78bfa; }')
   })
 })

@@ -286,7 +286,10 @@ describe('TrailTab', () => {
     expect(summary?.querySelector('.ttl-summaryStat')?.textContent).toBe('3 steps · 2 turns')
     expect(summary?.querySelector('.ttl-summaryFail')?.textContent).toBe('1 failed')
     // Tool-family distribution: two bash calls → one shell segment + legend.
+    // v0.10.20: the stats paint from the same cluster ink as the rows.
     expect(summary?.querySelectorAll('.ttl-distSeg')).toHaveLength(1)
+    expect(summary?.querySelector('.ttl-distSeg')?.className).toContain('ttl-ink-violet')
+    expect(summary?.querySelector('.ttl-legendDot')?.className).toContain('ttl-ink-violet')
     expect(summary?.querySelector('.ttl-legend')?.textContent).toContain('bash 2')
     // No wire timestamps in this fixture → no total duration is invented.
     expect(summary?.querySelector('.ttl-summaryDur')).toBeNull()
@@ -565,13 +568,19 @@ describe('TrailTab', () => {
     const turns = await readyTurns(2)
     const mix = turns[0].querySelector('.ttl-mix')
     expect(mix).toBeTruthy()
-    const skillItem = mix?.querySelector('.ttl-mixItem.ttl-tone-skill')
+    const skillItem = mix?.querySelector('.ttl-mixItem.ttl-ink-teal')
     expect(skillItem).toBeTruthy()
     expect(skillItem?.querySelector('.ttl-mixCount')?.textContent).toBe('1')
     // The mix stays capped at four items (skill replaces the smallest slot).
     expect(mix?.querySelectorAll('.ttl-mixItem')).toHaveLength(4)
     // shell/read/edit (2 each) are the loud families that would otherwise fill it.
-    expect(mix?.querySelectorAll('.ttl-mixItem.ttl-tone-shell').length).toBe(1)
+    expect(mix?.querySelectorAll('.ttl-mixItem.ttl-ink-violet').length).toBe(1)
+    // v0.10.20: each chip carries its row cluster's ink — shell violet, read
+    // blue, edit green, skill teal — instead of the legacy family tone.
+    for (const ink of ['violet', 'blue', 'green', 'teal']) {
+      expect(mix?.querySelector(`.ttl-mixItem.ttl-ink-${ink}`)).toBeTruthy()
+    }
+    expect(mix?.querySelector('[class*="ttl-tone-"]')).toBeNull()
   })
 
   it('figma plugin + todo tools get their own coloured families, no grey glyph (v0.10.10)', async () => {

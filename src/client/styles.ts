@@ -890,6 +890,10 @@ export const trailCss = `
   align-items: center;
   gap: 7px;
   margin-left: auto;
+  /* v0.10.20: the glyphs are 13px tall; a 13px line box centers the 9.5–10.5px
+     counters on the icon ink instead of leaving them 1px high (top-aligned
+     look). Badges/pills keep their own 16px line-height. */
+  line-height: 13px;
 }
 .ttl-mix { display: inline-flex; align-items: center; gap: 7px; color: var(--dsw-alias-label-quaternary, #7b8086); }
 .ttl-mixItem { display: inline-flex; align-items: center; gap: 2px; font-size: 9.5px; font-variant-numeric: tabular-nums; }
@@ -1067,9 +1071,10 @@ export const trailCss = `
 .ttl-tone-error { color: #f2726f; }
 .ttl-tone-generic { color: #9ba1a7; }
 
-/* cluster ink — one colour per work cluster (v0.10.19). The glyph family is
-   the cluster; the ttl-tone-* rules above stay for the statistics families
-   (mix chips / distribution bar / legend dots). */
+/* cluster ink — one colour per work cluster (v0.10.19). Rows, detail heads,
+   zoom rows AND the statistics (mix chips / distribution bar / legend dots) all
+   paint from these; the legacy .ttl-tone-* family colours above stay for
+   backward compatibility only. */
 .ttl-ink-violet { color: #a78bfa; }
 .ttl-ink-blue { color: #60a5fa; }
 .ttl-ink-green { color: #34d399; }
@@ -1078,6 +1083,14 @@ export const trailCss = `
 .ttl-ink-teal { color: #63c9d1; }
 .ttl-ink-gray { color: #9ba1a7; }
 .ttl-ink-red { color: #f2726f; }
+.ttl-distSeg.ttl-ink-violet, .ttl-legendDot.ttl-ink-violet { background: #a78bfa; }
+.ttl-distSeg.ttl-ink-blue, .ttl-legendDot.ttl-ink-blue { background: #60a5fa; }
+.ttl-distSeg.ttl-ink-green, .ttl-legendDot.ttl-ink-green { background: #34d399; }
+.ttl-distSeg.ttl-ink-amber, .ttl-legendDot.ttl-ink-amber { background: #f2b45c; }
+.ttl-distSeg.ttl-ink-pink, .ttl-legendDot.ttl-ink-pink { background: #f08fb8; }
+.ttl-distSeg.ttl-ink-teal, .ttl-legendDot.ttl-ink-teal { background: #63c9d1; }
+.ttl-distSeg.ttl-ink-gray, .ttl-legendDot.ttl-ink-gray { background: #9ba1a7; }
+.ttl-distSeg.ttl-ink-red, .ttl-legendDot.ttl-ink-red { background: #f2726f; }
 .ttl-stepIcon.ttl-tone-error {
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #f2726f) 16%, var(--dsw-alias-bg-layer-1, #232324));
 }
@@ -1910,8 +1923,8 @@ export const trailCss = `
 .ttl-turnFoot { padding: 6px 14px 0; }
 
 /* 2) session summary bar / legend dots are painted from .ttl-tone-* (span/ i) */
-.ttl-distSeg[class*="ttl-tone-"] { display: block; height: 4px; }
-.ttl-legendDot[class*="ttl-tone-"] { display: inline-block; }
+.ttl-distSeg[class*="ttl-tone-"], .ttl-distSeg[class*="ttl-ink-"] { display: block; height: 4px; }
+.ttl-legendDot[class*="ttl-tone-"], .ttl-legendDot[class*="ttl-ink-"] { display: inline-block; }
 
 /* 3) locate arrow only on hover / focus, like the prototype */
 .ttl-locateBtn { opacity: 0; pointer-events: none; transition: opacity 120ms ease; }

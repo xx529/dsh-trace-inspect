@@ -50,7 +50,7 @@ import {
   type ToolDetailResult,
 } from './useTrail'
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
-import { inkOf, splitMcpName, summarizeToolCall, type ToolIconKind } from './tool-summary'
+import { inkOf, splitMcpName, summarizeToolCall, type ToolIconKind, type ToolInk } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
 import { detectOutputKind } from './output-format'
@@ -319,6 +319,11 @@ function familyIconKind(family: ToolFamily): ToolIconKind {
     case 'todo': return 'todo'
     default: return 'generic'
   }
+}
+
+/** Statistics ink: the family's representative cluster carries the same ink as its rows. */
+function familyInk(family: ToolFamily): ToolInk {
+  return inkOf(familyIconKind(family))
 }
 
 /** Legend / mix label per family (the prototype uses the representative tool). */
@@ -772,7 +777,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                   {mix.map((entry) => (
                     <i
                       key={entry.family}
-                      className={`ttl-mixItem ttl-tone-${entry.family}`}
+                      className={`ttl-mixItem ttl-ink-${familyInk(entry.family)}`}
                       title={familyLabel(entry.family, ui)}
                     >
                       <ToolIcon kind={familyIconKind(entry.family)} />
@@ -1453,7 +1458,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
                 {overview.families.map((entry) => (
                   <i
                     key={entry.family}
-                    className={`ttl-distSeg ttl-dist-${entry.family} ttl-tone-${entry.family}`}
+                    className={`ttl-distSeg ttl-dist-${entry.family} ttl-ink-${familyInk(entry.family)}`}
                     style={{ width: `${(entry.count / overview.total) * 100}%` }}
                   />
                 ))}
@@ -1461,7 +1466,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
               <div className="ttl-legend">
                 {overview.families.map((entry) => (
                   <span className="ttl-legendItem" key={entry.family}>
-                    <i className={`ttl-legendDot ttl-dist-${entry.family} ttl-tone-${entry.family}`} aria-hidden="true" />
+                    <i className={`ttl-legendDot ttl-dist-${entry.family} ttl-ink-${familyInk(entry.family)}`} aria-hidden="true" />
                     {`${familyLabel(entry.family, ui)} ${entry.count}`}
                   </span>
                 ))}

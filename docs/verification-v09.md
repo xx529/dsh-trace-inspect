@@ -400,3 +400,19 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话（真实会话里低频簇很少同时出现）；字形沿用 Lucide 几何，与 Figma 稿逐条对应。
 
 ![每个工作簇一个图标：19 行字形与墨色](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0119-tool-clusters.jpg>)
+
+## 31. v0.10.20 轮次头部统计条：墨色对齐行图标 + 数字居中
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 这个统计 icon 要跟刚才改的（v0.10.19 工作簇图标）一致 | mix chip、会话分布条、图例 dot 全部改用 `.ttl-ink-*` 簇墨色，字形仍取族的代表簇（terminal / 铅笔 / 插头 / 开卷 / 扳手）；`.ttl-tone-*` 旧族色只保留在 CSS 做兼容 | chips = `ttl-ink-violet` 3 / `ttl-ink-green` 2 / `ttl-ink-pink` 2 / `ttl-ink-teal` 1；图例 dot 依次 violet / blue / green / pink / teal，与行图标同色 |
+| icon 和数字要居中对齐，现在是上对齐 | `.ttl-turnMeta` 显式 `line-height: 13px`（图标 13px 高），让 9.5px 计数落在图标墨迹中心；badge / pill 保持自己的 16px 行高 | 2× 截图像素量测：图标墨迹中心 23.0、数字墨迹中心 23.0；修复前同位置数字 24.5 vs 图标 26.5（约 1px 偏高） |
+
+- 覆盖：轮次头部 mix（含 skill 固定槽）、会话概览分布条 + 图例、`N 步`；展开态隐藏 mix 的规则未动。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **557 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-mix.mjs`（mock 一轮 3×bash + 2×edit + 2×MCP + 1×read + 1×skill，量 chip 类名 / 计算色 / 行高）。
+- 已知偏差：mock 会话；时间线上低频族的统计仍按「工具族」聚合（本次只改图标与配色，不把统计口径切成 22 簇）。
+
+![轮次头部统计条：簇墨色 + 数字居中](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0120-mix.jpg>)
+
+![会话概览：分布条与图例同一套簇墨色](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0120-summary.jpg>)
