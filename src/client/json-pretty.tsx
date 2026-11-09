@@ -19,7 +19,7 @@
  */
 import * as React from 'react'
 import { t, detectLang, type Lang } from './locales'
-import { copyToClipboard } from './ZoomOverlay'
+import { copyToClipboard } from './ui-shared'
 import { ValueViewer } from './value-viewer'
 
 /** A string at least this long is folded into a long-value block. */
@@ -71,44 +71,70 @@ function pushRow(ctx: EmitCtx, depth: number, content: React.ReactNode, testid?:
   )
 }
 
-/** One long string value: collapsed meta row + expand/copy/centered viewer. */
+/**
+ * One long string value (v0.10.31 redesign): a single-line code card — the
+ * value itself is the primary affordance (click anywhere on it, or the ⤢
+ * button, to open the single-value reader), with the character/line meta and
+ * the quiet 「展开 / 复制」 text actions on a second row. No dashed box, no
+ * solid buttons: hover only changes surface + border, never geometry.
+ */
 function LongValue(props: {
   label: string
   text: string
   ctx: EmitCtx
+  /** The JSON comma that belonged after the value; shown at the preview tail. */
+  trailingComma?: boolean
 }): React.ReactElement {
-  const { label, text, ctx } = props
+  const { label, text, ctx, trailingComma = false } = props
   const [open, setOpen] = React.useState(false)
   const lineCount = text.includes('\n') ? text.split('\n').length : 1
   const meta = (t(ctx.lang, 'valueMeta') as (chars: string, lines: number) => string)(formatCount(text.length), lineCount)
+  const viewLabel = t(ctx.lang, 'viewInCenter') as string
+  /** First line + the JSON comma; CSS ellipsis handles the overflow. */
+  const firstLine = (text.split('\n')[0] ?? '').trim()
+  const preview = `${firstLine}${trailingComma ? ',' : ''}`
   return (
     <span
-      className="ttl-jpLong"
+      className={`ttl-jpLong${open ? ' ttl-jpLongOpen' : ''}`}
       data-testid="ttl-json-long"
       onClick={(event) => { event.stopPropagation() }}
     >
-      <span className="ttl-jpLongMeta" data-testid="ttl-json-long-meta">{meta}</span>
-      <button
-        type="button"
-        className="ttl-dtab"
-        data-testid="ttl-json-long-toggle"
-        aria-expanded={open}
-        onClick={() => { setOpen(!open) }}
-      >{t(ctx.lang, open ? 'collapseLabel' : 'expandLabel') as string}</button>
-      <button
-        type="button"
-        className="ttl-dtab"
-        data-testid="ttl-json-long-copy"
-        onClick={() => { copyToClipboard(text) }}
-      >{t(ctx.lang, 'copyField') as string}</button>
-      <button
-        type="button"
-        className="ttl-dtab"
-        data-testid="ttl-json-long-view"
-        title={t(ctx.lang, 'viewInCenter') as string}
-        aria-label={t(ctx.lang, 'viewInCenter') as string}
-        onClick={() => { ctx.onView(label, text) }}
-      >⤢</button>
+      <span className="ttl-jpLongMain">
+        <button
+          type="button"
+          className="ttl-jpLongPreview"
+          data-testid="ttl-json-long-preview"
+          title={viewLabel}
+          aria-label={viewLabel}
+          onClick={() => { ctx.onView(label, text) }}
+        >{preview}</button>
+        <button
+          type="button"
+          className="ttl-jpLongView"
+          data-testid="ttl-json-long-view"
+          title={viewLabel}
+          aria-label={viewLabel}
+          onClick={() => { ctx.onView(label, text) }}
+        >⤢</button>
+      </span>
+      <span className="ttl-jpLongFoot">
+        <span className="ttl-jpLongMeta" data-testid="ttl-json-long-meta">{meta}</span>
+        <span className="ttl-jpLongSpacer" />
+        <button
+          type="button"
+          className="ttl-jpLongAction"
+          data-testid="ttl-json-long-toggle"
+          aria-expanded={open}
+          onClick={() => { setOpen(!open) }}
+        >{t(ctx.lang, open ? 'collapseLabel' : 'expandLabel') as string}</button>
+        <span className="ttl-jpLongDot" aria-hidden="true">·</span>
+        <button
+          type="button"
+          className="ttl-jpLongAction"
+          data-testid="ttl-json-long-copy"
+          onClick={() => { copyToClipboard(text) }}
+        >{t(ctx.lang, 'copyField') as string}</button>
+      </span>
       {open
         ? <pre className="ttl-jpRestored" data-testid="ttl-json-long-body">{text}</pre>
         : null}
@@ -135,8 +161,7 @@ function emitValue(
     if (value.length >= LONG_VALUE_CHARS) {
       pushRow(ctx, depth, React.createElement(React.Fragment, null,
         prefix,
-        React.createElement(LongValue, { label: path, text: value, ctx }),
-        comma))
+        React.createElement(LongValue, { label: path, text: value, ctx, trailingComma: trailingComma })))
       return
     }
     pushRow(ctx, depth, React.createElement(React.Fragment, null, prefix,

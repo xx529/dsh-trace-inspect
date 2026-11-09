@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.10.31] - 2026-11-10
+
+### Changed
+
+- **参数长值块重设计**（按 `ui-ux-pro-max` 的 truncation / progressive disclosure / 可见焦点 / 150–300ms 过渡规则）：
+  - 去掉虚线框与三个 30px 实心按钮，改为低对比代码卡片：`1px solid` 边框 + 左侧 2px 蓝墨线 + 8px 圆角 + 2% 白底；
+  - **值本身是主操作**：单行等宽预览（超长走 CSS 省略号），整行可点打开单值查看器；右侧 20px `⤢` 是显式入口（hover 变蓝）；
+  - 字符数 / 行数降为 10.5px 四元色元信息，「展开 / 复制」降为 10.5px 透明文本按钮（hover 才浮起底色），不再抢视觉；悬停仅改底色/边框、无位移；键盘焦点 2px 蓝描边；
+  - 展开态在卡内显示全文（按钮变「收起」），不再另开面板；JSON 逗号并入预览行尾，块级卡片不再产生孤立逗号行。
+
+### Verification
+
+- 新增 1 例 CSS 回归（实线/墨线/8px 圆角/无 dashed；文本按钮 10.5px 透明底；预览走 ellipsis）。测试 **543 例 / 21 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 420px，mock 211 字符 bash 命令）：长值块 `border-style: solid`、`border-radius: 8px`、`展开/复制` 均 `10.5px` + 透明底、块内 `.ttl-dtab` 0 个；展开后 `ttl-json-long-body` 出现且按钮变「收起」；0 条 console error。截图 `docs/assets/v0131-longvalue-collapsed.jpg`、`docs/assets/v0131-longvalue-expanded.jpg`，脚本 `scripts/verify/shoot-longvalue-ui.mjs`。
+- 设计：Figma 新增 `07c · 参数长值块`（BEFORE / AFTER 折叠 / 悬停 / 展开四态）。
+
+## [0.10.30] - 2026-11-09
+
+### Changed
+
+- **移除整步「放大阅读浮层」**：摘要现在已含完整参数 JSON、Markdown 输出与图片块，参数/结果被截断时会按需拉全，再开一个「步骤大纲 + 宽版阅读」的浮层已无必要。删掉 `ZoomOverlay.tsx`（约 1000 行）、`.ttl-zoom*` 样式与 `.ttl-clickablePane`，以及所有入口：详情头 `⤢`、底部「在中央查看」、点击面板放大、行上 `⌘⇧O`。放大浮层的 ⌘F/⌘C/导出等交互随组件一起下掉。
+- **长参数值改为「…」+ 单值查看器**：参数 JSON 里的长值先给首行片段 + 可点击的 `…`（`ttl-json-long-preview`）；点 `…` 或 `⤢` 打开既有的**单值查看器**（`ValueViewer`，body portal），并给它加了 `backdrop-filter: blur(6px)` 的背景模糊——弹窗 + 模糊背板，Esc / 点遮罩关闭、`⌘F` 搜索值、`⌘C` 复制完整值。
+- `DetailTab` 收敛为 `summary` / `raw`；`ResultView` 类型删除。
+
+### Verification
+
+- 测试：删除 `tests/zoom-overlay.spec.tsx`（整组件）与浮层相关契约用例；`detail-styles` 的类名契约改为单值查看器（`.ttl-valueViewer/.ttl-valueBackdrop/.ttl-valuePanel`）并新增模糊断言。现 **542 例 / 21 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 420px，Playwright 路由 mock 一条 227 字符 `bash` 命令）：详情带无 `ttl-detail-zoom` / `ttl-detail-view-center` / `ttl-pane-clickable`；参数里出现 `ttl-json-long-preview`；点击后 `ttl-value-viewer` portal 到 body、`backdrop-filter: blur(6px)`、标题 `command`、Esc 关闭；0 条 console error。截图 `docs/assets/v0130-band-longvalue.jpg`、`docs/assets/v0130-value-viewer.jpg`，脚本 `scripts/verify/shoot-value-viewer.mjs`。
+- 设计：Figma 页面「重设计原型 v0.9」里把 `07 · 放大阅读浮层` 标注为已移除，新增 `07b · 长值查看弹窗`（详情带长值 + 单值查看器 + BACKGROUND_BLUR 背板）。
+
 ## [0.10.29] - 2026-11-09
 
 ### Changed

@@ -13,7 +13,7 @@
  */
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { copyToClipboard } from './ZoomOverlay'
+import { copyToClipboard } from './ui-shared'
 import { t, type Lang } from './locales'
 
 export interface ValueViewerProps {

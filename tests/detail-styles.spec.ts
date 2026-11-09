@@ -25,8 +25,7 @@ import type { Dict } from '../src/client/locales'
 const CONTRACT_CLASSES = [
   '.ttl-step', '.ttl-stepWrap', '.ttl-stepIcon', '.ttl-detail', '.ttl-detailHead', '.ttl-detailBody',
   '.ttl-detailFoot', '.ttl-tabs', '.ttl-tab', '.ttl-code', '.ttl-codeLine', '.ttl-codeText',
-  '.ttl-section', '.ttl-parallel', '.ttl-zoom', '.ttl-zoomBackdrop', '.ttl-zoomPanel', '.ttl-zoomTop',
-  '.ttl-zoomBody', '.ttl-zoomOutline', '.ttl-zoomOutlineRow', '.ttl-zoomMain', '.ttl-zoomHead', '.ttl-zoomFoot',
+  '.ttl-section', '.ttl-parallel', '.ttl-valueViewer', '.ttl-valueBackdrop', '.ttl-valuePanel',
   '.ttl-imgThumbWrap', '.ttl-imgThumb',
 ]
 
@@ -60,35 +59,6 @@ describe('§10.4.1 新增 CSS 类', () => {
     expect(rule('.ttl-imgThumbWrap')).toContain('max-width: 100%;')
   })
 
-  it('浮层：fixed 全屏 + 背板 + 1280 宽 flex 面板', () => {
-    const zoom = rule('.ttl-zoom {')
-    expect(zoom).toContain('position: fixed;')
-    expect(zoom).toContain('inset: 0;')
-    expect(zoom).toMatch(/z-index: \d+;/)
-
-    const panel = rule('.ttl-zoomPanel {')
-    expect(trailCss).toContain('width: 1280px;')
-    expect(trailCss).toContain('height: 800px;')
-    expect(panel).toContain('display: flex;')
-    expect(panel).toContain('flex-direction: column;')
-    expect(panel).toContain('position: relative;')
-
-    const backdrop = rule('.ttl-zoomBackdrop {')
-    expect(backdrop).toContain('position: absolute;')
-    expect(backdrop).toContain('inset: 0;')
-  })
-
-  it('大纲列：width:256px 且自身可滚动', () => {
-    const outline = rule('.ttl-zoomOutline {')
-    expect(outline).toContain('width: 256px;')
-    expect(outline).toContain('overflow-y: auto;')
-  })
-
-  it('大纲当前行用 [aria-current="true"] 而非 JS 类切换', () => {
-    expect(trailCss).toContain('.ttl-zoomOutlineRow[aria-current="true"]')
-    const current = trailCss.slice(trailCss.indexOf('.ttl-zoomOutlineRow[aria-current="true"]'))
-    expect(current.slice(0, current.indexOf('}'))).toContain('background:')
-  })
 })
 
 const PALETTE = new Set([
@@ -224,6 +194,36 @@ describe('v0.10.10: 工具族不再有灰色字形', () => {
 describe('v0.10.27: 挪出 meta 后统计数字仍与图标居中', () => {
   it('.ttl-mix 自带 13px 行盒（不再依赖 .ttl-turnMeta 继承）', () => {
     expect(rule('.ttl-mix {')).toContain('line-height: 13px;')
+  })
+})
+
+describe('v0.10.31: 参数长值块重设计', () => {
+  it('实线卡片 + 左侧墨线，不再用虚线框和实心按钮', () => {
+    const block = rule('.ttl-jpLong {')
+    expect(block).toContain('border: 1px solid')
+    expect(block).toContain('border-left: 2px solid')
+    expect(block).toContain('border-radius: 8px')
+    expect(block).not.toContain('1px dashed')
+    const action = rule('.ttl-jpLongAction {')
+    expect(action).toContain('font-size: 10.5px')
+    expect(action).toContain('background: transparent')
+    // the value line itself is the primary affordance
+    expect(rule('.ttl-jpLongPreview {')).toContain('text-overflow: ellipsis')
+  })
+})
+
+describe('v0.10.30: 单值查看器背景模糊（放大浮层移除）', () => {
+  it('.ttl-valueBackdrop 带 backdrop-filter blur', () => {
+    const backdrop = rule('.ttl-valueBackdrop {')
+    expect(backdrop).toContain('backdrop-filter: blur(6px);')
+    expect(backdrop).toContain('-webkit-backdrop-filter: blur(6px);')
+  })
+
+  it('旧放大浮层的 class 已从 CSS 中移除', () => {
+    for (const legacy of ['.ttl-zoom {', '.ttl-zoomBackdrop {', '.ttl-zoomPanel {', '.ttl-zoomOutline {']) {
+      expect(trailCss).not.toContain(legacy)
+    }
+    expect(trailCss).not.toContain('.ttl-clickablePane')
   })
 })
 

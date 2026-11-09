@@ -550,3 +550,35 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![详情带：摘要 / 原始两页签，Markdown、参数 JSON、图片块都在摘要](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0129-detail-tabs.jpg)
 
 ![放大浮层：同样是摘要 / 原始两页签](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0129-zoom-tabs.jpg)
+
+## 41. v0.10.30 移除放大阅读浮层、长值改单值查看器
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 这个弹出框没必要了；唯一需要的是参数里很长的值，在 `…` 之后留一个点开查看该值内容，弹窗 + 背景模糊 | 删除 `ZoomOverlay.tsx` 与全部入口（详情头 `⤢`、底部「在中央查看」、点面板放大、`⌘⇧O`）及 `.ttl-zoom*`/`.ttl-clickablePane` 样式；参数 JSON 长值展示首行片段 + 可点击 `…`，点开 `ValueViewer` 单值查看器，并给背板加 `backdrop-filter: blur(6px)` | 详情带无 `ttl-detail-zoom` / `ttl-detail-view-center` / `ttl-pane-clickable`；`ttl-json-long-preview` 点击后 `ttl-value-viewer` portal 到 body、`backdrop-filter: blur(6px)`、标题 `command`；Esc 关闭 |
+| 设计先行 | Figma 页面「重设计原型 v0.9」把 `07 · 放大阅读浮层` 标注「已移除」，新增 `07b · 长值查看弹窗`（详情带长值 + 单值查看器 + BACKGROUND_BLUR 8px 背板 + 交互标注） | 截图见 Figma `07b` 节点 |
+
+- 保留：单值查看器的 `⌘F` 搜索值、`⌘C` 复制完整值、点遮罩/ Esc 关闭；行号 + 软换行。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **542 例 / 21 文件**（删除整组件与其 28 例浮层测试）；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-value-viewer.mjs`（mock 227 字符 bash 命令，量入口移除 / 查看器 portal / blur / Esc）。
+- 已知偏差：mock 会话；单值查看器仍是全屏 fixed 层 + 弹窗，只是背景改为模糊。
+
+![摘要：长参数值显示片段 +「…」](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0130-band-longvalue.jpg)
+
+![单值查看器：弹窗 + 背景模糊](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0130-value-viewer.jpg)
+
+## 42. v0.10.31 参数长值块重设计
+
+| 反馈 | 方案（依据 `ui-ux-pro-max`：truncation / progressive disclosure / 可见焦点 / 150–300ms） | 实测 |
+| --- | --- | --- |
+| 这一块的 UI 太丑了 | 旧：虚线框 + 30px 实心按钮 + 值被裁。新：`1px solid` + 左侧 2px 蓝墨线 + 8px 圆角的低对比代码卡片；值行即主操作（单行等宽预览 + CSS 省略号，整行点击进单值查看器，右侧 20px `⤢` 显式入口）；元信息与「展开 / 复制」降为 10.5px 透明文本按钮，hover 才浮起；悬停仅改底色/边框无位移；键盘焦点 2px 蓝描边；展开在卡内显示全文（「收起」） | `border-style: solid`、`border-radius: 8px`；操作按钮 10.5px + `background: transparent`；`.ttl-dtab` 0 个；展开出正文、按钮变「收起」 |
+| 设计先行 | Figma 新增 `07c · 参数长值块`：BEFORE / AFTER 折叠 / 悬停 / 展开四态 + 标注 | 见 Figma 页面「重设计原型 v0.9」 |
+
+- 细节：JSON 逗号并入预览行尾，块级卡片不再产生孤立逗号行；`prefers-reduced-motion` 下过渡会自动禁用（仅颜色/背景过渡，无位移动画）。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **543 例 / 21 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-longvalue-ui.mjs`（mock 211 字符命令，量 border/按钮/展开）。
+- 已知偏差：mock 会话；窄宽度下预览走省略号（完整值点开查看）。
+
+![长值块：实线卡片 + 值行为主操作](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0131-longvalue-collapsed.jpg)
+
+![展开态：卡内显示全文，按钮变「收起」](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0131-longvalue-expanded.jpg)

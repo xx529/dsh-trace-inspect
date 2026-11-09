@@ -21,7 +21,7 @@
  *   C · mergedFrom (model)
  *   D · F7 (replace rewrites result only)
  *   E · F8 (read envelope unwrap + footer stripping)
- *   F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DOM)
+ *   F · components (detail band / lazy detail / thumbnails / collapsed DOM)
  *   G · norms (no new runtime deps, no innerHTML/eval, token-only colors)
  *   H · artifact consistency (version/CHANGELOG, src↔lib, host seeds)
  */
@@ -64,7 +64,7 @@ import { attachmentUrl } from '../src/client/attachment-url'
 import { looksLikeMarkdown, MarkdownResult, unwrapFileResult } from '../src/client/markdown-result'
 import { markdownLabels } from '../src/client/markdown-labels'
 import { setPrimitivesForTest, type PrimitivesModule } from '../src/client/ui-primitives'
-import { TrailImages, ZoomOverlay } from '../src/client/ZoomOverlay'
+import { TrailImages } from '../src/client/ui-shared'
 import { TrailTab } from '../src/client/TrailTab'
 import { t, type Dict } from '../src/client/locales'
 import { trailCss } from '../src/client/styles'
@@ -1008,147 +1008,7 @@ function renderTab(events: SessionEventLike[], detail?: DetailFetch): void {
   )
 }
 
-const zStep = (seq: number, name: string, args: string, result?: Partial<TrailResult>): TrailStep => ({
-  kind: 'tool',
-  seq,
-  name,
-  argsPreview: args.replace(/\s+/g, ' ').slice(0, 80),
-  args,
-  callId: `c${seq}`,
-  error: '',
-  ...(result !== undefined
-    ? { result: { seq: seq + 1000, kind: 'text' as const, text: '', truncated: false, isError: false, ...result } }
-    : {}),
-})
-
-const zSteps = (): TrailStep[] => [
-  zStep(3, 'bash', '{"command":"ls -la"}', { text: 'total 0' }),
-  zStep(4, 'read', '{"path":"README.md"}', { text: '# Title' }),
-  zStep(5, 'grep', 'needle', { text: '' }),
-]
-
-function renderOverlay(steps: TrailStep[], initialSeq = 3): { onClose: ReturnType<typeof vi.fn> } {
-  const onClose = vi.fn()
-  render(<ZoomOverlay steps={steps} initialSeq={initialSeq} sessionId="s1" lang="en" onClose={onClose} />)
-  return { onClose }
-}
-
-describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DOM)', () => {
-  it('F1 浮层是 body 里的 modal dialog：role=dialog + aria-modal + 初始焦点在面板', () => {
-    const { container } = (() => {
-      const onClose = vi.fn()
-      const rendered = render(
-        <div data-testid="host"><ZoomOverlay steps={zSteps()} initialSeq={3} sessionId="s1" lang="en" onClose={onClose} /></div>,
-      )
-      return { container: rendered.container }
-    })()
-    expect(container.querySelector('[data-testid="ttl-zoom"]')).toBeNull() // portal 到 body
-    const dialog = screen.getByRole('dialog')
-    expect(dialog.getAttribute('aria-modal')).toBe('true')
-    expect(dialog.getAttribute('aria-label')).toContain('bash')
-    expect(document.activeElement).toBe(screen.getByTestId('ttl-zoom-panel'))
-    expect(screen.getAllByTestId('ttl-zoom-step')).toHaveLength(3)
-  })
-
-  it('F2 Esc 关闭恰好一次；其它键不关闭', () => {
-    const { onClose } = renderOverlay(zSteps())
-    fireEvent.keyDown(window, { key: 'a' })
-    fireEvent.keyDown(window, { key: 'Enter' })
-    expect(onClose).not.toHaveBeenCalled()
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('F3 ↑/↓ 在筛选后的步骤表内移动并被夹紧', () => {
-    renderOverlay(zSteps())
-    const search = screen.getByTestId('ttl-zoom-search')
-    fireEvent.change(search, { target: { value: 'bash' } })
-    const rows = screen.getAllByTestId('ttl-zoom-step')
-    expect(rows).toHaveLength(1)
-    fireEvent.keyDown(window, { key: 'ArrowDown' })
-    fireEvent.keyDown(window, { key: 'ArrowUp' })
-    expect(screen.getByTestId('ttl-zoom-seq').textContent).toBe('seq #3')
-    // 搜索框获得焦点时 ↑/↓ 留给光标。
-    fireEvent.change(search, { target: { value: '' } })
-    search.focus()
-    fireEvent.keyDown(search, { key: 'ArrowDown' })
-    expect(screen.getByTestId('ttl-zoom-seq').textContent).toBe('seq #3')
-  })
-
-  it('F4 ⌘F 聚焦搜索框；⌘C 复制当前页，但在输入框聚焦或有选区时不抢占', () => {
-    const writeText = vi.fn(async () => undefined)
-    vi.stubGlobal('navigator', { language: 'en-US', clipboard: { writeText } })
-    renderOverlay(zSteps())
-    const search = screen.getByTestId('ttl-zoom-search')
-
-    fireEvent.keyDown(window, { key: 'f', metaKey: true })
-    expect(document.activeElement).toBe(search)
-
-    // 输入框内 ⌘C：不复制（交给浏览器）。
-    fireEvent.keyDown(search, { key: 'c', metaKey: true })
-    expect(writeText).not.toHaveBeenCalled()
-
-    // 有实时选区：不复制。
-    vi.stubGlobal('getSelection', () => ({ toString: () => 'selected text' }))
-    fireEvent.keyDown(window, { key: 'c', metaKey: true })
-    expect(writeText).not.toHaveBeenCalled()
-
-    // 无选区：v0.9 默认 tab 是「摘要」，shell 步骤复制的是命令。
-    vi.stubGlobal('getSelection', () => ({ toString: () => '' }))
-    fireEvent.keyDown(window, { key: 'c', metaKey: true })
-    expect(writeText).toHaveBeenCalledWith('ls -la')
-
-    // v0.10.29：「结果」页签已并入摘要；⌘C 的摘要语义仍是命令。
-    expect(screen.queryByTestId('ttl-zoom-tab-result')).toBeNull()
-    expect(screen.queryByTestId('ttl-zoom-tab-params')).toBeNull()
-
-    // 切到「原始」页后复制的是参数。
-    fireEvent.click(screen.getByTestId('ttl-zoom-tab-raw'))
-    writeText.mockClear()
-    fireEvent.keyDown(window, { key: 'c', ctrlKey: true })
-    expect(writeText).toHaveBeenCalledWith('{"command":"ls -la"}')
-  })
-
-  it('F5 导出 JSON：payload 含整步字段（无 URL.createObjectURL 时走 data URL）', () => {
-    const original = (URL as unknown as { createObjectURL?: unknown }).createObjectURL
-    delete (URL as unknown as { createObjectURL?: unknown }).createObjectURL
-    const clicked: HTMLAnchorElement[] = []
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-      clicked.push(this)
-    })
-    try {
-      renderOverlay([
-        zStep(7, 'read', '{"path":"a.md"}', { text: 'body', truncated: true }),
-      ], 7)
-      fireEvent.click(screen.getByTestId('ttl-zoom-export'))
-      expect(clicked).toHaveLength(1)
-      expect(clicked[0].download).toBe('trace-step-7.json')
-      const href = clicked[0].href
-      expect(href.startsWith('data:application/json')).toBe(true)
-      const payload = JSON.parse(decodeURIComponent(href.slice(href.indexOf(',') + 1))) as Record<string, unknown>
-      expect(payload).toMatchObject({ seq: 7, callId: 'c7', name: 'read', kind: 'tool', arguments: '{"path":"a.md"}' })
-      expect(payload.result).toMatchObject({ text: 'body', truncated: true })
-      // 页脚 pill 反映截断。
-      expect(screen.getByTestId('ttl-zoom-pill').textContent).toBe('Truncated')
-    } finally {
-      if (original === undefined) delete (URL as unknown as { createObjectURL?: unknown }).createObjectURL
-      else (URL as unknown as { createObjectURL: unknown }).createObjectURL = original
-    }
-  })
-
-  it('F6 行聚焦时 ⌘⇧O 打开浮层，Esc 关闭后焦点回到触发行', async () => {
-    renderTab(threeSteps())
-    const rows = await screen.findAllByTestId('ttl-step')
-    rows[1].focus()
-    fireEvent.keyDown(rows[1], { key: 'O', shiftKey: true, metaKey: true })
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog.getAttribute('aria-label')).toContain('bash')
-
-    fireEvent.keyDown(window, { key: 'Escape' })
-    await waitFor(() => { expect(screen.queryByTestId('ttl-zoom')).toBeNull() })
-    expect(document.activeElement).toBe(rows[1])
-  })
-
+describe('F · components (detail band / lazy detail / thumbnails / collapsed DOM)', () => {
   it('F7 懒加载 inflight 去重：加载中关闭再打开，只发一次请求', async () => {
     let settle: (value: ToolDetailResult) => void = () => undefined
     const pending = new Promise<ToolDetailResult>((resolveSettled) => { settle = resolveSettled })
@@ -1322,7 +1182,7 @@ describe('G · 规范（依赖 / 安全 / token）', () => {
   })
 
   it('G3 未把不可信内容交给 innerHTML / dangerouslySetInnerHTML / eval（源码只在注释里提及）', () => {
-    const files = ['TrailTab.tsx', 'ZoomOverlay.tsx', 'markdown-result.tsx', 'json-tree.tsx', 'ui-primitives.ts']
+    const files = ['TrailTab.tsx', 'StepDetail.tsx', 'markdown-result.tsx', 'json-tree.tsx', 'ui-primitives.ts']
     const pattern = /dangerouslySetInnerHTML|\.innerHTML|\beval\s*\(/
     for (const file of files) {
       const lines = readFileSync(resolve(ROOT, 'src/client', file), 'utf8').split('\n')
@@ -1345,16 +1205,13 @@ describe('G · 规范（依赖 / 安全 / token）', () => {
     expect(offenders).toEqual([])
 
     const classes = [
-      '.ttl-imgThumbWrap', '.ttl-imgThumb', '.ttl-zoom', '.ttl-zoomBackdrop', '.ttl-zoomPanel',
-      '.ttl-zoomTop', '.ttl-zoomBody', '.ttl-zoomOutline', '.ttl-zoomOutlineRow', '.ttl-zoomMain',
-      '.ttl-zoomHead', '.ttl-zoomFoot', '.ttl-detail', '.ttl-detailHead', '.ttl-detailFoot', '.ttl-tabs',
+      '.ttl-imgThumbWrap', '.ttl-imgThumb', '.ttl-detail', '.ttl-detailHead', '.ttl-detailFoot', '.ttl-tabs',
       '.ttl-detailRetry', '.ttl-detailMerged', '.ttl-bannerWarn', '.ttl-bannerAction',
     ]
     for (const cls of classes) {
       const escaped = cls.replace(/\./g, '\\.')
       expect(new RegExp(`${escaped}(?=[\\s,{:.\\[]|$)`).test(trailCss), cls).toBe(true)
     }
-    expect(trailCss).toContain('.ttl-zoomOutlineRow[aria-current="true"]')
 
     const keys: Array<keyof Dict> = [
       'imageLoadFailed', 'detailLoading', 'detailLoadFailed', 'detailRetry', 'detailLoadedFull',
@@ -1398,7 +1255,7 @@ describe('H · 产物一致性', () => {
     expect(host).toContain('attachment-not-found')
 
     const client = readFileSync(resolve(ROOT, 'lib/client.js'), 'utf8')
-    for (const marker of ['ttl-img-thumb', 'ttl-detail-merged', 'ttl-zoomBackdrop', 'ttl-detail-retry', 'mergedNoSurfaceOp']) {
+    for (const marker of ['ttl-img-thumb', 'ttl-detail-merged', 'ttl-detail-retry', 'mergedNoSurfaceOp']) {
       expect(client, marker).toContain(marker)
     }
   })

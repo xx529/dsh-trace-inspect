@@ -5,7 +5,7 @@
  * only imports it, css-foundation can style it by contract class, and the
  * overlay can reuse the same types. The band is the primary reading surface:
  *
- *   head    tool-family chip + name + human description + copy/zoom/close
+ *   head    tool-family chip + name + human description + copy/close
  *   status  success/failure dot + text + duration + seq + contextual meta
  *   tabs    摘要 / 原始（v0.10.29：结果、参数两页并入摘要）
  *   body    one pane per tab (see below)
@@ -82,10 +82,7 @@ interface StepLabels {
   connected: string
   copy: string
   copyAll: string
-  zoomTitle: string
   closeTitle: string
-  viewInCenter: string
-  clickToView: string
   showFull: string
   collapse: string
   collapseAll: string
@@ -137,10 +134,7 @@ function labelsFor(lang: Lang): StepLabels {
     connected: zh ? '已连接' : 'Connected',
     copy: t(lang, 'copyField') as string,
     copyAll: t(lang, 'copyDetail') as string,
-    zoomTitle: t(lang, 'zoomOpen') as string,
     closeTitle: t(lang, 'zoomClose') as string,
-    viewInCenter: t(lang, 'viewInCenter') as string,
-    clickToView: t(lang, 'clickToViewFull') as string,
     showFull: zh ? '展开全文' : 'Show full',
     collapse: t(lang, 'collapseLabel') as string,
     collapseAll: zh ? '收起' : 'Collapse',
@@ -609,8 +603,6 @@ export interface StepDetailProps {
   lang: Lang
   /** Load (or join) the on-demand full detail of this step (契约 §10.5.2). */
   onLoadDetail(seq: number): Promise<ToolDetailResult>
-  /** Open the centered viewer for this step on a given pane (契约 §10.5.4). */
-  onZoom(step: TrailStep, trigger: HTMLElement | null, tab?: DetailTab): void
   /** Collapse the band. Optional: without it the close button is not rendered. */
   onClose?: () => void
 }
@@ -629,7 +621,7 @@ const TABS: ReadonlyArray<{ value: DetailTab; key: keyof Pick<StepLabels, 'summa
  * @returns The band element.
  */
 export function StepDetail(props: StepDetailProps): React.ReactElement {
-  const { id, step, sessionId, lang, onLoadDetail, onZoom, onClose } = props
+  const { id, step, sessionId, lang, onLoadDetail, onClose } = props
   const labels = React.useMemo(() => labelsFor(lang), [lang])
   const result: TrailResult | undefined = step.result
   const args = step.args ?? ''
@@ -695,20 +687,6 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
   }
 
   const titleOf = (name: string): string => (t(lang, 'detailAria') as (tool: string) => string)(name)
-  const openZoomFor = (which: DetailTab, element: HTMLElement): void => {
-    const wrap = element.closest('.ttl-stepWrap')
-    const row = wrap !== null ? wrap.querySelector('[data-testid="ttl-step"]') : null
-    onZoom(step, row instanceof HTMLElement ? row : null, which)
-  }
-  /** A click inside the pane opens the wide viewer — unless it hit a control. */
-  const openZoomFromPane = (event: React.MouseEvent<HTMLDivElement>): void => {
-    const target = event.target as HTMLElement | null
-    if (target !== null && typeof target.closest === 'function'
-      && target.closest('button, a, input, textarea, select') !== null) return
-    if (typeof window !== 'undefined' && (window.getSelection?.()?.toString() ?? '').length > 0) return
-    openZoomFor(tab, event.currentTarget)
-  }
-
   /** Contextual right-hand meta of the status row (参数 N 字符 / 参数 N 项 / 结果 N KB). */
   const statusMeta = (): string => {
     if (tab === 'raw') {
@@ -963,14 +941,6 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
           label={labels.copyAll}
           className="ttl-detailAction"
         />
-        <button
-          type="button"
-          className="ttl-detailAction"
-          data-testid="ttl-detail-zoom"
-          title={labels.zoomTitle}
-          aria-label={labels.zoomTitle}
-          onClick={(event) => { openZoomFor(tab, event.currentTarget) }}
-        >⤢</button>
         {onClose !== undefined
           ? (
             <button
@@ -1015,15 +985,8 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
       </div>
 
       <div className="ttl-detailBody" data-testid={`ttl-detail-body-${tab}`}>
-        <div
-          className="ttl-clickablePane"
-          data-testid="ttl-pane-clickable"
-          title={labels.clickToView}
-          onClick={openZoomFromPane}
-        >
-          {tab === 'summary' ? renderSummary() : null}
-          {tab === 'raw' ? renderRaw() : null}
-        </div>
+        {tab === 'summary' ? renderSummary() : null}
+        {tab === 'raw' ? renderRaw() : null}
       </div>
 
       <div className="ttl-detailFoot" data-testid="ttl-detail-foot">
@@ -1032,15 +995,6 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
           data-testid="ttl-detail-pill"
         >{pillText}</span>
         <span className="ttl-detailSeq" data-testid="ttl-detail-foot-seq">{`seq #${step.seq}`}</span>
-        <button
-          type="button"
-          className="ttl-detailViewCenter"
-          data-testid="ttl-detail-view-center"
-          onClick={(event) => { openZoomFor(tab, event.currentTarget) }}
-        >
-          {labels.viewInCenter}
-          <span className="ttl-detailViewIcon" aria-hidden="true">⤢</span>
-        </button>
       </div>
     </div>
   )

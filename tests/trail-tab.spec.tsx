@@ -1273,43 +1273,8 @@ describe('TrailTab', () => {
     expect(screen.queryByTestId('ttl-detail-merged')).toBeNull()
   })
 
-  // ── v0.5.0 · zoom entries (契约 §10.5.4) ───────────────────────────────
+  // ── output rows + tool summaries ───────────────────────────────────────
 
-  it('the detail footer ⤢ opens the overlay and Esc returns focus to the row', async () => {
-    renderTab(threeSteps())
-    const steps = await screen.findAllByTestId('ttl-step')
-    fireEvent.click(steps[0])
-    const zoomButton = await screen.findByTestId('ttl-detail-zoom')
-    expect(zoomButton.getAttribute('title')).toBe('Open zoomed view')
-    expect(zoomButton.getAttribute('aria-label')).toBe('Open zoomed view')
-
-    fireEvent.click(zoomButton)
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog.getAttribute('aria-modal')).toBe('true')
-    expect(dialog.getAttribute('aria-label')).toBe('bash · step details')
-    // The outline is the whole current turn (3 steps), not just the open one.
-    expect(screen.getAllByTestId('ttl-zoom-step')).toHaveLength(3)
-    expect(screen.getByTestId('ttl-zoom-title').textContent).toBe('bash')
-
-    fireEvent.keyDown(window, { key: 'Escape' })
-    await waitFor(() => { expect(screen.queryByTestId('ttl-zoom')).toBeNull() })
-    expect(document.activeElement).toBe(steps[0])
-  })
-
-  it('⌘⇧O on a focused step row opens the overlay on that step', async () => {
-    renderTab(threeSteps())
-    const steps = await screen.findAllByTestId('ttl-step')
-    fireEvent.keyDown(steps[2], { key: 'O', shiftKey: true, metaKey: true })
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog.getAttribute('aria-label')).toBe('read · step details')
-    expect(screen.getByTestId('ttl-zoom-title').textContent).toContain('read')
-    // The row itself never expanded (⌘⇧O is not a disclosure key).
-    expect(screen.queryByTestId('ttl-detail')).toBeNull()
-  })
-})
-
-// ── v0.6.0: output rows expand, and the centered viewer is reachable ──────
-describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
   const markdownTurn = (): Ev[] => [
     user(1, 'read the readme'),
     turnStart(2, 1),
@@ -1374,30 +1339,6 @@ describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
     expect(screen.getByTestId('ttl-output-preview').textContent).toBe('all green')
     fireEvent.click(row)
     expect(screen.queryByTestId('ttl-output-body')).toBeNull()
-  })
-
-  it('the toolbar opens the centered viewer on the tab that is active', async () => {
-    renderTab(oneTurn())
-    fireEvent.click(await screen.findByTestId('ttl-step'))
-    await screen.findByTestId('ttl-detail')
-    // v0.9 opens on 摘要.
-    expect(screen.getByTestId('ttl-detail-tab-summary').getAttribute('aria-selected')).toBe('true')
-    fireEvent.click(screen.getByTestId('ttl-detail-view-center'))
-    expect(await screen.findByTestId('ttl-zoom')).toBeTruthy()
-    expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(screen.queryByTestId('ttl-zoom')).toBeNull()
-  })
-
-  it('clicking the pane opens the viewer, but a control inside the pane does not', async () => {
-    renderTab(markdownTurn())
-    fireEvent.click(await screen.findByTestId('ttl-step'))
-    await screen.findByTestId('ttl-detail')
-    fireEvent.click(screen.getByTestId('ttl-detail-copy'))
-    expect(screen.queryByTestId('ttl-zoom')).toBeNull() // a control click must not open the viewer
-    fireEvent.click(screen.getByTestId('ttl-pane-clickable'))
-    expect(await screen.findByTestId('ttl-zoom')).toBeTruthy()
-    expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
   })
 
   it('renders the tool summary instead of the raw argument JSON', async () => {

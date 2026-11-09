@@ -16,7 +16,7 @@
  *   │   └ section.ttl-turn       head: #N · HH:mm · dur · mix · ⚠n · ∥n · steps · ↗ · ⌄
  *   │       └ div.ttl-turnBody   input row → steps (parallel groups inline) → output → foot
  *   ├ div.ttl-statusbar          read-only sync dot · seq
- *   └ jump banner / to-bottom / zoom overlay
+ *   └ jump banner / to-bottom
  *
  * Contracts honoured here (see `docs/redesign-v09-impl.md` §2):
  *  - search is an in-memory, case-insensitive substring filter over
@@ -26,7 +26,7 @@
  *  - parallel batches are same-level (no extra indent) with a full-width
  *    tinted row + 2px violet rail, sharing the step columns;
  *  - the inline detail band is the redesigned `StepDetail` (separate file);
- *    this file only plumbs view state, on-demand detail loading and zoom.
+ *    this file only plumbs on-demand detail loading.
  *
  * Rendering cost model (kept from v0.2.1): closed turns keep object identity
  * across polls, rows are keyed by event seq and every turn is a memoized
@@ -56,9 +56,7 @@ import { MarkdownResult, RawText, looksLikeMarkdown } from './markdown-result'
 import { markdownLabels } from './markdown-labels'
 import { formatClock, formatDuration, toolFamily, turnDuration, type ToolFamily } from './format'
 import { StepDetail } from './StepDetail'
-import { ZoomOverlay } from './ZoomOverlay'
 import { copyToClipboard } from './ui-shared'
-import type { DetailTab } from './detail-types'
 
 /** Transport for the on-demand full tool detail (契约 §10.3.4). */
 export type FetchToolDetail = (sessionId: string, seqs: number[], signal?: AbortSignal) => Promise<ToolDetailResult>
@@ -397,7 +395,6 @@ interface StepRowProps {
   onStepOpen: (step: TrailStep) => void
   onStepClose: (step: TrailStep) => void
   onLoadDetail: (seq: number) => Promise<ToolDetailResult>
-  onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null, tab?: DetailTab) => void
 }
 
 /**
@@ -411,7 +408,7 @@ interface StepRowProps {
 const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactElement {
   const {
     step, turn, open, lang, sessionId,
-    onJump, onToggleStep, onStepOpen, onStepClose, onLoadDetail, onZoom,
+    onJump, onToggleStep, onStepOpen, onStepClose, onLoadDetail,
   } = props
   const summary = React.useMemo(
     () => summarizeToolCall(step.name, step.args, step.argsPreview, lang),
@@ -431,11 +428,6 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
   const title = step.kind === 'error'
     ? step.error
     : (step.argsPreview.length > 0 ? step.argsPreview : desc)
-  /** Keep the band's memo effective: a stable handler per (row, turn). */
-  const openZoomForStep = React.useCallback(
-    (target: TrailStep, trigger: HTMLElement | null, tab?: DetailTab) => { onZoom(target, turn, trigger, tab) },
-    [onZoom, turn],
-  )
   /** The band's own ✕ collapses exactly this step (Alt-multi keeps it valid). */
   const closeDetail = React.useCallback((): void => { onStepClose(step) }, [onStepClose, step])
   return (
@@ -461,9 +453,6 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
           } else if (event.key === 'ArrowLeft') {
             event.preventDefault()
             onStepClose(step)
-          } else if ((event.key === 'o' || event.key === 'O') && event.shiftKey && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault()
-            onZoom(step, turn, event.currentTarget)
           }
         }}
       >
@@ -492,7 +481,6 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
             sessionId={sessionId}
             lang={lang}
             onLoadDetail={onLoadDetail}
-            onZoom={openZoomForStep}
             onClose={closeDetail}
           />
         )
@@ -523,7 +511,6 @@ interface TurnRowProps {
   onStepOpen: (step: TrailStep) => void
   onStepClose: (step: TrailStep) => void
   onLoadDetail: (seq: number) => Promise<ToolDetailResult>
-  onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null, tab?: DetailTab) => void
 }
 
 /**
@@ -535,7 +522,7 @@ interface TurnRowProps {
 const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactElement {
   const {
     turn, index, expanded, active, showFull, filter, query, isToolFilter, lang, sessionId, openSeqs,
-    onToggle, onShowEarlier, onJump, onToggleStep, onStepOpen, onStepClose, onLoadDetail, onZoom,
+    onToggle, onShowEarlier, onJump, onToggleStep, onStepOpen, onStepClose, onLoadDetail,
   } = props
   const ui = uiStrings(lang)
   const id = turnByIdentity(turn)
@@ -663,7 +650,6 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
       onStepOpen={onStepOpen}
       onStepClose={onStepClose}
       onLoadDetail={onLoadDetail}
-      onZoom={onZoom}
     />
   )
 
@@ -949,8 +935,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   const [showFullTurn, setShowFullTurn] = React.useState<Set<string>>(new Set())
   /** Expanded step seqs (inline detail band). Plain click opens exactly one. */
   const [openSeqs, setOpenSeqs] = React.useState<ReadonlySet<number>>(() => new Set<number>())
-  /** The open overlay: which turn it was opened from and which step it shows. */
-  const [zoom, setZoom] = React.useState<{ turnId: string; seq: number; tab?: DetailTab } | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
   /**
    * v0.10.28: when a toggle makes the list shorter than the current scroll
@@ -966,7 +950,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   const searchRef = React.useRef<HTMLInputElement | null>(null)
   const jumpingRef = React.useRef(false)
   /** The row to focus again once the dialog closes (契约: 焦点回到触发行). */
-  const zoomReturnRef = React.useRef<HTMLElement | null>(null)
 
   // ── Derived: filtered turns ────────────────────────────────────────────
   const isToolFilter = filter !== 'all' && filter !== 'failed'
@@ -1104,12 +1087,11 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     setFollowPaused(false)
   }, [])
 
-  // ── ⌘F / Ctrl+F focuses the search field (unless the zoom dialog owns it) ─
+  // ── ⌘F / Ctrl+F focuses the search field ─
   React.useEffect(() => {
     if (!visible) return undefined
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return
-      if (typeof document !== 'undefined' && document.querySelector('[data-testid="ttl-zoom"]') !== null) return
       const input = searchRef.current
       if (input === null) return
       event.preventDefault()
@@ -1258,51 +1240,16 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     return request
   }, [sessionId])
 
-  // ── Zoom overlay (v0.5.0, 契约 §10.5.4) ────────────────────────────────
-  const openZoom = React.useCallback((
-    step: TrailStep,
-    turn: TrailTurn,
-    trigger: HTMLElement | null,
-    tab?: DetailTab,
-  ): void => {
-    zoomReturnRef.current = trigger ?? (typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null)
-    setZoom({ turnId: turnByIdentity(turn), seq: step.seq, tab })
-  }, [])
-
-  const closeZoom = React.useCallback((): void => { setZoom(null) }, [])
-
-  const zoomSteps = React.useMemo<readonly TrailStep[]>(() => {
-    if (zoom === null) return []
-    const turn = turns.find((entry) => turnByIdentity(entry) === zoom.turnId)
-    return turn === undefined ? [] : stepsOf(turn)
-  }, [zoom, turns])
-
-  // A closed dialog returns focus to the row that opened it (if still mounted).
-  React.useEffect(() => {
-    if (zoom !== null) return
-    const target = zoomReturnRef.current
-    if (target === null) return
-    zoomReturnRef.current = null
-    if (target.isConnected !== false && typeof target.focus === 'function') target.focus()
-  }, [zoom])
-
-  // A turn that scrolled out of the trail (session switch, filter) closes it.
-  React.useEffect(() => {
-    if (zoom !== null && zoomSteps.length === 0) setZoom(null)
-  }, [zoom, zoomSteps])
-
   // A different session starts from a clean slate; hiding the tab does too
   // (contract §6) so a re-shown panel never resurrects a stale open band.
   React.useEffect(() => {
     setOpenSeqs(new Set<number>())
-    setZoom(null)
     setQuery('')
     setExpandedTurns(null)
   }, [sessionId])
   React.useEffect(() => {
     if (visible) return
     setOpenSeqs(new Set<number>())
-    setZoom(null)
   }, [visible])
 
   // ── Locate (jump) ──────────────────────────────────────────────────────
@@ -1632,7 +1579,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
             onStepOpen={openStep}
             onStepClose={closeStep}
             onLoadDetail={loadDetail}
-            onZoom={openZoom}
           />
         ))}
         <div className="ttl-listFoot" data-testid="ttl-list-foot">
@@ -1699,18 +1645,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
             <span className="ttl-spin">{spinnerIcon()}</span>
             {(t(lang, 'jumpProgress') as (n: number) => string)(jumpPages)}
           </div>
-        : null}
-      {zoom !== null && zoomSteps.length > 0
-        ? (
-          <ZoomOverlay
-            steps={zoomSteps}
-            initialSeq={zoom.seq}
-            initialTab={zoom.tab}
-            sessionId={sessionId}
-            lang={lang}
-            onClose={closeZoom}
-          />
-        )
         : null}
     </div>
   )

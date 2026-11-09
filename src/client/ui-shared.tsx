@@ -11,7 +11,7 @@ import { attachmentUrl } from './attachment-url'
 import { t, type Lang } from './locales'
 import type { TrailResultImage } from '../trail-model'
 
-export type { ResultView, DetailTab } from './detail-types'
+export type { DetailTab } from './detail-types'
 
 // ── Shared view primitives (TrailTab imports these) ──────────────────────
 

@@ -332,13 +332,10 @@ export const trailCss = `
 
 /* ══ v0.5.0 (契约 §10.4.1) ═══════════════════════════════════════════════
  * Image thumbnails over the session-authorized attachment route, the
- * on-demand full-detail states, the merged-from note, and the P2 zoom
- * overlay. Same rules as above: colors only as var(--dsw-*) (the hex
- * after the comma is the native dark fallback, never a literal choice),
- * radii from the native --dsw-radius-* scale, code from
- * var(--ds-font-family-code). The overlay is plain position:fixed so it
- * needs no host slot: .ttl-zoom is the fixed layer, .ttl-zoomBackdrop
- * fills it, .ttl-zoomPanel is the flex column on top. */
+ * on-demand full-detail states and the merged-from note. Same rules as
+ * above: colors only as var(--dsw-*) (the hex after the comma is the native
+ * dark fallback, never a literal choice), radii from the native
+ * --dsw-radius-* scale, code from var(--ds-font-family-code). */
 
 /* ── Image thumbnail (replaces the chip once bytes are authorized) ── */
 .ttl-imgThumbWrap {
@@ -405,7 +402,6 @@ export const trailCss = `
   line-height: 16px;
 }
 
-.ttl-clickablePane { cursor: zoom-in; }
 
 .ttl-jsonPrettyWrap { position: relative; }
 
@@ -436,30 +432,104 @@ export const trailCss = `
 .ttl-jsonPunct { color: var(--dsw-alias-label-tertiary, #adb2b8); }
 
 .ttl-jpLong {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  /* v0.10.31: the long value is a quiet code card, not a form field — no
+     dashed frame, no solid buttons. The value line is the primary action,
+     the meta + text actions sit underneath, hover only shifts surface. */
+  margin: 2px 0 3px;
+  padding: 5px 8px 4px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.08));
+  border-left: 2px solid color-mix(in srgb, var(--dsw-static-blue-400, #5686fe) 55%, transparent);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.ttl-jpLong:hover { background: rgba(255, 255, 255, 0.04); border-color: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.14)); }
+.ttl-jpLong:focus-within { border-color: color-mix(in srgb, var(--dsw-static-blue-300, #7cb2ff) 60%, transparent); }
+
+.ttl-jpLongMain { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.ttl-jpLongPreview {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  font-family: var(--ds-font-family-code, "SF Mono", Consolas, Menlo, monospace);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.ttl-jpLongPreview:hover { color: var(--dsw-alias-label-primary, #f3f4f6); }
+.ttl-jpLongView {
+  flex: none;
   display: inline-flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-quaternary, #7b8086);
+  font-size: 11px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.ttl-jpLongView:hover { background: rgba(255, 255, 255, 0.08); color: var(--dsw-static-blue-300, #7cb2ff); }
+.ttl-jpLongPreview:focus-visible,
+.ttl-jpLongView:focus-visible,
+.ttl-jpLongAction:focus-visible {
+  outline: 2px solid var(--dsw-static-blue-300, #7cb2ff);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+.ttl-jpLongFoot {
+  display: flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 6px;
-  border: 1px dashed var(--dsw-alias-separator-secondary, rgba(255, 255, 255, 0.18));
-  border-radius: 5px;
-  max-width: 100%;
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-quaternary, #7b8086);
 }
-
-.ttl-jpLongMeta {
+.ttl-jpLongMeta { font-variant-numeric: tabular-nums; }
+.ttl-jpLongSpacer { flex: 1; }
+.ttl-jpLongAction {
+  padding: 0 3px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  font: inherit;
   font-size: 10.5px;
-  color: var(--dsw-alias-label-secondary, #b9bdc4);
-  font-family: var(--ds-font-family-code, "SF Mono", Consolas, Menlo, monospace);
+  line-height: 14px;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
 }
+.ttl-jpLongAction:hover { color: var(--dsw-alias-label-primary, #f3f4f6); background: rgba(255, 255, 255, 0.06); }
+.ttl-jpLongDot { color: rgba(255, 255, 255, 0.28); }
 
 .ttl-jpRestored {
-  flex-basis: 100%;
-  margin: 2px 0 2px;
-  padding: 4px 6px;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 6px 0 1px;
+  padding: 6px 8px;
   /* v0.10.15: an expanded long value renders in full — no inner scroll box.
      The panel / overlay owns the scrolling. */
   border-left: 2px solid var(--dsw-alias-state-business-primary, #4176e6);
-  background: var(--dsw-alias-bg-layer-2, #202024);
+  border-radius: 0 4px 4px 0;
+  background: rgba(0, 0, 0, 0.22);
   font-family: var(--ds-font-family-code, "SF Mono", Consolas, Menlo, monospace);
   font-size: 11px;
   line-height: 16px;
@@ -470,7 +540,15 @@ export const trailCss = `
 
 .ttl-valueViewer { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; }
 
-.ttl-valueBackdrop { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask, rgba(0, 0, 0, 0.55)); }
+.ttl-valueBackdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--dsw-alias-bg-mask, rgba(0, 0, 0, 0.45));
+  /* v0.10.30: the single-value reader is the only popup left — blur what is
+     behind it so the value reads as a focused layer, not another page. */
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
 
 .ttl-valuePanel {
   position: relative;
@@ -1433,7 +1511,7 @@ export const trailCss = `
   color: #dfe2e5;
   font-size: 12px;
 }
-.ttl-detailAction, .ttl-detailViewCenter, .ttl-detailViewIcon {
+.ttl-detailAction {
   flex: none;
   width: 20px;
   height: 20px;
@@ -1737,7 +1815,7 @@ export const trailCss = `
 }
 .ttl-detailFoot .ttl-pill { flex: none; }
 .ttl-detail-foot-seq { color: var(--dsw-alias-label-quaternary, #5f6469); font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace); font-size: 9.5px; }
-.ttl-detailFoot .ttl-detailViewCenter {
+.ttl-detailFoot .ttl-detailAction {
   margin-left: auto;
   width: auto;
   padding: 0 0 0 6px;
@@ -1761,189 +1839,6 @@ export const trailCss = `
 .ttl-pillOk { background: rgba(78, 212, 164, 0.14); color: #8fdcb8; }
 .ttl-pillWarn { background: rgba(242, 180, 92, 0.16); color: #f2c98d; }
 .ttl-pillErr { background: rgba(242, 114, 111, 0.16); color: #f6a9a7; }
-
-/* ══ v0.9 zoom overlay ═══════════════════════════════════════════════════ */
-
-.ttl-zoom {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-.ttl-zoomBackdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.62); }
-.ttl-zoomPanel {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 1120px;
-  max-width: calc(100vw - 48px);
-  height: 660px;
-  max-height: calc(100vh - 48px);
-  overflow: hidden;
-  border-radius: 14px;
-  background: var(--dsw-alias-bg-layer-1, #232324);
-  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
-  outline: none;
-}
-.ttl-zoomTop {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 56px;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.07));
-  background: rgba(255, 255, 255, 0.02);
-}
-.ttl-zoom .ttl-brandIcon { width: 16px; height: 16px; }
-.ttl-zoomCrumb { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-quaternary, #7b8086); font-size: 11.5px; white-space: nowrap; }
-.ttl-zoomCrumb b { color: var(--dsw-alias-label-secondary, #cfd3d6); font-weight: 500; }
-.ttl-zoomCrumbSep { color: var(--dsw-alias-label-quaternary, #5f6469); }
-.ttl-zoomStatus { height: 22px; padding: 0 10px; }
-.ttl-zoomTop .ttl-search { margin-left: auto; width: 420px; flex: none; height: 28px; }
-.ttl-zoomTools { display: flex; align-items: center; gap: 4px; }
-.ttl-zoomTools .ttl-iconBtn { width: 28px; height: 28px; }
-.ttl-zoomBody { flex: 1; min-height: 0; display: flex; }
-.ttl-zoomOutline {
-  flex: none;
-  width: 256px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 10px 8px;
-  overflow-y: auto;
-  background: var(--dsw-alias-bg-layer-1, #1f1f21);
-  border-right: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.07));
-  scrollbar-width: thin;
-}
-.ttl-zoomOutlineHead { display: flex; align-items: baseline; gap: 6px; padding: 4px 8px 8px; }
-.ttl-zoomOutlineLabel { color: var(--dsw-alias-label-tertiary, #9ba1a7); font-size: 10px; font-weight: 500; letter-spacing: 0.5px; }
-.ttl-zoomOutlineCount { color: var(--dsw-alias-label-quaternary, #5f6469); font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace); font-size: 9.5px; }
-.ttl-zoomOutlineCur { color: var(--dsw-static-blue-300, #7cb2ff); font-style: normal; font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace); font-size: 9.5px; }
-.ttl-zoomOutlineTurn { display: flex; align-items: center; gap: 6px; padding: 4px 8px 6px; }
-.ttl-zoomOutlineTurn .ttl-turnTime { font-size: 9.5px; }
-.ttl-zoomOutlineRow {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  height: 28px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.ttl-zoomOutlineRow:hover { background: rgba(255, 255, 255, 0.04); }
-.ttl-zoomOutlineRow[aria-current="true"] {
-  background: rgba(76, 141, 255, 0.14);
-  box-shadow: inset 2px 0 0 var(--dsw-static-blue-500, #4c8dff);
-}
-.ttl-zoomOutlineRow .ttl-stepIcon { width: 16px; height: 16px; }
-.ttl-zoomOutlineRow .ttl-stepName { width: 38px; font-size: 9px; }
-.ttl-zoomOutlineRow .ttl-stepDesc { font-size: 10.5px; color: var(--dsw-alias-label-tertiary, #9ba1a7); }
-.ttl-zoomOutlineRow[aria-current="true"] .ttl-stepDesc { color: #e6e8ea; }
-.ttl-zoomOutlineRow .ttl-stepDur { width: 28px; font-size: 9px; }
-.ttl-zoomMain {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 14px 24px 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-.ttl-zoomHead { flex: none; display: flex; align-items: center; gap: 10px; }
-.ttl-zoomHead .ttl-detailIcon { width: 26px; height: 26px; }
-.ttl-zoomHeadText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ttl-zoomHeadLine { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.ttl-zoomHeadLine .ttl-detailName { font-size: 15px; }
-.ttl-zoomHeadLine .ttl-detailTool { font-size: 13px; max-width: 240px; }
-.ttl-zoomHead .ttl-detailDesc { font-size: 12.5px; }
-.ttl-zoomMeta, .ttl-zoom-meta {
-  color: var(--dsw-alias-label-quaternary, #5f6469);
-  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
-  font-size: 10px;
-}
-.ttl-zoomMain .ttl-tabs { margin-top: 10px; }
-.ttl-zoomMain .ttl-tab { font-size: 11.5px; }
-.ttl-zoomPane { padding: 10px 0 16px; min-height: 0; }
-.ttl-zoomPane .ttl-code { padding: 12px 14px; }
-.ttl-zoomPane .ttl-codeGutter { width: 18px; font-size: 9.5px; line-height: 20px; }
-.ttl-zoomPane .ttl-codeText { font-size: 12px; line-height: 20px; }
-.ttl-zoomPane .ttl-section { min-height: 26px; }
-.ttl-zoomPane .ttl-outBlock { font-size: 11px; line-height: 18px; }
-.ttl-zoomFoot {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 20px;
-  border-top: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.07));
-  background: rgba(255, 255, 255, 0.015);
-}
-.ttl-zoomShortcuts { display: flex; align-items: center; gap: 14px; }
-.ttl-zoomShortcut { display: inline-flex; align-items: center; gap: 5px; color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 10px; }
-.ttl-zoomShortcut .ttl-kbd { min-width: 22px; }
-.ttl-zoomFootState { display: flex; align-items: center; gap: 8px; margin-left: auto; color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 9.5px; }
-.ttl-zoomFootState .ttl-pill { height: 16px; font-size: 9px; }
-.ttl-zoom-empty, .ttl-zoom-nomatch { padding: 24px 0; color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 11px; }
-.ttl-zoom-error { padding: 10px 0; color: var(--dsw-alias-state-error-primary, #f2726f); font-size: 11px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .ttl-chevron, .ttl-skeletonBar { transition: none; animation: none; }
-}
-
-/* ── v0.9 leaf classes used by the new shell / detail ───── */
-.ttl-empty-filtered { padding: 8px 14px; color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 10.5px; }
-.ttl-item-compaction { color: var(--dsw-alias-label-quaternary, #5f6469); }
-.ttl-itemJump {
-  flex: none;
-  width: 16px;
-  text-align: right;
-  color: var(--dsw-alias-label-quaternary, #7b8086);
-  font-size: 11px;
-  line-height: 18px;
-}
-.ttl-output-body {
-  padding: 0 14px 8px 64px;
-  color: var(--dsw-alias-label-secondary, #cfd3d6);
-  font-size: 12px;
-  line-height: 18px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.ttl-statusMsg { color: var(--dsw-alias-label-tertiary, #9ba1a7); font-size: 10.5px; }
-.ttl-errorName, .ttl-error-name {
-  color: var(--dsw-alias-state-error-primary, #f2726f);
-  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
-  font-size: 11px;
-}
-
-/* ── v0.9 fixes from shell-view review ─────────────────── */
-.ttl-distSeg.ttl-tone-shell, .ttl-legendDot.ttl-tone-shell { background: #a78bfa; }
-.ttl-distSeg.ttl-tone-read, .ttl-legendDot.ttl-tone-read { background: #60a5fa; }
-.ttl-distSeg.ttl-tone-edit, .ttl-legendDot.ttl-tone-edit { background: #34d399; }
-.ttl-distSeg.ttl-tone-mcp, .ttl-legendDot.ttl-tone-mcp { background: #f08fb8; }
-.ttl-distSeg.ttl-tone-todo, .ttl-legendDot.ttl-tone-todo { background: #f2b45c; }
-.ttl-distSeg.ttl-tone-generic, .ttl-legendDot.ttl-tone-generic { background: #9ba1a7; }
-.ttl-statusDot { background: #4ed4a4; }
-.ttl-stepWrap:hover .ttl-stepJump, .ttl-stepWrap[data-open="true"] .ttl-stepJump { display: inline-flex; }
-.ttl-stepWrap[data-open="true"] .ttl-stepJump { color: var(--dsw-static-blue-300, #7cb2ff); }
-.ttl-stepWrap:hover { background: rgba(255, 255, 255, 0.035); border-radius: 4px; }
-.ttl-stepStatus { font-size: 10px; line-height: 10px; justify-content: center; align-items: center; }
-.ttl-stepIcon svg { width: 16px; height: 16px; }
-.ttl-stepWrap .ttl-step:hover { background: transparent; }
 
 /* ══ v0.9 integration fixes (frame compare round 1) ══════════════════════ */
 
@@ -1980,20 +1875,6 @@ export const trailCss = `
 /* 7) MCP tool name gets more room in the detail head */
 .ttl-detailTool { max-width: 196px; }
 
-/* 8) zoom head: text action button, no duplicated status pill */
-.ttl-zoomHeadLine .ttl-pill, .ttl-zoomHead .ttl-pill { display: none; }
-.ttl-zoomHead .ttl-detailAction {
-  width: auto;
-  height: 28px;
-  padding: 0 10px;
-  gap: 6px;
-  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.10));
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--dsw-alias-label-secondary, #cfd3d6);
-  font-size: 11px;
-  white-space: nowrap;
-}
-.ttl-zoomHead .ttl-detailMeta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
 
 /* 9) filters: keep the 「更多」 chip reachable while the list scrolls */
 .ttl-moreChip, .ttl-chip-more {
@@ -2028,7 +1909,6 @@ export const trailCss = `
   background: rgba(255, 255, 255, 0.04);
 }
 .ttl-stepRail { background: rgba(255, 255, 255, 0.09); }
-.ttl-zoomPanel { width: 1280px; height: 800px; max-width: calc(100vw - 48px); max-height: calc(100vh - 48px); }
 
 /* ══ v0.9 integration fixes (frame compare round 3) ══════════════════════ */
 .ttl-statusbar .ttl-toBottom,
