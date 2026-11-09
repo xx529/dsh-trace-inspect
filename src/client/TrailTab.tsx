@@ -50,7 +50,7 @@ import {
   type ToolDetailResult,
 } from './useTrail'
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
-import { inkOf, splitMcpName, summarizeToolCall, type ToolIconKind, type ToolInk } from './tool-summary'
+import { inkOf, splitMcpName, summarizeToolCall, toolIconKind, type ToolIconKind, type ToolInk } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
 import { detectOutputKind } from './output-format'
@@ -326,6 +326,40 @@ function familyInk(family: ToolFamily): ToolInk {
   return inkOf(familyIconKind(family))
 }
 
+/** Human name of a turn-head cluster chip (hover tooltip; zh / en). */
+const CLUSTER_LABEL: Record<ToolIconKind, { zh: string; en: string }> = {
+  terminal: { zh: '命令执行', en: 'shell' },
+  'terminal-session': { zh: '长驻终端', en: 'terminal session' },
+  jobs: { zh: '后台作业', en: 'jobs' },
+  code: { zh: '代码执行', en: 'code' },
+  'file-read': { zh: '读取文件', en: 'file read' },
+  'file-write': { zh: '写入文件', en: 'file write' },
+  'file-edit': { zh: '编辑文件', en: 'file edit' },
+  search: { zh: '检索', en: 'search' },
+  web: { zh: '联网', en: 'web' },
+  todo: { zh: '计划清单', en: 'plan' },
+  goal: { zh: '目标', en: 'goal' },
+  schedule: { zh: '定时任务', en: 'schedule' },
+  ask: { zh: '询问用户', en: 'ask' },
+  present: { zh: '交付物', en: 'present' },
+  subagent: { zh: '子代理', en: 'subagent' },
+  team: { zh: '团队协作', en: 'team' },
+  'team-task': { zh: '团队任务板', en: 'team tasks' },
+  workflow: { zh: '工作流 / 循环', en: 'workflow' },
+  skill: { zh: '技能', en: 'skill' },
+  session: { zh: '会话回溯', en: 'session' },
+  folder: { zh: '工作区', en: 'workspace' },
+  plugin: { zh: '运行时插件', en: 'plugin' },
+  mcp: { zh: 'MCP', en: 'MCP' },
+  alert: { zh: '失败', en: 'failed' },
+  generic: { zh: '其他工具', en: 'other tool' },
+}
+
+/** Cluster chip tooltip, e.g. `团队协作 2`. */
+function clusterLabel(kind: ToolIconKind, lang: Lang): string {
+  return CLUSTER_LABEL[kind][lang]
+}
+
 /** Legend / mix label per family (the prototype uses the representative tool). */
 function familyLabel(family: ToolFamily, ui: UiStrings): string {
   switch (family) {
@@ -542,35 +576,39 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     : ''
 
   /** Failed steps of the turn (the red `✗n` badge + the foot line). */
+  /** A step row draws the alert triangle (instead of its cluster glyph) when failed. */
+  const stepFailed = (step: TrailStep): boolean => step.kind === 'error' || step.result?.isError === true
+
+  /** Failed rows = the rows that lead with the alert triangle (wire errors AND `isError` results). */
   const errorCount = React.useMemo(() => {
     let count = 0
-    for (const item of turn.items) {
-      if (item.kind === 'tool' && item.step.kind === 'error') count += 1
+    for (const item of items) {
+      if (item.kind !== 'tool') continue
+      if (stepFailed(item.step)) count += 1
     }
     return count
-  }, [turn])
+  }, [items])
 
   /**
-   * Head mix: tool steps by family, at most four — the turn's shape at a glance.
-   * `skill` is pinned (v0.10.9): loading a skill is a semantic event, not just
-   * more calls, so a turn that used one always shows its count even when three
-   * louder families would otherwise fill the four slots.
+   * Head mix (v0.10.22): tool steps by WORK CLUSTER — the exact glyph each row
+   * draws — counted over the same filtered step list the expanded body renders,
+   * so every `icon + N` chip can be counted 1:1 in the opened turn. Failed
+   * steps are not chips: they all draw the alert triangle and are counted by
+   * the red error badge instead. No cap: every cluster present gets a chip (the
+   * row wraps when a narrow dock cannot fit them on one line).
    */
-  const mix = React.useMemo(() => {
-    const counts = new Map<ToolFamily, number>()
-    for (const item of turn.items) {
-      if (item.kind !== 'tool' || item.step.kind !== 'tool') continue
-      const family = toolFamily(item.step.name, false)
-      counts.set(family, (counts.get(family) ?? 0) + 1)
+  const clusterMix = React.useMemo(() => {
+    const counts = new Map<ToolIconKind, number>()
+    for (const item of items) {
+      if (item.kind !== 'tool') continue
+      if (stepFailed(item.step)) continue
+      const kind = toolIconKind(item.step.name)
+      counts.set(kind, (counts.get(kind) ?? 0) + 1)
     }
-    const entries = [...counts.entries()].sort((a, b) => b[1] - a[1])
-    const skill = entries.find(([family]) => family === 'skill')
-    const others = entries.filter(([family]) => family !== 'skill')
-    const picked = skill === undefined
-      ? others.slice(0, 4)
-      : [...others.slice(0, 3), skill]
-    return picked.map(([family, count]) => ({ family, count }))
-  }, [turn])
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([kind, count]) => ({ kind, count }))
+  }, [items])
 
   const [openOutputs, setOpenOutputs] = React.useState<ReadonlySet<string>>(() => new Set<string>())
   const toggleOutput = React.useCallback((key: string): void => {
@@ -783,25 +821,26 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
           {duration.length > 0 ? <span className="ttl-turnDur">{duration}</span> : null}
           <span className="ttl-turnHeadSpacer" />
           <span className="ttl-turnMeta">
-            {/* Family mix. Kept in the DOM for both states; styles.ts may hide
-                it on the expanded card (prototype 1-01 vs 2-02). */}
-            {mix.length > 0
+            {/* Work-cluster mix (v0.10.22). Kept in the DOM for both states;
+                styles.ts may hide it on the expanded card (1-01 vs 2-02). */}
+            {clusterMix.length > 0
               ? (
                 <span className="ttl-mix" aria-hidden="true">
-                  {mix.map((entry) => (
+                  {clusterMix.map((entry) => (
                     <i
-                      key={entry.family}
-                      className={`ttl-mixItem ttl-ink-${familyInk(entry.family)}`}
-                      title={familyLabel(entry.family, ui)}
+                      key={entry.kind}
+                      className={`ttl-mixItem ttl-ink-${inkOf(entry.kind)}`}
+                      data-cluster={entry.kind}
+                      title={`${clusterLabel(entry.kind, lang)} ${entry.count}`}
                     >
-                      <ToolIcon kind={familyIconKind(entry.family)} />
+                      <ToolIcon kind={entry.kind} />
                       <span className="ttl-mixCount">{entry.count}</span>
                     </i>
                   ))}
                 </span>
               )
               : null}
-            {hasError
+            {errorCount > 0
               ? (
                 <span
                   className="ttl-badge ttl-badgeErr"

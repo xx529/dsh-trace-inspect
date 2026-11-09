@@ -547,7 +547,7 @@ describe('TrailTab', () => {
     expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
   })
 
-  it('collapsed-turn mix always includes a loaded skill even when four louder families exist (v0.10.9)', async () => {
+  it('collapsed-turn mix counts work clusters 1:1 with the opened rows (v0.10.22)', async () => {
     renderTab([
       user(1, 'mixed turn'),
       turnStart(2, 1),
@@ -568,19 +568,80 @@ describe('TrailTab', () => {
     const turns = await readyTurns(2)
     const mix = turns[0].querySelector('.ttl-mix')
     expect(mix).toBeTruthy()
-    const skillItem = mix?.querySelector('.ttl-mixItem.ttl-ink-teal')
-    expect(skillItem).toBeTruthy()
-    expect(skillItem?.querySelector('.ttl-mixCount')?.textContent).toBe('1')
-    // The mix stays capped at four items (skill replaces the smallest slot).
-    expect(mix?.querySelectorAll('.ttl-mixItem')).toHaveLength(4)
-    // shell/read/edit (2 each) are the loud families that would otherwise fill it.
-    expect(mix?.querySelectorAll('.ttl-mixItem.ttl-ink-violet').length).toBe(1)
-    // v0.10.20: each chip carries its row cluster's ink — shell violet, read
-    // blue, edit green, skill teal — instead of the legacy family tone.
-    for (const ink of ['violet', 'blue', 'green', 'teal']) {
-      expect(mix?.querySelector(`.ttl-mixItem.ttl-ink-${ink}`)).toBeTruthy()
-    }
+    // One chip per WORK CLUSTER (same glyph the rows draw) — not per family and
+    // not capped at four any more: file-edit 2, file-read 2, terminal 2,
+    // generic 1, skill 1 (bash×2 / read×2 / edit×2 / custom / skill).
+    const chips = [...(mix?.querySelectorAll('.ttl-mixItem') ?? [])].map((el) => ({
+      kind: el.getAttribute('data-cluster'),
+      count: Number(el.querySelector('.ttl-mixCount')?.textContent ?? '0'),
+      ink: /ttl-ink-(\w+)/.exec(String(el.className))?.[1],
+    }))
+    expect(chips).toEqual([
+      { kind: 'file-edit', count: 2, ink: 'green' },
+      { kind: 'file-read', count: 2, ink: 'blue' },
+      { kind: 'terminal', count: 2, ink: 'violet' },
+      { kind: 'generic', count: 1, ink: 'gray' },
+      { kind: 'skill', count: 1, ink: 'teal' },
+    ])
+    // v0.10.20 chrome stays: no legacy family tone classes on the chips.
     expect(mix?.querySelector('[class*="ttl-tone-"]')).toBeNull()
+    // Open the turn and prove every chip is countable 1:1 by its own glyph.
+    fireEvent.click(within(turns[0]).getByTestId('ttl-turn-tag'))
+    await waitFor(() => { expect(turns[0].querySelectorAll('.ttl-step').length).toBeGreaterThan(0) })
+    const glyphs = [...turns[0].querySelectorAll('.ttl-step .ttl-stepIcon svg')].map((svg) => svg.innerHTML)
+    for (const chip of mix?.querySelectorAll('.ttl-mixItem') ?? []) {
+      const glyph = chip.querySelector('svg')?.innerHTML ?? ''
+      expect(glyphs.filter((html) => html === glyph)).toHaveLength(
+        Number(chip.querySelector('.ttl-mixCount')?.textContent),
+      )
+    }
+  })
+
+  it('failed steps are counted by the error badge, never by a cluster chip (v0.10.22)', async () => {
+    renderTab([
+      user(1, 'agents'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"ok"}', 'c3'),
+      toolCall(4, 'bash', 'npm test', 'c4'),
+      ev('tool/result', 5, { callId: 'c4', message: { isError: true }, content: [{ type: 'text', text: 'exit 1' }] }),
+      toolCall(6, 'read', '{"file_path":"a.ts"}', 'c6'),
+      toolCall(7, 'wait_agent', '{"target":"a"}', 'c7'),
+      toolCall(8, 'wait_agent', '{"target":"b"}', 'c8'),
+      toolCall(9, 'team_task_create', '{"subject":"audit"}', 'c9'),
+      toolCall(10, 'figma_status', '{}', 'c10'),
+      turnEnd(11, 1),
+    ])
+    const turn = (await screen.findAllByTestId('ttl-turn'))[0]
+    const chips = [...turn.querySelectorAll('.ttl-mixItem')].map((el) => ({
+      kind: el.getAttribute('data-cluster'),
+      count: Number(el.querySelector('.ttl-mixCount')?.textContent ?? '0'),
+    }))
+    // 6 healthy steps → 6 chips (terminal loses its failed sibling), and the
+    // failed bash row is only in the red error badge.
+    expect(chips).toEqual([
+      { kind: 'team', count: 2 },
+      { kind: 'file-read', count: 1 },
+      { kind: 'generic', count: 1 },
+      { kind: 'team-task', count: 1 },
+      { kind: 'terminal', count: 1 },
+    ])
+    const badge = turn.querySelector('[data-testid="ttl-error-dot"]')
+    expect(badge?.querySelector('[data-testid="ttl-error-count"]')?.textContent).toBe('1')
+    // Every chip count equals the rows that draw that exact glyph; the alert
+    // rows equal the error badge — nothing is counted twice, nothing is lost.
+    const icons = [...turn.querySelectorAll('.ttl-step .ttl-stepIcon svg')].map((svg) => svg.innerHTML)
+    for (const chip of turn.querySelectorAll('.ttl-mixItem')) {
+      const glyph = chip.querySelector('svg')?.innerHTML ?? ''
+      expect(icons.filter((html) => html === glyph)).toHaveLength(
+        Number(chip.querySelector('.ttl-mixCount')?.textContent),
+      )
+    }
+    const alertRows = [...turn.querySelectorAll('.ttl-step')].filter((row) =>
+      (row.querySelector('.ttl-stepIcon svg')?.innerHTML ?? '').includes('M10.29 3.86'),
+    )
+    expect(alertRows).toHaveLength(1)
+    const chipTotal = chips.reduce((sum, chip) => sum + chip.count, 0)
+    expect(chipTotal + alertRows.length).toBe(icons.length)
   })
 
   it('figma plugin + todo tools get their own coloured families, no grey glyph (v0.10.10)', async () => {

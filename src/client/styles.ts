@@ -885,7 +885,10 @@ export const trailCss = `
   white-space: nowrap;
 }
 .ttl-turnMeta {
-  flex: none;
+  /* v0.10.22: may shrink so the cluster chips can wrap instead of overflowing
+     the 400px dock; the tag / time / duration keep flex:none. */
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -895,7 +898,16 @@ export const trailCss = `
      look). Badges/pills keep their own 16px line-height. */
   line-height: 13px;
 }
-.ttl-mix { display: inline-flex; align-items: center; gap: 7px; color: var(--dsw-alias-label-quaternary, #7b8086); }
+.ttl-mix {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 7px;
+  row-gap: 3px;
+  min-width: 0;
+  color: var(--dsw-alias-label-quaternary, #7b8086);
+}
 .ttl-mixItem { display: inline-flex; align-items: center; gap: 2px; font-size: 9.5px; font-variant-numeric: tabular-nums; }
 .ttl-mixItem svg { display: block; }
 .ttl-mixCount { font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace); }

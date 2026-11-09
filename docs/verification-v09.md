@@ -432,3 +432,19 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![折叠卡：预览行是点击目标](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0121-card-collapsed.jpg>)
 
 ![点击预览行后：就地展开输入行 + 3 条步骤](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0121-card-expanded.jpg>)
+
+## 33. v0.10.22 折叠统计按工作簇计数（可与展开行 1:1 对账）
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 折叠统计的 icon 和数量，跟实际打开的不一致；期望 icon 和对应数量在展开内容里数得一模一样 | 统计口径由「工具族」改为**工作簇**（`toolIconKind`，与行图标同一字形/墨色），计数取自展开体真正渲染的步骤集合（含筛选/搜索），失败步不算进簇——它们统一画告警三角、由红色失败徽标计数；取消 4 个 chip 上限与 skill 固定槽，出现的簇全展示，窄面板自动换行 | 真实 47 步轮次（bash 21 / wait_agent 9 / list_agents 4 / team_task_create 4 / spawn_teammate 4 / team_task_list 3 / todo_write 2）：chips `terminal 21 · team 17 · team-task 7 · todo 2`（和 47），展开后逐 chip `21/21 · 17/17 · 7/7 · 2/2` |
+| 失败徽标与行内呈现也要一致 | 失败计数改为「画告警三角的行」：`step.kind === 'error'` 或 `result.isError === true`（此前只数 wire error，`isError` 结果行看着失败却不进徽标） | 8 簇 57 步行：chip 合计 57 == 展开行数；`isError` 单测：6 健康步 → 6 chip，告警 1 行 == 徽标 1，`chipTotal + alertRows == 全部行数` |
+
+- 覆盖：折叠头 chips（含筛选/搜索态随可见步骤收缩）、失败徽标、脚注 `N failed`、`data-error` 卡背景不变。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **562 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-mix-exact.mjs --mode real|wrap`（逐 chip 用字形 innerHTML 对展开行计数，失败即 exit 2）。
+- 已知偏差：mock 会话（工具名/数量取自用户上报的真实轮次，参数与结果文本为合成）；换行仅在单行放不下时发生。
+
+![折叠统计（真实 47 步轮次）：terminal 21 · team 17 · team-task 7 · todo 2](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0122-mix-clusters.jpg>)
+
+![8 簇 57 步：全部 chip 仍与展开行 1:1，单行排满](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0122-mix-wrap.jpg>)

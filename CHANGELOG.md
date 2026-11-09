@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.22] - 2026-11-09
+
+### Fixed
+
+- **折叠统计的 icon 和数量与展开内容对不上**：轮次头部的混合统计此前按「工具族」聚合（9 个粗粒度族），而展开后的步骤行按「工作簇」画图标，于是 `generic` 族会把 `wait_agent` / `list_agents` / `team_task_create` / `spawn_teammate` 合成一个扳手图标，展开后却找不到任何扳手行；`read` 族也会把 `read` 与 `grep` 合并成一个文件图标。现在统计改为按**工作簇**聚合——与行图标同一套 `toolIconKind`，每个 chip 都用行的字形与墨色，`data-cluster` 可对账。
+- **计数口径对齐「展开后真正渲染的步骤」**：簇计数取自当前过滤/搜索后的步骤列表，而不是全量 `turn.items`，所以在任何筛选状态下 chip 计数都等于展开体里能数到的行数；不再封顶 4 个 chip + skill 固定槽，所有出现的簇各占一个 chip，窄面板自动换行（`.ttl-mix` flex-wrap）。
+- **失败步不再混进簇计数**：失败行统一画红色告警三角，现在归失败徽标统计；同时把失败徽标/脚注的口径从「只有 wire `error` 步」改成「画告警三角的行」，即 `step.kind === 'error'` **或** `result.isError === true`，与行内呈现一致（之前 `isError` 结果行看着是失败但不计入徽标）。
+- 覆盖范围：折叠态与展开态共用同一份 DOM；筛选/搜索态 chip 随可见步骤收缩；`skill` 不再需要固定槽位（无上限后自然出现）。
+
+### Verification
+
+- 更新/新增回归：`trail-tab` 重写 mix 用例为簇口径并**逐 chip 对账**（打开轮次后按字形 innerHTML 统计行数 == chip 数字）；新增失败口径用例（1 个 `isError` 结果：6 个健康步 → 6 个 chip，告警行 1 条 == 徽标 1，`chipTotal + alertRows == 全部行数`）。测试 **562 例 / 22 文件**（561 → 562）。
+- 实机（独立 `trace-verify` web profile，19487，dock 400px，Playwright 路由 mock **用户上报的那一轮 47 步**：bash 21 / wait_agent 9 / list_agents 4 / team_task_create 4 / spawn_teammate 4 / team_task_list 3 / todo_write 2）：折叠头 chips = `terminal 21 · team 17 · team-task 7 · todo 2`（总和 47 = 步数），展开后逐 chip 计数 `21/21 · 17/17 · 7/7 · 2/2` 全部一致；另测 8 簇 57 步行也逐 chip 一致（折叠头一行排满，必要时换行）；0 条 console error。截图 `docs/assets/v0122-mix-clusters.jpg`（真实轮次）与 `docs/assets/v0122-mix-wrap.jpg`（8 簇），脚本 `scripts/verify/shoot-mix-exact.mjs`（`--mode real|wrap`）。
+
 ## [0.10.21] - 2026-11-09
 
 ### Changed
