@@ -122,6 +122,8 @@ export interface Dict {
   footnotes: string
   // ── v0.5.0（契约 §10.4.2）：缩略图 / 按需完整详情 / 放大浮层 ──
   imageLoadFailed: string
+  /** Open the thumbnail in the full-size image lightbox. */
+  imageOpen: string
   detailLoading: string
   detailLoadFailed: string
   detailRetry: string
@@ -221,6 +223,7 @@ const zh: Dict = {
   unwrapLabel: '不换行',
   footnotes: '脚注',
   imageLoadFailed: '图片加载失败，仅显示元数据',
+  imageOpen: '查看大图',
   detailLoading: '载入完整内容…',
   detailLoadFailed: '完整内容加载失败，当前显示截断预览',
   detailRetry: '重试',
@@ -316,6 +319,7 @@ const en: Dict = {
   unwrapLabel: 'No wrap',
   footnotes: 'Footnotes',
   imageLoadFailed: 'Image failed to load — metadata only',
+  imageOpen: 'View full size',
   detailLoading: 'Loading full content…',
   detailLoadFailed: 'Failed to load full content — showing the truncated preview',
   detailRetry: 'Retry',

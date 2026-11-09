@@ -7,6 +7,7 @@
  * depend on these without importing the overlay itself (no import cycles).
  */
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { attachmentUrl } from './attachment-url'
 import { t, type Lang } from './locales'
 import type { TrailResultImage } from '../trail-model'
@@ -108,6 +109,86 @@ export function TrailImages(props: TrailImagesProps): React.ReactElement {
   )
 }
 
+/**
+ * Full-size image lightbox (v0.10.35): the detail band's thumbnail is a
+ * preview; clicking it opens this dialog with the session-authorized URL at
+ * up to 90vw / 80vh, a blurred backdrop (same language as the value reader),
+ * the caption/metadata row, and Esc / backdrop click to close.
+ */
+function ImageLightbox(props: {
+  url: string
+  label: string
+  meta: React.ReactNode
+  lang: Lang
+  onClose: () => void
+}): React.ReactPortal | null {
+  const { url, label, meta, lang, onClose } = props
+  const closeRef = React.useRef<HTMLButtonElement | null>(null)
+  const returnFocusRef = React.useRef<Element | null>(null)
+
+  React.useEffect(() => {
+    returnFocusRef.current = typeof document === 'undefined' ? null : document.activeElement
+    const close = closeRef.current
+    if (close !== null && typeof close.focus === 'function') close.focus()
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      onClose()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      const target = returnFocusRef.current
+      if (target instanceof HTMLElement && target.isConnected) target.focus()
+    }
+  }, [onClose])
+
+  if (typeof document === 'undefined') return null
+  const closeLabel = t(lang, 'zoomClose') as string
+  return createPortal(
+    <div
+      className="ttl-imgLightbox"
+      data-testid="ttl-img-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+    >
+      <div
+        className="ttl-imgLightboxBackdrop"
+        data-testid="ttl-img-lightbox-backdrop"
+        aria-hidden="true"
+        onClick={onClose}
+      />
+      <div className="ttl-imgLightboxPanel">
+        <div className="ttl-imgLightboxHead">
+          <span className="ttl-imgLightboxTitle">{label}</span>
+          <span className="ttl-imgLightboxMeta">{meta}</span>
+          <button
+            ref={closeRef}
+            type="button"
+            className="ttl-imgLightboxClose"
+            data-testid="ttl-img-lightbox-close"
+            title={closeLabel}
+            aria-label={closeLabel}
+            onClick={onClose}
+          >✕</button>
+        </div>
+        <div className="ttl-imgLightboxBody" onClick={onClose}>
+          <img
+            className="ttl-imgLightboxImg"
+            data-testid="ttl-img-lightbox-img"
+            src={url}
+            alt={label}
+            onClick={(event) => { event.stopPropagation() }}
+          />
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 const ImageBlock = React.memo(function ImageBlock(props: {
   image: TrailResultImage
   sessionId: string
@@ -115,6 +196,7 @@ const ImageBlock = React.memo(function ImageBlock(props: {
 }): React.ReactElement {
   const { image, sessionId, lang } = props
   const [loadFailed, setLoadFailed] = React.useState(false)
+  const [zoomed, setZoomed] = React.useState(false)
   const url = attachmentUrl(sessionId, image)
   const name = image.name ?? image.mediaType
   const label = (t(lang, 'imageLabel') as (name: string) => string)(name)
@@ -133,11 +215,19 @@ const ImageBlock = React.memo(function ImageBlock(props: {
     </>
   )
   const showThumb = url !== null && !loadFailed
+  const openLabel = t(lang, 'imageOpen') as string
   return (
     <div className="ttl-imgItem" data-testid="ttl-img-item">
       {showThumb
         ? (
-          <div className="ttl-imgThumbWrap" data-testid="ttl-img-thumb-wrap">
+          <button
+            type="button"
+            className="ttl-imgThumbWrap ttl-imgThumbBtn"
+            data-testid="ttl-img-thumb-wrap"
+            title={openLabel}
+            aria-label={openLabel}
+            onClick={() => { setZoomed(true) }}
+          >
             <img
               data-testid="ttl-img-thumb"
               className="ttl-imgThumb"
@@ -146,7 +236,7 @@ const ImageBlock = React.memo(function ImageBlock(props: {
               alt={label}
               onError={() => { setLoadFailed(true) }}
             />
-          </div>
+          </button>
         )
         : null}
       <span className="ttl-imgChip" data-testid="ttl-img-chip">
@@ -159,6 +249,9 @@ const ImageBlock = React.memo(function ImageBlock(props: {
             {t(lang, 'imageLoadFailed') as string}
           </span>
         )
+        : null}
+      {showThumb && zoomed && url !== null
+        ? <ImageLightbox url={url} label={label} meta={meta} lang={lang} onClose={() => { setZoomed(false) }} />
         : null}
     </div>
   )

@@ -1057,7 +1057,8 @@ describe('F · components (detail band / lazy detail / thumbnails / collapsed DO
     expect(thumb.getAttribute('loading')).toBe('lazy')
     expect(thumb.getAttribute('src')).toBe('/trace-inspect/api/attachment?sessionId=v050-ui&attachmentId=sha256%3Aabc')
     expect(thumb.getAttribute('alt')).toBe('Image: a.png')
-    expect(thumb.parentElement?.className).toBe('ttl-imgThumbWrap')
+    expect(thumb.parentElement?.className).toContain('ttl-imgThumbWrap')
+    expect(thumb.parentElement?.className).toContain('ttl-imgThumbBtn')
 
     fireEvent.error(thumb)
     expect(screen.queryByTestId('ttl-img-thumb')).toBeNull()

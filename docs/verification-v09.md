@@ -622,3 +622,18 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：skill 书形图标的墨迹中心比其 13px 盒中心低 0.75px（图标自身不对称，非数字问题）。
 
 ![90% 缩放下统计数字与图标居中对齐（56px zoom 头）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0134-mix-align.jpg)
+
+## 46. v0.10.35 图片缩略图可点开大图
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 这种图片，点击应该有可以打开大图 | 缩略图改为按钮（`cursor: zoom-in`、hover 提亮、键盘可聚焦）；点击打开大图查看器：固定层 + `backdrop-filter: blur(6px)` 遮罩 + 面板（标题 / 格式 / 尺寸） + 右上 `✕`；Esc / 点遮罩 / ✕ 关闭，关闭后焦点回到缩略图；图片走会话授权 attachment 路由 | 缩略图父元素 `BUTTON`；点击后 `ttl-img-lightbox` portal body、role=dialog、aria-modal、大图 naturalWidth 1600、遮罩 blur(6px)；Esc 关闭 |
+| 不放大到模糊 | 大图 `max-width: min(1200px, 92vw)` / `max-height: calc(90vh - 88px)` + `object-fit: contain`，原图小于容器时按原尺寸显示 | 面板宽 1138px（1600px 原图缩到上限内） |
+
+- 新增文案 `imageOpen`（查看大图 / View full size）；加载失败仍只显示 chip + 警告，不出现可点缩略图。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **548 例 / 21 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-image-lightbox.mjs`（mock read_image + attachment 路由返回真实 JPEG，量 portal/尺寸/blur/Esc）。
+
+![详情里的缩略图（可点击）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0135-image-inline.jpg)
+
+![大图查看器：背景模糊 + 元信息 + Esc/遮罩关闭](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0135-image-lightbox.jpg)

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.35] - 2026-11-10
+
+### Added
+
+- **图片缩略图可点开大图**：详情「摘要」里的图片块（如 `read_image` 结果）现在是按钮（`cursor: zoom-in`，hover 轻微提亮，键盘可聚焦/回车打开），点击后打开**大图查看器**：固定层 + 背景模糊（与单值查看器同一套语言）、顶部标题/尺寸/格式元信息、右上 `✕`，Esc / 点遮罩 / `✕` 关闭；关闭后焦点回到缩略图。图片仍走会话授权的 attachment 路由，按 `max-width/max-height` 自适应，不放大到模糊。
+- 新增文案 `imageOpen`（查看大图 / View full size）。
+
+### Verification
+
+- 新增 2 例回归：点击缩略图打开 role=dialog + aria-modal + 图片 src；Esc / 点遮罩 / 关闭按钮三种关闭方式，点图片本身不关闭。测试 **548 例 / 21 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 400，mock 一条 `read_image` + `image/*` attachment，attachment 路由回真实 JPEG）：缩略图 naturalWidth 1600、父元素是 `BUTTON`；点击后 `ttl-img-lightbox` portal 到 body、role=dialog、`backdrop-filter: blur(6px)`、大图 naturalWidth 1600；Esc 关闭；0 条 console error。截图 `docs/assets/v0135-image-inline.jpg`、`docs/assets/v0135-image-lightbox.jpg`，脚本 `scripts/verify/shoot-image-lightbox.mjs`。
+
 ## [0.10.34] - 2026-11-10
 
 ### Fixed

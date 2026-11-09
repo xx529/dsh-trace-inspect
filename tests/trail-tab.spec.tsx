@@ -1183,7 +1183,8 @@ describe('TrailTab', () => {
     expect(thumb.className).toBe('ttl-imgThumb')
     expect(thumb.getAttribute('src')).toBe('/trace-inspect/api/attachment?sessionId=s1&attachmentId=sha256%3Aabc')
     expect(thumb.getAttribute('alt')).toBe('Image: a.png')
-    expect(thumb.parentElement?.className).toBe('ttl-imgThumbWrap')
+    expect(thumb.parentElement?.className).toContain('ttl-imgThumbWrap')
+    expect(thumb.parentElement?.className).toContain('ttl-imgThumbBtn')
     // The metadata/chip row stays visible underneath the thumbnail.
     const chip = screen.getByTestId('ttl-img-chip')
     expect(chip.textContent).toContain('Image: a.png')
@@ -1221,6 +1222,40 @@ describe('TrailTab', () => {
     expect(screen.queryByTestId('ttl-img-thumb-wrap')).toBeNull()
     expect(screen.getByTestId('ttl-img-chip').textContent).toContain('Image: a.png')
     expect(screen.getByTestId('ttl-img-failed').textContent).toBe('Image failed to load — metadata only')
+  })
+
+  it('clicking the thumbnail opens the full-size image lightbox (v0.10.35)', async () => {
+    renderTab(imageTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    const thumb = (await screen.findByTestId('ttl-img-thumb')) as HTMLImageElement
+    fireEvent.click(thumb)
+    const lightbox = await screen.findByTestId('ttl-img-lightbox')
+    expect(lightbox.getAttribute('role')).toBe('dialog')
+    expect(lightbox.getAttribute('aria-modal')).toBe('true')
+    expect(document.body.contains(lightbox)).toBe(true)
+    const big = screen.getByTestId('ttl-img-lightbox-img') as HTMLImageElement
+    expect(big.getAttribute('src')).toBe('/trace-inspect/api/attachment?sessionId=s1&attachmentId=sha256%3Aabc')
+    expect(screen.getByTestId('ttl-img-lightbox').textContent).toContain('image/png')
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByTestId('ttl-img-lightbox')).toBeNull()
+  })
+
+  it('the lightbox closes on backdrop click but not on clicking the image', async () => {
+    renderTab(imageTurn())
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    fireEvent.click(await screen.findByTestId('ttl-img-thumb'))
+    await screen.findByTestId('ttl-img-lightbox')
+    fireEvent.click(screen.getByTestId('ttl-img-lightbox-img'))
+    expect(screen.getByTestId('ttl-img-lightbox')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('ttl-img-lightbox-backdrop'))
+    expect(screen.queryByTestId('ttl-img-lightbox')).toBeNull()
+    // The close button does the same.
+    fireEvent.click(screen.getByTestId('ttl-img-thumb'))
+    await screen.findByTestId('ttl-img-lightbox')
+    fireEvent.click(screen.getByTestId('ttl-img-lightbox-close'))
+    expect(screen.queryByTestId('ttl-img-lightbox')).toBeNull()
   })
 
   // ── v0.5.0 · on-demand full detail (契约 §10.5.2) ──────────────────────
