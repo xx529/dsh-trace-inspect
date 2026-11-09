@@ -582,3 +582,17 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![长值块：实线卡片 + 值行为主操作](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0131-longvalue-collapsed.jpg)
 
 ![展开态：卡内显示全文，按钮变「收起」](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0131-longvalue-expanded.jpg)
+
+## 43. v0.10.32 长值回到 JSON 原样（内联 + 蓝色「…」）
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 不要框框，直接文本…，省略号高亮一个颜色表示可点开，不破坏 JSON 原有格式 | 去掉卡片/边框/墨线/元信息行/按钮；长字符串就是普通 JSON token（键、引号、值、逗号原样），值尾内联蓝色 `…` 作为唯一可点区；hover 下划线 + 浅蓝底，点击打开单值查看器；字符/行数放进 tooltip；值行 flex 布局保证 `…` 与收尾引号/逗号始终在面板内；超出文本右侧渐隐 | `.ttl-jpLong` `display:flex` / `border-width:0` / 透明背景；`…` `rgb(147,197,253)`；无 `.ttl-jpLongMeta/Foot/Action`；点开查看器 3 行 + blur，Esc 关闭 |
+| 格式保持 | 键行 `"command":` 与值同一行；逗号保留在收尾引号后 | `"command": "cd /Users/lzx…",` 结构不变 |
+
+- 移除：内联展开（`.ttl-jpRestored`）与复制按钮（查看器内提供复制完整值）。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **541 例 / 21 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-longvalue-ui.mjs`（量内联样式、`…` 颜色/点击、查看器与 Esc）。
+- 设计：Figma `07d · 长值内联形式`（`07c` 标记已被替代）。
+
+![长值回到 JSON 原样：只有蓝色「…」可点](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0132-longvalue-inline.jpg)

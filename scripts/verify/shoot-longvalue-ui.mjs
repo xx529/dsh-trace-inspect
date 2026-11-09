@@ -117,54 +117,62 @@ try {
   const metrics = await page.evaluate(() => {
     const block = document.querySelector('[data-testid="ttl-json-long"]')
     const style = block === null ? null : getComputedStyle(block)
-    const preview = block?.querySelector('[data-testid="ttl-json-long-preview"]')
-    const actions = [...(block?.querySelectorAll('[data-testid="ttl-json-long-toggle"], [data-testid="ttl-json-long-copy"]') ?? [])]
-      .map((el) => ({ text: (el.textContent ?? '').trim(), size: getComputedStyle(el).fontSize, bg: getComputedStyle(el).backgroundColor }))
+    const more = block?.querySelector('[data-testid="ttl-json-long-view"]')
+    const moreStyle = more === null || more === undefined ? null : getComputedStyle(more)
+    const detailText = (document.querySelector('[data-testid="ttl-detail"]')?.textContent ?? '')
     return {
-      borderStyle: style?.borderStyle ?? null,
-      borderLeftWidth: style?.borderLeftWidth ?? null,
-      radius: style?.borderRadius ?? null,
-      previewText: (preview?.textContent ?? '').slice(0, 80),
-      previewFontSize: preview === null || preview === undefined ? null : getComputedStyle(preview).fontSize,
-      actions,
-      hasDtabButtons: block?.querySelectorAll('.ttl-dtab').length ?? 0,
-      blockRect: block?.getBoundingClientRect().toJSON() ?? null,
+      display: style?.display ?? null,
+      borderWidth: style?.borderTopWidth ?? null,
+      background: style?.backgroundColor ?? null,
+      moreText: (more?.textContent ?? ''),
+      moreColor: moreStyle?.color ?? null,
+      moreTitle: more?.getAttribute('title') ?? null,
+      jsonShape: detailText.includes('"command": "cd /Users/lzx'),
+      hasBoxChrome: block?.querySelector('.ttl-jpLongMeta, .ttl-jpLongFoot, .ttl-jpLongAction') !== null,
       detailRect: document.querySelector('[data-testid="ttl-detail"]')?.getBoundingClientRect().toJSON() ?? null,
     }
   })
-  log('metrics:', JSON.stringify({ borderStyle: metrics.borderStyle, radius: metrics.radius, actions: metrics.actions, hasDtab: metrics.hasDtabButtons }))
+  log('metrics:', JSON.stringify({ display: metrics.display, borderWidth: metrics.borderWidth, bg: metrics.background, moreColor: metrics.moreColor }))
 
   const detailRect = metrics.detailRect
   const clip = { x: Math.max(0, Math.round(detailRect.x) - 6), y: Math.max(0, Math.round(detailRect.y) - 6), width: Math.min(430, page.viewportSize().width - Math.round(detailRect.x) + 12), height: Math.min(560, Math.round(detailRect.height) + 12) }
-  await page.screenshot({ path: path.join(OUT_DIR, 'panel-collapsed.png'), clip, animations: 'disabled' })
+  await page.screenshot({ path: path.join(OUT_DIR, 'panel-inline.png'), clip, animations: 'disabled' })
 
-  // Hover state
-  await page.locator('[data-testid="ttl-json-long-preview"]').first().hover()
-  await sleep(page, 500)
+  // Hover the 「…」
+  await page.locator('[data-testid="ttl-json-long-view"]').first().hover()
+  await sleep(page, 400)
   await page.screenshot({ path: path.join(OUT_DIR, 'panel-hover.png'), clip, animations: 'disabled' })
 
-  // Expand inline
-  await page.locator('[data-testid="ttl-json-long-toggle"]').first().click()
-  await sleep(page, 600)
-  const expanded = await page.evaluate(() => ({
-    hasBody: document.querySelector('[data-testid="ttl-json-long-body"]') !== null,
-    bodyText: (document.querySelector('[data-testid="ttl-json-long-body"]')?.textContent ?? '').slice(0, 60),
-    toggleText: (document.querySelector('[data-testid="ttl-json-long-toggle"]')?.textContent ?? '').trim(),
-  }))
-  log('expanded:', JSON.stringify(expanded))
-  const detailRect2 = await page.evaluate(() => document.querySelector('[data-testid="ttl-detail"]')?.getBoundingClientRect().toJSON() ?? null)
-  await page.screenshot({
-    path: path.join(OUT_DIR, 'panel-expanded.png'),
-    clip: { x: Math.max(0, Math.round(detailRect2.x) - 6), y: Math.max(0, Math.round(detailRect2.y) - 6), width: Math.min(430, page.viewportSize().width - Math.round(detailRect2.x) + 12), height: Math.min(660, Math.round(detailRect2.height) + 12) },
-    animations: 'disabled',
+  // Click → single-value reader (blurred backdrop), Esc closes.
+  await page.locator('[data-testid="ttl-json-long-view"]').first().click()
+  await page.waitForSelector('[data-testid="ttl-value-viewer"]', { timeout: 15000 })
+  await sleep(page, 500)
+  const viewer = await page.evaluate(() => {
+    const root = document.querySelector('[data-testid="ttl-value-viewer"]')
+    const backdrop = root?.querySelector('.ttl-valueBackdrop')
+    return {
+      title: (root?.querySelector('[data-testid="ttl-value-title"]')?.textContent ?? '').trim(),
+      bodyLines: root?.querySelectorAll('.ttl-valueLine').length ?? 0,
+      blur: backdrop === null || backdrop === undefined ? null : getComputedStyle(backdrop).backdropFilter,
+    }
   })
+  log('viewer:', JSON.stringify(viewer))
+  await page.screenshot({ path: path.join(OUT_DIR, 'panel-viewer.png'), animations: 'disabled' })
+  await page.keyboard.press('Escape')
+  await sleep(page, 400)
+  const closed = await page.evaluate(() => document.querySelector('[data-testid="ttl-value-viewer"]') === null)
 
-  fs.writeFileSync(path.join(OUT_DIR, 'longvalue-metrics.json'), JSON.stringify({ metrics, expanded, consoleErrors }, null, 2))
-  log('console errors:', consoleErrors.length)
+  fs.writeFileSync(path.join(OUT_DIR, 'longvalue-metrics.json'), JSON.stringify({ metrics, viewer, closed, consoleErrors }, null, 2))
+  log('console errors:', consoleErrors.length, 'closed:', closed)
+  const rgb = (String(metrics.moreColor).match(/\d+/g) ?? []).map(Number)
+  const isBlue = rgb.length >= 3 && rgb[2] > rgb[0] + 20
   const bad = [
-    metrics.borderStyle !== 'solid',
-    metrics.hasDtabButtons > 0,
-    !expanded.hasBody,
+    metrics.hasBoxChrome,
+    metrics.moreText !== '…',
+    !isBlue,
+    !metrics.jsonShape,
+    !viewer.title.includes('command'),
+    !closed,
   ]
   if (bad.some(Boolean)) process.exitCode = 2
 } finally {

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.32] - 2026-11-10
+
+### Changed
+
+- **长值不再有卡片框，回到 JSON 原样**（承接 0.10.31）：去掉实线卡片、左侧墨线、元信息行与「展开 / 复制」按钮；长字符串就是一串普通 JSON——键、引号、值、逗号保持原样，只在值尾内联一个蓝色 `…` 表示「可点开查看完整值」。
+  - 蓝色 `…` 是唯一可点区：hover 变下划线 + 浅蓝底，点击打开 07b 的单值查看器（背景模糊）；字符数 / 行数放进它的 tooltip。
+  - 值行用 flex 布局（key 固定 + 值占剩余宽度），保证 `…` 与收尾引号、逗号始终在面板宽度内；超出的文本用右侧渐隐而非硬裁。
+  - 内联「展开」不再需要（查看器承担阅读），`.ttl-jpRestored` 一并移除。
+
+### Verification
+
+- 更新 2 例 json-pretty 回归：内联 JSON 形状（`"command": "…` 且无 meta/toggle/copy/body）+ 点击 `…` 打开查看器；`detail-styles` 契约改为内联规则（无 border/background/按钮）。测试 **541 例 / 21 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 420px，mock 211 字符 bash 命令）：`.ttl-jpLong` 计算 `display: flex`、`border-width: 0px`、背景透明，`…` 颜色 `rgb(147,197,253)`、无卡片/按钮/元信息节点；点击后单值查看器打开（标题 `command`、3 行、`backdrop-filter: blur(6px)`），Esc 关闭；0 条 console error。截图 `docs/assets/v0132-longvalue-inline.jpg`，脚本 `scripts/verify/shoot-longvalue-ui.mjs`。
+- 设计：Figma 新增 `07d · 长值内联形式`，并把 `07c` 标注为已被替代。
+
 ## [0.10.31] - 2026-11-10
 
 ### Changed

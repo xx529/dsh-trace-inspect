@@ -157,15 +157,6 @@ describe('v0.10.2: 统一 ICON 底色 + 图标间竖线（原型 2-02）', () =>
   })
 })
 
-describe('v0.10.15: 展开的长值不再有内部滚动', () => {
-  it('ttl-jpRestored 没有 max-height / overflow 滚动盒', () => {
-    const restored = rule('.ttl-jpRestored {')
-    expect(restored).not.toContain('max-height')
-    expect(restored).not.toContain('overflow: auto')
-    expect(restored).toContain('white-space: pre-wrap')
-  })
-})
-
 describe('v0.10.12: 展开的输出是卡片', () => {
   it('展开体与详情带同款 surface / 圆角 / 边框 / 内边距 / 13.5px 内缩', () => {
     const body = rule('.ttl-msgBody {')
@@ -197,18 +188,17 @@ describe('v0.10.27: 挪出 meta 后统计数字仍与图标居中', () => {
   })
 })
 
-describe('v0.10.31: 参数长值块重设计', () => {
-  it('实线卡片 + 左侧墨线，不再用虚线框和实心按钮', () => {
+describe('v0.10.32: 长值内联 JSON + 蓝色省略号', () => {
+  it('不再有卡片/按钮：值以 JSON 字符串内联，只有 ⤢ 前的蓝色 … 可点', () => {
     const block = rule('.ttl-jpLong {')
-    expect(block).toContain('border: 1px solid')
-    expect(block).toContain('border-left: 2px solid')
-    expect(block).toContain('border-radius: 8px')
-    expect(block).not.toContain('1px dashed')
-    const action = rule('.ttl-jpLongAction {')
-    expect(action).toContain('font-size: 10.5px')
-    expect(action).toContain('background: transparent')
-    // the value line itself is the primary affordance
-    expect(rule('.ttl-jpLongPreview {')).toContain('text-overflow: ellipsis')
+    expect(block).toContain('display: flex')
+    expect(rule('.ttl-jpLineFlex {')).toContain('display: flex')
+    expect(block).not.toContain('border')
+    expect(block).not.toContain('background')
+    expect(rule('.ttl-jpLongMore {')).toContain('color: var(--dsw-static-blue-300, #7cb2ff);')
+    expect(trailCss).not.toContain('.ttl-jpLongAction')
+    expect(trailCss).not.toContain('.ttl-jpLongFoot')
+    expect(trailCss).not.toContain('.ttl-jpRestored')
   })
 })
 

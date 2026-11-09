@@ -52,29 +52,22 @@ describe('JsonPretty — long values (B)', () => {
   const longCommand = `cd /Users/lzx/Documents/GitHub/dsh-trace-inspect && python3 - <<'PY'\nimport re\n${'x'.repeat(200)}\nPY`
   const value = { command: longCommand, timeout: 120000 }
 
-  it('collapses a long string by default behind a size/line meta block', () => {
+  it('keeps a long string inline as JSON + a highlighted 「…」 affordance (v0.10.32)', () => {
     render(React.createElement(JsonPretty, { value, lang: 'zh' }))
     const block = screen.getByTestId('ttl-json-long')
     expect(block).toBeTruthy()
-    // Default collapsed: the decoded text is not rendered yet.
+    // Real JSON shape: quotes around the value, no meta row / buttons / card.
+    const text = screen.getByTestId('ttl-json-pretty').textContent ?? ''
+    expect(text).toContain('"command": "cd /Users/lzx/Documents/GitHub/dsh-trace-inspect')
+    expect(text).toContain('"timeout": 120000')
     expect(screen.queryByTestId('ttl-json-long-body')).toBeNull()
-    const meta = screen.getByTestId('ttl-json-long-meta').textContent ?? ''
-    expect(meta).toContain('字符')
-    expect(meta).toContain('行')
-    // The short sibling keeps the inline JSON shape.
-    expect(screen.getByTestId('ttl-json-pretty').textContent).toContain('"timeout": 120000')
-  })
-
-  it('expands into REAL newlines and collapses again', () => {
-    render(React.createElement(JsonPretty, { value }))
-    fireEvent.click(screen.getByTestId('ttl-json-long-toggle'))
-    const body = screen.getByTestId('ttl-json-long-body')
-    // The heredoc is restored as separate lines, not as `\n` escapes.
-    expect(body.textContent).toBe(longCommand)
-    expect(body.textContent).toContain('\nimport re\n')
-    expect(body.textContent).not.toContain('\\n')
-    fireEvent.click(screen.getByTestId('ttl-json-long-toggle'))
-    expect(screen.queryByTestId('ttl-json-long-body')).toBeNull()
+    expect(screen.queryByTestId('ttl-json-long-meta')).toBeNull()
+    // The only affordance: a blue 「…」 whose tooltip carries the size/line meta.
+    const more = screen.getByTestId('ttl-json-long-view')
+    expect(more.textContent).toBe('…')
+    const title = more.getAttribute('title') ?? ''
+    expect(title).toContain('字符')
+    expect(title).toContain('行')
   })
 
   it('only folds strings at or above the documented threshold', () => {
@@ -104,9 +97,10 @@ describe('JsonPretty — centered value reader (C)', () => {
     expect(screen.queryByTestId('ttl-value-viewer')).toBeNull()
   })
 
-  it('copies the decoded value from the block without throwing', () => {
+  it('does not add extra controls: copying lives in the reader', () => {
     render(React.createElement(JsonPretty, { value }))
-    // jsdom has no clipboard by default; the helper no-ops when unavailable.
-    expect(() => { fireEvent.click(screen.getByTestId('ttl-json-long-copy')) }).not.toThrow()
+    // v0.10.32: no copy/expand buttons in the JSON line; the reader owns them.
+    expect(screen.queryByTestId('ttl-json-long-copy')).toBeNull()
+    expect(screen.queryByTestId('ttl-json-long-toggle')).toBeNull()
   })
 })

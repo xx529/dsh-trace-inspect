@@ -72,72 +72,44 @@ function pushRow(ctx: EmitCtx, depth: number, content: React.ReactNode, testid?:
 }
 
 /**
- * One long string value (v0.10.31 redesign): a single-line code card — the
- * value itself is the primary affordance (click anywhere on it, or the ⤢
- * button, to open the single-value reader), with the character/line meta and
- * the quiet 「展开 / 复制」 text actions on a second row. No dashed box, no
- * solid buttons: hover only changes surface + border, never geometry.
+ * One long string value, kept INLINE as JSON (v0.10.32): the value renders as
+ * a normal string token — quotes, text, trailing comma — clipped to one line.
+ * The only chrome is the 「…」 tail, tinted blue to read as "click to read the
+ * whole value"; it opens the single-value reader. No card, no meta row, no
+ * buttons: the document keeps its original JSON shape.
  */
 function LongValue(props: {
   label: string
   text: string
   ctx: EmitCtx
-  /** The JSON comma that belonged after the value; shown at the preview tail. */
+  /** The JSON comma that belonged after the value. */
   trailingComma?: boolean
 }): React.ReactElement {
   const { label, text, ctx, trailingComma = false } = props
-  const [open, setOpen] = React.useState(false)
   const lineCount = text.includes('\n') ? text.split('\n').length : 1
   const meta = (t(ctx.lang, 'valueMeta') as (chars: string, lines: number) => string)(formatCount(text.length), lineCount)
   const viewLabel = t(ctx.lang, 'viewInCenter') as string
-  /** First line + the JSON comma; CSS ellipsis handles the overflow. */
+  /** First line only; the CSS mask fades the clipped tail and 「…」 follows it. */
   const firstLine = (text.split('\n')[0] ?? '').trim()
-  const preview = `${firstLine}${trailingComma ? ',' : ''}`
+  const title = `${viewLabel} · ${meta}`
   return (
     <span
-      className={`ttl-jpLong${open ? ' ttl-jpLongOpen' : ''}`}
+      className="ttl-jpLong"
       data-testid="ttl-json-long"
       onClick={(event) => { event.stopPropagation() }}
     >
-      <span className="ttl-jpLongMain">
-        <button
-          type="button"
-          className="ttl-jpLongPreview"
-          data-testid="ttl-json-long-preview"
-          title={viewLabel}
-          aria-label={viewLabel}
-          onClick={() => { ctx.onView(label, text) }}
-        >{preview}</button>
-        <button
-          type="button"
-          className="ttl-jpLongView"
-          data-testid="ttl-json-long-view"
-          title={viewLabel}
-          aria-label={viewLabel}
-          onClick={() => { ctx.onView(label, text) }}
-        >⤢</button>
-      </span>
-      <span className="ttl-jpLongFoot">
-        <span className="ttl-jpLongMeta" data-testid="ttl-json-long-meta">{meta}</span>
-        <span className="ttl-jpLongSpacer" />
-        <button
-          type="button"
-          className="ttl-jpLongAction"
-          data-testid="ttl-json-long-toggle"
-          aria-expanded={open}
-          onClick={() => { setOpen(!open) }}
-        >{t(ctx.lang, open ? 'collapseLabel' : 'expandLabel') as string}</button>
-        <span className="ttl-jpLongDot" aria-hidden="true">·</span>
-        <button
-          type="button"
-          className="ttl-jpLongAction"
-          data-testid="ttl-json-long-copy"
-          onClick={() => { copyToClipboard(text) }}
-        >{t(ctx.lang, 'copyField') as string}</button>
-      </span>
-      {open
-        ? <pre className="ttl-jpRestored" data-testid="ttl-json-long-body">{text}</pre>
-        : null}
+      <span className="ttl-jpLongQuote" aria-hidden="true">&quot;</span>
+      <span className="ttl-jpLongText" data-testid="ttl-json-long-preview">{firstLine}</span>
+      <button
+        type="button"
+        className="ttl-jpLongMore"
+        data-testid="ttl-json-long-view"
+        title={title}
+        aria-label={title}
+        onClick={() => { ctx.onView(label, text) }}
+      >…</button>
+      <span className="ttl-jpLongQuote" aria-hidden="true">&quot;</span>
+      {trailingComma ? <span className="ttl-jsonPunct">,</span> : null}
     </span>
   )
 }
@@ -159,7 +131,9 @@ function emitValue(
 
   if (typeof value === 'string') {
     if (value.length >= LONG_VALUE_CHARS) {
-      pushRow(ctx, depth, React.createElement(React.Fragment, null,
+      // A flex line keeps the key fixed and lets the long value take the rest,
+      // so the trailing 「…」 is always visible inside the panel width.
+      pushRow(ctx, depth, React.createElement('span', { className: 'ttl-jpLineFlex' },
         prefix,
         React.createElement(LongValue, { label: path, text: value, ctx, trailingComma: trailingComma })))
       return
