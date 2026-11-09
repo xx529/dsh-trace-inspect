@@ -587,6 +587,47 @@ describe('TrailTab', () => {
     }
   })
 
+  it('MCP calls keep the plug chip in the mix (v0.10.33)', async () => {
+    renderTab([
+      user(1, 'figma'),
+      turnStart(2, 1),
+      toolCall(3, 'mcp__figma__use_figma', '{"code":"x"}', 'c3'),
+      toolCall(4, 'mcp__figma__create_session', '{}', 'c4'),
+      toolCall(5, 'bash', '{"command":"ls"}', 'c5'),
+      turnEnd(6, 1),
+    ])
+    const turn = (await screen.findAllByTestId('ttl-turn'))[0]
+    const chips = [...turn.querySelectorAll('.ttl-mixItem')].map((el) => ({
+      kind: el.getAttribute('data-cluster'),
+      count: Number(el.querySelector('.ttl-mixCount')?.textContent ?? '0'),
+    }))
+    // The two MCP calls are one pink plug chip — the same glyph their rows draw.
+    expect(chips).toEqual([{ kind: 'mcp', count: 2 }, { kind: 'terminal', count: 1 }])
+    const mcpChip = turn.querySelector('.ttl-mixItem[data-cluster="mcp"]') as HTMLElement
+    expect(mcpChip.className).toContain('ttl-ink-pink')
+  })
+
+  it('the failure badge follows the cluster chips in the left group (v0.10.33)', async () => {
+    renderTab([
+      user(1, 'fail'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', 'npm test', 'c3'),
+      ev('tool/result', 4, { callId: 'c3', message: { isError: true }, content: [{ type: 'text', text: 'exit 1' }] }),
+      turnEnd(5, 1),
+    ])
+    const turn = (await screen.findAllByTestId('ttl-turn'))[0]
+    const toggle = turn.querySelector('.ttl-turnToggle') as HTMLElement
+    const badge = turn.querySelector('[data-testid="ttl-error-dot"]') as HTMLElement
+    const spacer = toggle.querySelector('.ttl-turnHeadSpacer') as HTMLElement
+    const meta = toggle.querySelector('.ttl-turnMeta') as HTMLElement
+    expect(badge).toBeTruthy()
+    // Left group: … chips → alert badge → spacer → right meta.
+    expect(badge.parentElement).toBe(toggle)
+    const children = [...toggle.children]
+    expect(children.indexOf(badge)).toBeLessThan(children.indexOf(spacer))
+    expect(meta.querySelector('[data-testid="ttl-error-dot"]')).toBeNull()
+  })
+
   it('failed steps are counted by the error badge, never by a cluster chip (v0.10.22)', async () => {
     renderTab([
       user(1, 'agents'),

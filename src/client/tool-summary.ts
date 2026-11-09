@@ -206,6 +206,9 @@ const CLUSTER_RULES: ReadonlyArray<readonly [string, ToolIconKind]> = [
  * @returns The cluster glyph; `generic` (wrench) for non-built-in, non-MCP tools.
  */
 export function toolIconKind(name: string): ToolIconKind {
+  // MCP calls (`mcp__server__tool`, legacy `mcp_server_tool`) are their own
+  // cluster; the rows already draw the plug via `summarizeToolCall`.
+  if (name.startsWith('mcp__') || name.startsWith('mcp_')) return 'mcp'
   const exact = CLUSTER_BY_NAME[name]
   if (exact !== undefined) return exact
   for (const [prefix, kind] of CLUSTER_RULES) {

@@ -813,8 +813,6 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
               </span>
             )
             : null}
-          <span className="ttl-turnHeadSpacer" />
-          <span className="ttl-turnMeta">
             {errorCount > 0
               ? (
                 <span
@@ -828,6 +826,8 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                 </span>
               )
               : null}
+          <span className="ttl-turnHeadSpacer" />
+          <span className="ttl-turnMeta">
             {parallelGroups.length > 0
               ? (
                 <span

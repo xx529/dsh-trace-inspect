@@ -148,6 +148,13 @@ describe('tool-summary — work clusters (v0.10.19)', () => {
     expect(summarizeToolCall('list_mcp_resources', '{}', '…').icon).toBe('mcp')
   })
 
+  it('MCP wire names resolve to the MCP cluster, not the wrench (v0.10.33)', () => {
+    for (const name of ['mcp__figma__use_figma', 'mcp__figma__create_session', 'mcp__playwright__browser_click', 'mcp_server_tool']) {
+      expect(toolIconKind(name), name).toBe('mcp')
+    }
+    expect(inkOf('mcp')).toBe('pink')
+  })
+
   it('cluster ink follows the seven-tone palette', () => {
     expect(inkOf('terminal')).toBe('violet')
     expect(inkOf('file-read')).toBe('blue')

@@ -596,3 +596,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 设计：Figma `07d · 长值内联形式`（`07c` 标记已被替代）。
 
 ![长值回到 JSON 原样：只有蓝色「…」可点](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0132-longvalue-inline.jpg)
+
+## 44. v0.10.33 MCP 统计恢复 + 失败徽标移到统计后面
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 为什么统计没有了 MCP | `toolIconKind()` 补 `mcp__` / 旧式 `mcp_` 前缀 → `mcp` 簇；此前 MCP 线名掉进 generic，行上粉插头、统计里却是扳手 | chips = `mcp 2`（粉色插头）· terminal 2 · file-read 1 · generic 1 |
+| 报错的 icon 要跟在左侧的 icon 后面 | `⚠N` 失败徽标从右侧 meta 组移到左侧组：紧接簇统计 chips、在 spacer 之前；右侧仅 `∥N` / `N 步` / chevron | toggle 子节点顺序 `tag · time · dur · mix · badge · spacer · meta`；徽标不在 meta 内 |
+
+- 覆盖：折叠态与展开态一致；失败步仍不计入簇 chip（由徽标计数），MCP 失败步也一样。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **544 例 / 21 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-mcp-mix.mjs`（mock 3 个 MCP + 1 失败 + bash/read/figma_status，量 chips 与徽标 DOM 位置）。
+
+![折叠头：粉色插头 MCP 2，⚠1 紧跟在统计后面](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0133-mcp-mix.jpg)

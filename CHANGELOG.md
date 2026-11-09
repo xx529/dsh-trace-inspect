@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.33] - 2026-11-10
+
+### Fixed
+
+- **折叠统计里少了 MCP**：`toolIconKind()` 只认 `mcp__server__tool` 之外的显式表与前缀规则，MCP 线名落进了兜底 wrench，于是行上是粉色插头、统计里却是扳手（截图里的 `⟳ 2` 其实是 generic）。现在 `mcp__` / 旧式 `mcp_` 前缀直接归 `mcp` 簇，统计与行图标一致。
+- **失败徽标挪到统计图标后面**：`⚠N` 从右侧 meta 组移到左侧组——紧随簇统计 chips、在弹性 spacer 之前；右侧分组只保留 `∥N` 并行徽标、`N 步` 与 chevron。折叠/展开两态一致。
+
+### Verification
+
+- 新增 2 例回归：`tool-summary` 断言 MCP 线名（含旧式 `mcp_server_tool`）→ `mcp` 簇 + pink；`trail-tab` 断言 MCP 调用合成粉插头 chip、失败徽标是 toggle 的直接子节点且在 spacer 之前、不在 meta 里。测试 **544 例 / 21 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 400，mock 一轮：bash×2 / read / 3×MCP（1 个失败）/ figma_status）：折叠头 chips = `mcp 2 · terminal 2 · file-read 1 · generic 1`，随后是 `⚠1` 徽标；toggle 子节点顺序 `tag · time · dur · mix · badge · spacer · meta`；0 条 console error。截图 `docs/assets/v0133-mcp-mix.jpg`，脚本 `scripts/verify/shoot-mcp-mix.mjs`。
+
 ## [0.10.32] - 2026-11-10
 
 ### Changed
