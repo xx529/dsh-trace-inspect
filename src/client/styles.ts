@@ -1989,8 +1989,10 @@ export const trailCss = `
 }
 
 
-/* 10) expanded turns hide the mix strip (prototype 2-02) */
-.ttl-turn[data-collapsed="false"] .ttl-mix { display: none; }
+/* 10) v0.10.23: the cluster mix stays visible when a turn is expanded too —
+   the counts are the same 1:1 ledger as the rows below, so hiding them on open
+   made the opened turn look like the numbers had disappeared. */
+.ttl-turn[data-collapsed="false"] .ttl-mix { display: inline-flex; }
 
 /* ══ v0.9 integration fixes (frame compare round 2) ══════════════════════ */
 .ttl-codeFoot {

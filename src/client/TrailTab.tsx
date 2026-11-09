@@ -821,8 +821,9 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
           {duration.length > 0 ? <span className="ttl-turnDur">{duration}</span> : null}
           <span className="ttl-turnHeadSpacer" />
           <span className="ttl-turnMeta">
-            {/* Work-cluster mix (v0.10.22). Kept in the DOM for both states;
-                styles.ts may hide it on the expanded card (1-01 vs 2-02). */}
+            {/* Work-cluster mix (v0.10.22). Shown collapsed AND expanded
+                (v0.10.23): the chips are the row ledger, so opening the turn
+                must not hide them. */}
             {clusterMix.length > 0
               ? (
                 <span className="ttl-mix" aria-hidden="true">

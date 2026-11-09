@@ -221,6 +221,15 @@ describe('v0.10.10: 工具族不再有灰色字形', () => {
   })
 })
 
+describe('v0.10.23: 展开态保留簇统计', () => {
+  it('展开的轮次不再隐藏 .ttl-mix', () => {
+    // The old v0.9 rule hid the strip on open (prototype 2-02); v0.10.23 keeps
+    // it because the chips are the same 1:1 ledger as the expanded rows.
+    expect(trailCss).not.toMatch(/\.ttl-turn\[data-collapsed="false"\][^{]*\.ttl-mix[^{]*\{[^}]*display:\s*none/)
+    expect(trailCss).toContain('.ttl-turn[data-collapsed="false"] .ttl-mix { display: inline-flex; }')
+  })
+})
+
 describe('v0.10.20: 统计条与行图标共用墨色 + 数字与图标居中对齐', () => {
   it('mix 行高对齐 13px 图标网格（数字不再偏上）', () => {
     const meta = rule('.ttl-turnMeta {')

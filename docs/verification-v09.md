@@ -448,3 +448,17 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![折叠统计（真实 47 步轮次）：terminal 21 · team 17 · team-task 7 · todo 2](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0122-mix-clusters.jpg>)
 
 ![8 簇 57 步：全部 chip 仍与展开行 1:1，单行排满](</Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0122-mix-wrap.jpg>)
+
+## 34. v0.10.23 展开态保留簇统计条
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 轨迹展开时，icon + 数量统计也要保留，现在一展开就没有了 | v0.9 按原型 2-02 的 `.ttl-turn[data-collapsed="false"] .ttl-mix { display: none }` 改为展开态也显示（`display: inline-flex`）；折叠 / 展开共用同一份 chips，同一套 1:1 台账 | 展开态 `data-collapsed=false`、`.ttl-mix` computed `display:flex`；chips `terminal 21 · team 17 · team-task 7 · todo 2` + 47 行步骤；折叠回去同样可见 |
+| 不影响折叠态与筛选 / 窄面板 | 只改显示规则；chip 计数仍取自可见步骤集合；wrap 规则沿用 v0.10.22 | 折叠态同样 visible；窄面板换行未变 |
+
+- 覆盖：折叠头、展开头、筛选 / 搜索态（chip 随可见步骤收缩）；失败徽标、`N 步`、chevron 布局不变。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **563 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-expanded-mix.mjs`（mock 用户上报的 47 步轮次：展开 → 断言 computed display 与 chips → 截图 → 折叠复验）。
+- 已知偏差：mock 会话（工具名/数量取自真实轮次，参数与结果文本为合成）。
+
+![展开态头部仍显示簇统计：terminal 21 · team 17 · team-task 7 · todo 2](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0123-mix-expanded.jpg)

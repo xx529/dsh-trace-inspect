@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.23] - 2026-11-09
+
+### Changed
+
+- **展开轮次时保留簇统计条**：v0.9 沿原型 2-02 的规则（`.ttl-turn[data-collapsed="false"] .ttl-mix { display: none }`）会在展开后把折叠头部的 `icon + N` 统计整条藏掉，看起来像统计消失了。现在折叠 / 展开共用同一份 chips（同一套 1:1 台账），展开态的头部继续显示簇统计，随时可以和下面的步骤行对账。
+- 覆盖：折叠态、展开态、筛选/搜索态（chip 随可见步骤收缩）；失败徽标、`N 步`、chevron 的排布不变；窄面板仍按 v0.10.22 的 wrap 规则换行。
+
+### Verification
+
+- 新增 1 例样式回归：展开态不再出现 `display: none`，且保留 `.ttl-turn[data-collapsed="false"] .ttl-mix { display: inline-flex; }`。测试 **563 例 / 22 文件**（562 → 563）。
+- 实机（独立 `trace-verify` web profile，19487，dock 400px，Playwright 路由 mock 用户上报的 47 步轮次）：展开态 `data-collapsed=false` 时 `.ttl-mix` 计算样式 `display:flex`（inline-flex），chips 仍是 `terminal 21 · team 17 · team-task 7 · todo 2`，下方 47 行步骤；再折叠回去同样可见；0 条 console error。截图 `docs/assets/v0123-mix-expanded.jpg`，脚本 `scripts/verify/shoot-expanded-mix.mjs`。
+
 ## [0.10.22] - 2026-11-09
 
 ### Fixed
