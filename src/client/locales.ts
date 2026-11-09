@@ -78,8 +78,6 @@ export interface Dict {
   running: string
   error: string
   turnPrefix: (n: number) => string
-  expandAll: string
-  collapseAll: string
   locate: string
   stepsLabel: string
   filterCollapse: string
@@ -187,8 +185,6 @@ const zh: Dict = {
   running: '进行中',
   error: '错误',
   turnPrefix: (n) => `轮次 ${n}`,
-  expandAll: '展开全部',
-  collapseAll: '全部折叠',
   locate: '定位',
   stepsLabel: '工具步骤数',
   filterCollapse: '收起',
@@ -284,8 +280,6 @@ const en: Dict = {
   running: 'running',
   error: 'error',
   turnPrefix: (n) => `Turn ${n}`,
-  expandAll: 'Expand all',
-  collapseAll: 'Collapse all',
   locate: 'Locate',
   stepsLabel: 'tool steps',
   filterCollapse: 'Collapse',

@@ -958,6 +958,34 @@ describe('TrailTab', () => {
     expect(screen.getAllByTestId('ttl-turn')[1].getAttribute('data-collapsed')).toBe('false')
   })
 
+  it('the header holds the search inline and drops the idle ⋯ button (v0.10.24)', async () => {
+    renderTab(twoTurns())
+    await readyTurns(2)
+    const header = document.querySelector('.ttl-header') as HTMLElement | null
+    expect(header).toBeTruthy()
+    const search = header?.querySelector('[data-testid="ttl-search"]')
+    const follow = header?.querySelector('[data-testid="ttl-follow-toggle"]')
+    expect(search).toBeTruthy()
+    expect(follow).toBeTruthy()
+    // The search sits immediately right of the follow toggle (one compact row).
+    const children = [...(header?.children ?? [])]
+    expect(children.indexOf(search?.parentElement as Element)).toBeGreaterThan(
+      children.indexOf(follow as Element),
+    )
+    // …and is the last item, i.e. flush against the right edge.
+    expect(children[children.length - 1]).toBe(search?.parentElement)
+    // The old full-width row and the no-op 「⋯」 are gone.
+    expect(header?.querySelector('[data-testid="ttl-more"]')).toBeNull()
+    expect(document.querySelector('.ttl-searchRow')).toBeNull()
+    // Searching still works from the header field.
+    fireEvent.change(search as Element, { target: { value: 'kubectl' } })
+    await waitFor(() => {
+      const names = screen.queryAllByTestId('ttl-step').map((el) => el.querySelector('.ttl-stepName')?.textContent)
+      expect(names.length).toBeGreaterThan(0)
+      expect(names.every((name) => name === 'bash')).toBe(true)
+    })
+  })
+
   it('drains hasMore pages before settling on ready', async () => {
     const pageA = [user(1, 'first'), turnStart(2, 1), assistant(3, 'A'), turnEnd(4, 1)]
     const pageB = [user(5, 'second'), turnStart(6, 2), assistant(7, 'B'), turnEnd(8, 2)]

@@ -8,8 +8,8 @@
  * (`docs/prototype/1-01`, `2-02`, `2b`, `6-06`):
  *
  *   root
- *   ├ header.ttl-header          brand icon · 轮次轨迹 · 「7 轮 · 208 步」 · 跟随 · ⋯
- *   ├ div.ttl-searchRow          searched-substring input (+ ⌘F) + kbd
+ *   ├ header.ttl-header          brand icon · 轮次轨迹 · 「7 轮 · 208 步」 · 搜索框 · 跟随
+ *   │                            （v0.10.24：搜索从独立一行收进头部；⋯ 已移除）
  *   ├ div.ttl-filters            chips: 全部 / 失败 / top tools / ⋯ dropdown
  *   ├ div.ttl-summary            steps · turns · failures · duration + family bar + legend
  *   ├ div.ttl-list               turn cards (three-line: head / 2-line preview / body)
@@ -137,6 +137,8 @@ const TITLE_CAP = 512
 // synced / stepCount / parallelGroups / failCount / others / …
 interface UiStrings {
   searchPlaceholder: string
+  /** Short placeholder for the inline header search (v0.10.24). */
+  searchPlaceholderShort: string
   clearSearch: string
   more: string
   reading: string
@@ -165,6 +167,7 @@ interface UiStrings {
 
 const ZH_UI: UiStrings = {
   searchPlaceholder: '搜索步骤、文件或命令',
+  searchPlaceholderShort: '搜索步骤…',
   clearSearch: '清除搜索',
   more: '更多',
   reading: '正在读取事件流…',
@@ -192,6 +195,7 @@ const ZH_UI: UiStrings = {
 
 const EN_UI: UiStrings = {
   searchPlaceholder: 'Search steps, files or commands',
+  searchPlaceholderShort: 'Search steps…',
   clearSearch: 'Clear search',
   more: 'More',
   reading: 'Reading the event stream…',
@@ -1135,15 +1139,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     })
   }, [])
 
-  const allVisibleExpanded = expandedTurns !== null
-    && visibleTurns.length > 0
-    && visibleTurns.every((turn) => expandedTurns.has(turnByIdentity(turn)))
-
-  /** Header ⋯: expand every visible turn, or collapse them all. */
-  const toggleAllTurns = (): void => {
-    setExpandedTurns(allVisibleExpanded ? new Set<string>() : new Set(visibleTurns.map(turnByIdentity)))
-  }
-
   const toggleShowFull = React.useCallback((id: string): void => {
     setShowFullTurn((current) => {
       const next = new Set(current)
@@ -1420,50 +1415,40 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
         <span className="ttl-followDot" aria-hidden="true" />
         {t(lang, followLatest ? 'followLatest' : 'followPaused') as string}
       </button>
-      <button
-        type="button"
-        className="ttl-iconBtn"
-        data-testid="ttl-more"
-        aria-label={t(lang, allVisibleExpanded ? 'collapseAll' : 'expandAll') as string}
-        title={t(lang, allVisibleExpanded ? 'collapseAll' : 'expandAll') as string}
-        onClick={toggleAllTurns}
-      >⋯</button>
+      {turns.length > 0
+        ? (
+          <div className="ttl-search" title={`${ui.searchPlaceholder} (⌘F)`}>
+            <span className="ttl-searchIcon" aria-hidden="true">{searchIcon()}</span>
+            <input
+              ref={searchRef}
+              type="search"
+              className="ttl-searchInput"
+              data-testid="ttl-search"
+              value={query}
+              placeholder={ui.searchPlaceholderShort}
+              aria-label={ui.searchPlaceholder}
+              onChange={(event) => { setQuery(event.target.value) }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setQuery('')
+                }
+              }}
+            />
+            {query.length > 0
+              ? <button
+                  type="button"
+                  className="ttl-searchClear"
+                  data-testid="ttl-search-clear"
+                  aria-label={ui.clearSearch}
+                  title={ui.clearSearch}
+                  onClick={() => { setQuery('') }}
+                >×</button>
+              : null}
+          </div>
+        )
+        : null}
     </header>
-  )
-
-  const searchRow = (
-    <div className="ttl-searchRow">
-      <div className="ttl-search">
-        <span className="ttl-searchIcon" aria-hidden="true">{searchIcon()}</span>
-        <input
-          ref={searchRef}
-          type="search"
-          className="ttl-searchInput"
-          data-testid="ttl-search"
-          value={query}
-          placeholder={ui.searchPlaceholder}
-          aria-label={ui.searchPlaceholder}
-          onChange={(event) => { setQuery(event.target.value) }}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.preventDefault()
-              setQuery('')
-            }
-          }}
-        />
-        {query.length > 0
-          ? <button
-              type="button"
-              className="ttl-searchClear"
-              data-testid="ttl-search-clear"
-              aria-label={ui.clearSearch}
-              title={ui.clearSearch}
-              onClick={() => { setQuery('') }}
-            >×</button>
-          : null}
-        <kbd className="ttl-kbd">⌘F</kbd>
-      </div>
-    </div>
   )
 
   const chips = (
@@ -1680,7 +1665,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       style={{ ['--ttl-step-name-w' as string]: `${stepNameWidth}px` }}
     >
       {header}
-      {turns.length > 0 ? searchRow : null}
       {turns.length > 0 ? chips : null}
       {summaryBar}
       {body}

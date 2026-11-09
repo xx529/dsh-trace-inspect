@@ -462,3 +462,20 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话（工具名/数量取自真实轮次，参数与结果文本为合成）。
 
 ![展开态头部仍显示簇统计：terminal 21 · team 17 · team-task 7 · todo 2](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0123-mix-expanded.jpg)
+
+## 35. v0.10.24 头部收敛：去掉空闲 ⋯、搜索收进一行
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 上方「⋯」按钮没用，去除 | 删除头部右侧 `.ttl-iconBtn[data-testid=ttl-more]`（展开全部/全部折叠）及 `toggleAllTurns` / `allVisibleExpanded` 与两条文案；chips 行的「⋯」（更多工具）保留 | header children 不再含按钮：`brandIcon · title · count · spacer · search · follow` |
+| 搜索框放到「跟随」旁边，省一行 | 删除独占一行的 `.ttl-searchRow`；搜索框内联到 header（跟随右侧、贴面板右缘），高 24px、宽 120–240px 自适应，占位文案「搜索步骤…」，完整文案作 aria-label/title（⌘F 保留） | dock 400：跟随 `50×24`（右缘 1278.5）→ 搜索 `143.5×24`（左缘 1286.5、右缘 1430 贴内边距）；dock 360：搜索 `123.5×24`（1306.5–1430），跟随右缘 1298.5 ≤ 搜索左缘；header 溢出 0，chips 紧贴 header |
+| 下拉别错位 | 少一行后工具下拉锚点 `top:124px → 82px` | 下拉出现在 chips 下方 2px |
+
+- 覆盖：空/加载/错误态的 header（搜索仅在 `turns > 0` 时渲染，与旧行为一致）；⌘F 聚焦、Esc 清空、清除按钮、筛选 chips、工具下拉均保持。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **566 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-header.mjs --dock 400|360`（量 header 子节点顺序、搜索/跟随矩形、溢出、chips 贴合、下拉偏移）。
+- 已知偏差：mock 会话；窄于 320px 的极端 dock 未纳入本次验证。
+
+![头部：跟随右侧贴边内联搜索，右上角 ⋯ 已移除（dock 400）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0124-header.jpg)
+
+![dock 360：搜索框自动收窄，不重叠](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0124-header-360.jpg)

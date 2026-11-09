@@ -652,11 +652,18 @@ export const trailCss = `
 .ttl-iconBtn svg { display: block; }
 
 /* ── search ─────────────────────────────────────────────── */
-.ttl-searchRow {
-  box-sizing: border-box;
-  flex: none;
-  padding: 8px 14px 4px;
+/* v0.10.24: the search lives in the header, right before 「跟随」 — the old
+   full-width row cost a whole line for one input. */
+.ttl-header .ttl-search {
+  flex: 1 1 120px;
+  min-width: 72px;
+  max-width: 240px;
+  height: 24px;
+  gap: 6px;
+  padding: 0 6px 0 8px;
 }
+.ttl-header .ttl-searchIcon { width: 11px; height: 11px; }
+.ttl-header .ttl-searchInput { font-size: 11px; line-height: 16px; }
 .ttl-search {
   box-sizing: border-box;
   display: flex;
@@ -760,7 +767,8 @@ export const trailCss = `
 .ttl-moreChip { padding: 0 7px; }
 .ttl-toolDropdown {
   position: absolute;
-  top: 124px;
+  /* v0.10.24: header (44) + chip row (36) + 2 — the search row is gone. */
+  top: 82px;
   right: 14px;
   z-index: 30;
   min-width: 160px;

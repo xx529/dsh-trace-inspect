@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.24] - 2026-11-09
+
+### Changed
+
+- **面板头部去掉空闲的 ⋯**：右上角「⋯」（展开全部 / 全部折叠）平时没人点、又容易和菜单混淆，直接移除；同时删掉 `toggleAllTurns` / `allVisibleExpanded` 与 `expandAll` / `collapseAll` 两条文案。工具筛选 chips 行里的 ⋯（更多工具）是功能入口，保留。
+- **搜索框收进头部、省掉一整行**：原来独占一行的 `.ttl-searchRow`（含 8px 上下内边距）删除，搜索框移到「跟随」右侧的同一行（贴右缘，跟随紧挨其左），高 24px、宽 120–240px 自适应；占位文案缩为「搜索步骤…」（完整文案仍作 aria-label + hover title，⌘F 快捷键照旧）。面板因此少一整行（约 42px），chips 行紧跟头部，工具下拉锚点也从 `top:124px` 收到 `82px`。
+
+### Verification
+
+- 新增 3 例回归：头部 DOM 顺序（brand/title/count/spacer/search/follow）、无 `ttl-more` 按钮、无 `.ttl-searchRow`，且头部搜索仍能过滤列表；2 例 CSS gate（旧搜索行样式删除、头部搜索 24px 高度、下拉 `top:82px`）。测试 **566 例 / 22 文件**（563 → 566）。
+- 实机（独立 `trace-verify` web profile，19487，Playwright 路由 mock 一轮 6 个工具）：dock 400 与 360 两档下 header 顺序均为 `brandIcon · title · count · spacer · search · follow`，搜索框 `143.5×24` / `123.5×24` 且位于「跟随」右侧、右缘贴 header 内边距（1430），跟随右缘 1278.5/1298.5 ≤ 搜索左缘 1286.5/1306.5，header 横向溢出 0，chips 行紧贴 header（差值 <1.5px），工具下拉在 chips 下方 2px（`top:82`），无 `ttl-more`；0 条 console error。截图 `docs/assets/v0124-header.jpg`（400）与 `docs/assets/v0124-header-360.jpg`（360），脚本 `scripts/verify/shoot-header.mjs --dock 400|360`。
+
 ## [0.10.23] - 2026-11-09
 
 ### Changed

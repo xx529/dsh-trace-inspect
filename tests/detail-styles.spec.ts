@@ -221,6 +221,18 @@ describe('v0.10.10: 工具族不再有灰色字形', () => {
   })
 })
 
+describe('v0.10.24: 搜索收进头部、去掉空闲的 ⋯', () => {
+  it('旧的全宽搜索行样式已移除，头部内联搜索是紧凑高度', () => {
+    expect(trailCss).not.toContain('.ttl-searchRow {')
+    expect(rule('.ttl-header .ttl-search {')).toContain('height: 24px;')
+    expect(rule('.ttl-header .ttl-search {')).toContain('max-width: 240px;')
+  })
+
+  it('工具下拉跟着少一行上移', () => {
+    expect(rule('.ttl-toolDropdown {')).toContain('top: 82px;')
+  })
+})
+
 describe('v0.10.23: 展开态保留簇统计', () => {
   it('展开的轮次不再隐藏 .ttl-mix', () => {
     // The old v0.9 rule hid the strip on open (prototype 2-02); v0.10.23 keeps
