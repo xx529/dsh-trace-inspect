@@ -188,6 +188,14 @@ describe('v0.10.27: 挪出 meta 后统计数字仍与图标居中', () => {
   })
 })
 
+describe('v0.10.34: 统计数字与图标同尺度 (SVG text)', () => {
+  it('.ttl-mixCount is a 13px SVG box; digits use the 9.5px code font', () => {
+    expect(rule('.ttl-mixCount {')).toContain('height: 13px')
+    const text = rule('.ttl-mixCount text {')
+    expect(text).toContain('font-size: 9.5px')
+  })
+})
+
 describe('v0.10.32: 长值内联 JSON + 蓝色省略号', () => {
   it('不再有卡片/按钮：值以 JSON 字符串内联，只有 ⤢ 前的蓝色 … 可点', () => {
     const block = rule('.ttl-jpLong {')

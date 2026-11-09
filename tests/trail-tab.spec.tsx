@@ -537,6 +537,29 @@ describe('TrailTab', () => {
     expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
   })
 
+  it('cluster counters are SVG text, scaled with the glyph (v0.10.34)', async () => {
+    renderTab([
+      user(1, 'mixed'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"a"}', 'c3'),
+      toolCall(4, 'read', '{"file_path":"a.ts"}', 'c4'),
+      turnEnd(5, 1),
+    ])
+    const turn = (await screen.findAllByTestId('ttl-turn'))[0]
+    for (const chip of [...turn.querySelectorAll('.ttl-mixItem')]) {
+      const count = chip.querySelector('.ttl-mixCount') as HTMLElement
+      const glyph = chip.querySelector('svg') as SVGSVGElement
+      expect(count).toBeTruthy()
+      // The digits live inside a 13px SVG text node, not an HTML line box, so
+      // they scale exactly like the icon under fractional zoom.
+      const svg = count.querySelector('svg')
+      expect(svg).toBeTruthy()
+      expect(svg?.getAttribute('height')).toBe('13')
+      expect(count.querySelector('svg text')?.textContent).toBe(count.textContent)
+      expect(glyph).toBeTruthy()
+    }
+  })
+
   it('collapsed-turn mix counts work clusters 1:1 with the opened rows (v0.10.22)', async () => {
     renderTab([
       user(1, 'mixed turn'),

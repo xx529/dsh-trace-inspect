@@ -807,7 +807,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                     title={`${clusterLabel(entry.kind, lang)} ${entry.count}`}
                   >
                     <ToolIcon kind={entry.kind} />
-                    <span className="ttl-mixCount">{entry.count}</span>
+                    <MixCount count={entry.count} />
                   </i>
                 ))}
               </span>
@@ -1649,6 +1649,34 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     </div>
   )
 }
+
+/**
+ * v0.10.34: the cluster counters are SVG text, not HTML text.
+ *
+ * The chips pair a 13px SVG glyph with a 9.5px counter. With a plain text
+ * line box the counter drifts ~1px above the glyph under fractional zoom/DPR
+ * (0.9 / 1.1 etc.), even with `line-height: 13px`. Keeping the digits inside
+ * an SVG of the same 13px height makes both scale by exactly the same factor,
+ * so the optical centre matches at every zoom level. `textLength` keeps 1–2
+ * digits inside their box regardless of the live code font.
+ */
+const MixCount = React.memo(function MixCount({ count }: { count: number }): React.ReactElement {
+  const digits = String(count)
+  const width = digits.length * 5.7 + 0.2
+  return (
+    <span className="ttl-mixCount">
+      <svg width={width} height={13} viewBox={`0 0 ${width} 13`} aria-hidden="true" focusable="false">
+        <text
+          x="0"
+          y="10"
+          textLength={digits.length * 5.7 - 0.6}
+          lengthAdjust="spacingAndGlyphs"
+          fill="currentColor"
+        >{digits}</text>
+      </svg>
+    </span>
+  )
+})
 
 // ── Inline glyphs (hand-drawn, currentColor) ────────────────────────────
 

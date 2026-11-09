@@ -935,7 +935,11 @@ export const trailCss = `
 }
 .ttl-mixItem { display: inline-flex; align-items: center; gap: 2px; font-size: 9.5px; font-variant-numeric: tabular-nums; }
 .ttl-mixItem svg { display: block; }
-.ttl-mixCount { font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace); }
+.ttl-mixCount { display: inline-flex; align-items: center; height: 13px; }
+.ttl-mixCount text {
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
+  font-size: 9.5px;
+}
 .ttl-badge {
   display: inline-flex;
   align-items: center;

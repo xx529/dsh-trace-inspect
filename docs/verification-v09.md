@@ -609,3 +609,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 采集脚本：`scripts/verify/shoot-mcp-mix.mjs`（mock 3 个 MCP + 1 失败 + bash/read/figma_status，量 chips 与徽标 DOM 位置）。
 
 ![折叠头：粉色插头 MCP 2，⚠1 紧跟在统计后面](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0133-mcp-mix.jpg)
+
+## 45. v0.10.34 统计数字与图标同尺度（SVG text）
+
+| 反馈 | 原因 | 方案 | 实测 |
+| --- | --- | --- | --- |
+| icon 和数字高度不一致 | 数字是 HTML 文本行盒（`line-height:13px`），图标是 13px SVG；在 ~90% 缩放/分数 DPR 下，文本行盒与矢量图标的取整路径不同，数字整体高约 1px（100% 时差 0，110% 时反而低 0.1px） | 数字改为 13px 高 SVG `<text>`（`textLength` + `lengthAdjust="spacingAndGlyphs"` 保证 1–2 位在盒内），与图标同一缩放路径 | zoom 0.9/1.0/1.1 下，terminal / mcp / file-read 的“数字墨迹中心 − 图标墨迹中心”均为 **0.00px** |
+
+- 结构：`.ttl-mixCount` 只负责 13px 盒；`.ttl-mixCount text` 沿用 9.5px 代码字体；`textContent` 仍是数字（现有统计测试与 a11y 语义不变）。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **546 例 / 21 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-mix-align.mjs`（zoom 0.9/1.0/1.1 截图 + DOM 契约；像素差在文档里用保存的 PNG 复核）。
+- 已知偏差：skill 书形图标的墨迹中心比其 13px 盒中心低 0.75px（图标自身不对称，非数字问题）。
+
+![90% 缩放下统计数字与图标居中对齐（56px zoom 头）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0134-mix-align.jpg)

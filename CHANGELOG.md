@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.34] - 2026-11-10
+
+### Fixed
+
+- **统计数字与图标在缩放/高分屏下差 1px**：数字原本是 HTML 文本行盒（`line-height: 13px`）配 13px SVG 图标；在 ~90% 缩放（或分数 DPR）下，文本行盒取整与矢量图标取整不一致，数字整体高了约 1px。现在数字改成一个 **13px 高的 SVG `<text>`**（`textLength` + `lengthAdjust="spacingAndGlyphs"` 保证 1–2 位数字始终落在盒内），和图标走同一条矢量缩放路径：90% / 100% / 110% 三个缩放级别下，terminal / mcp / file-read 三个簇的“数字墨迹中心 − 图标墨迹中心”偏差均为 **0px**。
+
+### Verification
+
+- 新增 2 例回归：`trail-tab` 断言每个 `.ttl-mixCount` 内是 13px 的 SVG text 且文本等于数字；`detail-styles` 断言 `.ttl-mixCount` 为 13px 盒、`text` 走 9.5px 代码字体。测试 **546 例 / 21 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 400，mock 一轮 5 个簇）：在 zoom 0.9 / 1.0 / 1.1 三次截图，像素级量“数字墨迹中心 − 图标墨迹中心”，terminal/mcp/file-read 均为 0.00；0 条 console error。截图 `docs/assets/v0134-mix-align.jpg`，脚本 `scripts/verify/shoot-mix-align.mjs`。
+
 ## [0.10.33] - 2026-11-10
 
 ### Fixed
