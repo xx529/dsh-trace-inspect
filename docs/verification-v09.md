@@ -479,3 +479,31 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![头部：跟随右侧贴边内联搜索，右上角 ⋯ 已移除（dock 400）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0124-header.jpg)
 
 ![dock 360：搜索框自动收窄，不重叠](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0124-header-360.jpg)
+
+## 36. v0.10.25 轮次头的簇统计挪到「时长」一侧
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 这个统计 icon 换成靠时长的那一侧 | `clusterMix` 从 `.ttl-turnMeta`（右缘）移到 `.ttl-turnToggle` 里、紧跟 `ttl-turnDur`、位于 `spacer` 之前；右侧分组只剩失败/并行徽标、`N 步`、chevron | toggle 子节点 = `tag · time · dur · mix · spacer · meta`；`dur` 右缘 1164.2 → `mix` 1172.2–1276.1（同一行，中心线均 203），`meta` 1379.8–1426 |
+| 换行方向 | `.ttl-mix` 由右对齐改左对齐（`flex: 0 1 auto` + `justify-content: flex-start`），多簇时在时长一侧向下换行 | chips = terminal 5 / file-read 2 / team 2 / file-edit 1，单行排布 |
+| 缺失时长 | 无 `event.time` 时 chips 紧跟标签/时间，其余不变 | 回归用例覆盖折叠/展开两态 |
+
+- 覆盖：折叠态与展开态共用同一份 DOM；`N 步`、失败/并行徽标、tooltip、`data-cluster` 对账字段不变。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **568 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-turnhead-mix.mjs`（mock 一轮 10 步 + 真实 12m00s 时长，量 dur/mix/meta 矩形与同行判定）。
+- 已知偏差：mock 会话；时长侧空间不足时 chips 左对齐换行（不裁剪）。
+
+![轮次头：簇统计紧随时长，右侧只留「10 步」与 chevron](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0125-turnhead-mix.jpg)
+
+## 37. v0.10.26 read_image 在摘要页直接显示图片
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 读取图片的（read_image），要展示图片出来 | 结果里本来就带 `image` block（`attachment.attachmentId`），只是摘要页的 `OutputSection` 只画了文本占位。现在 `OutputSection` 接收 `images/sessionId/lang`，在「输出」文本下方渲染 `TrailImages`（会话授权缩略图 + 元数据 chip）；纯图片结果也会显示「输出」区块 + 图片 | 摘要页（默认，未切页签）出现 `ttl-img-row` + `ttl-img-thumb`，缩略图自然尺寸 `800×144`，chip `图片：turnheadmix-big.png image/jpeg 800×144 · 9 KB` |
+| 覆盖范围 | 所有摘要页走 `OutputSection` 的族：read / read_image / edit / todo / MCP / generic / shell；「结果」页与浮层保持原行为 | 回归 + 实机各自覆盖；0 条 console error |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **569 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-read-image.mjs`（mock `read_image` 的文本信封 + image block，并 route 回放真实 PNG 作为 attachment 路由响应）。
+- 已知偏差：mock 会话；缩略图走既有的 `/trace-inspect/api/attachment` 授权路由，非该会话引用的附件仍会回退占位 chip。
+
+![read_image 摘要页：图片本体 + 元数据 chip](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0126-read-image.jpg)

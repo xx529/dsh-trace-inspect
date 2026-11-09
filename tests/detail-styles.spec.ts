@@ -221,6 +221,14 @@ describe('v0.10.10: 工具族不再有灰色字形', () => {
   })
 })
 
+describe('v0.10.25: 簇统计挪到「时长」一侧', () => {
+  it('.ttl-mix 在左侧分组里换行时左对齐', () => {
+    const mix = rule('.ttl-mix {')
+    expect(mix).toContain('flex: 0 1 auto;')
+    expect(mix).toContain('justify-content: flex-start;')
+  })
+})
+
 describe('v0.10.24: 搜索收进头部、去掉空闲的 ⋯', () => {
   it('旧的全宽搜索行样式已移除，头部内联搜索是紧凑高度', () => {
     expect(trailCss).not.toContain('.ttl-searchRow {')

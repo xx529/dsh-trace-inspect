@@ -823,28 +823,27 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
           <span className="ttl-turnTag" data-testid="ttl-turn-tag">{turnTag}</span>
           {clock.length > 0 ? <span className="ttl-turnTime">{clock}</span> : null}
           {duration.length > 0 ? <span className="ttl-turnDur">{duration}</span> : null}
+          {/* v0.10.25: the cluster ledger sits on the duration side (left group),
+              so the right edge only keeps the badges / 「N 步」 / chevron. */}
+          {clusterMix.length > 0
+            ? (
+              <span className="ttl-mix" aria-hidden="true">
+                {clusterMix.map((entry) => (
+                  <i
+                    key={entry.kind}
+                    className={`ttl-mixItem ttl-ink-${inkOf(entry.kind)}`}
+                    data-cluster={entry.kind}
+                    title={`${clusterLabel(entry.kind, lang)} ${entry.count}`}
+                  >
+                    <ToolIcon kind={entry.kind} />
+                    <span className="ttl-mixCount">{entry.count}</span>
+                  </i>
+                ))}
+              </span>
+            )
+            : null}
           <span className="ttl-turnHeadSpacer" />
           <span className="ttl-turnMeta">
-            {/* Work-cluster mix (v0.10.22). Shown collapsed AND expanded
-                (v0.10.23): the chips are the row ledger, so opening the turn
-                must not hide them. */}
-            {clusterMix.length > 0
-              ? (
-                <span className="ttl-mix" aria-hidden="true">
-                  {clusterMix.map((entry) => (
-                    <i
-                      key={entry.kind}
-                      className={`ttl-mixItem ttl-ink-${inkOf(entry.kind)}`}
-                      data-cluster={entry.kind}
-                      title={`${clusterLabel(entry.kind, lang)} ${entry.count}`}
-                    >
-                      <ToolIcon kind={entry.kind} />
-                      <span className="ttl-mixCount">{entry.count}</span>
-                    </i>
-                  ))}
-                </span>
-              )
-              : null}
             {errorCount > 0
               ? (
                 <span

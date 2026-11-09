@@ -480,8 +480,12 @@ function OutputSection(props: {
   text: string
   labels: StepLabels
   error: boolean
+  /** v0.10.26: image blocks (e.g. `read_image`) render as real thumbnails. */
+  images?: readonly TrailResultImage[]
+  sessionId?: string
+  lang?: Lang
 }): React.ReactElement | null {
-  const { text, labels, error } = props
+  const { text, labels, error, images = [], sessionId, lang } = props
   const [expanded, setExpanded] = React.useState(false)
   const lines = React.useMemo(() => {
     // JSON / JSONL results are pretty-printed first; the preview clamp then
@@ -490,7 +494,7 @@ function OutputSection(props: {
     const normalized = source.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
     return normalized.length === 0 ? [] : normalized.split('\n')
   }, [text, error])
-  if (lines.length === 0) return null
+  if (lines.length === 0 && images.length === 0) return null
   const shown = expanded ? lines : lines.slice(0, OUT_PREVIEW_LINES)
   return (
     <section className="ttl-section">
@@ -517,6 +521,9 @@ function OutputSection(props: {
           return <div className="ttl-outLine" key={index}>{rendered.length === 0 ? '\u00a0' : rendered}</div>
         })}
       </div>
+      {images.length > 0 && sessionId !== undefined && lang !== undefined
+        ? <TrailImages images={images} sessionId={sessionId} lang={lang} />
+        : null}
     </section>
   )
 }
@@ -882,7 +889,14 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
       return fullText
     })()
     const output = (): React.ReactElement | null => (
-      <OutputSection text={outputText} labels={labels} error={isError} />
+      <OutputSection
+        text={outputText}
+        labels={labels}
+        error={isError}
+        images={fullImages}
+        sessionId={sessionId}
+        lang={lang}
+      />
     )
 
     if (family === 'shell' && commandText.length > 0) {

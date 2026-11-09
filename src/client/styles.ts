@@ -908,8 +908,11 @@ export const trailCss = `
 }
 .ttl-mix {
   display: inline-flex;
+  flex: 0 1 auto;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  /* v0.10.25: the chips now live on the duration side (left group), so an
+     overflow wraps left-aligned instead of hugging the right edge. */
+  justify-content: flex-start;
   align-items: center;
   gap: 7px;
   row-gap: 3px;

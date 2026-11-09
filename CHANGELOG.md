@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.10.26] - 2026-11-09
+
+### Fixed
+
+- **`read_image` 在详情「摘要」页直接显示图片**：此前摘要页只把结果文本画出来——`image/jpeg image, 800×144 px, 9390 bytes` 的占位串，真正带 `attachment` 的 image block 只在「结果」页和放大浮层渲染，所以点开图片工具看不到图。现在 `OutputSection` 接收结果里的 image blocks，在「输出」文本下方用会话授权缩略图（`/trace-inspect/api/attachment`）+ 元数据 chip 显示；纯图片结果（无文本）也会渲染「输出」区块 + 图片。
+- 覆盖所有在摘要页走 `OutputSection` 的工具族：`read` / `read_image` / `edit` / `todo`、MCP、generic、shell（任何结果里带 image block 的调用）；「结果」页与浮层行为不变。
+
+### Verification
+
+- 新增 1 例回归：`read_image` 打开后**不切页签**（默认摘要）即出现 `ttl-img-row` / `ttl-img-thumb`，`src` 为会话授权附件地址、`alt`/元数据 chip 正确。测试 **569 例 / 22 文件**（568 → 569）。
+- 实机（独立 `trace-verify` web profile，19487，dock 420px，Playwright 路由 mock 一条 `read_image` 结果 = 文本信封 + image block，并回放真实 800×144 PNG 作为 attachment）：摘要页 `data-tab=summary`、`ttl-img-row` 存在、缩略图自然尺寸 `800×144`（面板内显示 352×65），chip `图片：turnheadmix-big.png image/jpeg 800×144 · 9 KB`，0 条 console error。截图 `docs/assets/v0126-read-image.jpg`，脚本 `scripts/verify/shoot-read-image.mjs`。
+
+## [0.10.25] - 2026-11-09
+
+### Changed
+
+- **轮次头的簇统计挪到「时长」一侧**：v0.10.22 的 chips 原本贴右缘（`#1 10:32 12m00s … >_39 📄2 42 步 >`），中间留出一大段空白。现在 chips 作为左侧分组的一员紧跟在 `时长` 后面、`spacer` 之前：`#1 10:32 12m00s >_39 📄2 ⟳1 … 42 步 >`，右侧只剩失败/并行徽标、`N 步` 与 chevron。
+- `.ttl-mix` 从右对齐换行改为左对齐换行（`justify-content: flex-start`，`flex: 0 1 auto`），chips 多时在时长一侧向下换行，不再挤右边缘。
+- 覆盖：折叠态与展开态一致；计时缺失（无 event.time）时 chips 紧跟时间/标签，行为不变。
+
+### Verification
+
+- 新增 2 例回归：`trail-tab` 断言 `.ttl-mix` 是 `.ttl-turnToggle` 的直接子节点、位于 `spacer` 之前且不再属于 `.ttl-turnMeta`；`detail-styles` 断言 `.ttl-mix` 的 `flex: 0 1 auto` + `justify-content: flex-start`。测试 **568 例 / 22 文件**（566 → 568）。
+- 实机（独立 `trace-verify` web profile，19487，dock 400，Playwright 路由 mock 一轮带真实 12m00s 时长的会话）：`.ttl-turnToggle` 子节点 = `tag · time · dur · mix · spacer · meta`；`dur` 右缘 1164.2 → `mix` 1172.2–1276.1（同一行，中心线 203 = 203），`meta`（`10 步` + chevron）在 1379.8–1426；chips = terminal 5 / file-read 2 / team 2 / file-edit 1；0 条 console error。截图 `docs/assets/v0125-turnhead-mix.jpg`，脚本 `scripts/verify/shoot-turnhead-mix.mjs`。
+
 ## [0.10.24] - 2026-11-09
 
 ### Changed

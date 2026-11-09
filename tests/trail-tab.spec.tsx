@@ -986,6 +986,26 @@ describe('TrailTab', () => {
     })
   })
 
+  it('the turn-head mix sits on the duration side, before the spacer (v0.10.25)', async () => {
+    renderTab(twoTurns())
+    const turns = await readyTurns(2)
+    const toggle = turns[0].querySelector('.ttl-turnToggle') as HTMLElement | null
+    expect(toggle).toBeTruthy()
+    const mix = toggle?.querySelector('.ttl-mix')
+    const meta = toggle?.querySelector('.ttl-turnMeta') as HTMLElement | null
+    const spacer = toggle?.querySelector('.ttl-turnHeadSpacer') as HTMLElement | null
+    expect(mix).toBeTruthy()
+    // v0.10.25: the ledger is a direct child of the toggle, right before the
+    // flexible spacer — next to time / duration instead of the right edge.
+    expect(mix?.parentElement).toBe(toggle)
+    const children = [...(toggle?.children ?? [])]
+    expect(children.indexOf(mix as Element)).toBeGreaterThanOrEqual(0)
+    expect(children.indexOf(mix as Element)).toBeLessThan(children.indexOf(spacer as Element))
+    expect(children.indexOf(meta as Element)).toBeGreaterThan(children.indexOf(spacer as Element))
+    // The right group no longer owns the chips.
+    expect(meta?.querySelector('.ttl-mix')).toBeNull()
+  })
+
   it('drains hasMore pages before settling on ready', async () => {
     const pageA = [user(1, 'first'), turnStart(2, 1), assistant(3, 'A'), turnEnd(4, 1)]
     const pageB = [user(5, 'second'), turnStart(6, 2), assistant(7, 'B'), turnEnd(8, 2)]
@@ -1085,6 +1105,23 @@ describe('TrailTab', () => {
     expect(chip.textContent).toContain('image/png')
     expect(chip.textContent).toContain('100×50 · 2 KB')
     expect(screen.queryByTestId('ttl-img-failed')).toBeNull()
+  })
+
+  it('read_image shows the actual picture in the default 摘要 pane (v0.10.26)', async () => {
+    renderTab(imageTurn())
+    const step = await screen.findByTestId('ttl-step')
+    fireEvent.click(step)
+    const detail = await screen.findByTestId('ttl-detail')
+    // No tab switch: the summary pane itself must show the image block.
+    expect(detail.getAttribute('data-tab')).toBe('summary')
+    expect(await screen.findByTestId('ttl-img-row')).toBeTruthy()
+    const thumb = (await screen.findByTestId('ttl-img-thumb')) as HTMLImageElement
+    expect(thumb.getAttribute('loading')).toBe('lazy')
+    expect(thumb.getAttribute('src')).toBe('/trace-inspect/api/attachment?sessionId=s1&attachmentId=sha256%3Aabc')
+    expect(thumb.getAttribute('alt')).toBe('Image: a.png')
+    // The caption / metadata chip stays under the thumbnail.
+    expect(screen.getByTestId('ttl-img-chip').textContent).toContain('image/png')
+    expect(screen.getByTestId('ttl-img-chip').textContent).toContain('100×50 · 2 KB')
   })
 
   it('an image that fails to load hides the img, keeps the chip and warns', async () => {
