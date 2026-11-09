@@ -18,7 +18,8 @@
  *       │  └ main.ttl-zoomMain       .ttl-zoomHead + .ttl-tabs + .ttl-zoomPane
  *       └ footer.ttl-zoomFoot        Esc/↑↓/⌘F/⌘C/⌘E + read-only sync status
  *
- * The four tabs are 摘要 / 结果 / 参数 / 原始 (`DetailTab`). 摘要 is the
+ * The two tabs are 摘要 / 原始 (`DetailTab`; v0.10.29 merged 结果 / 参数
+ * into 摘要). 摘要 is the
  * redesigned default: a wide, line-numbered command block for shell tools
  * (segments + token spans come from `command-format.ts`, the same module the
  * inline detail band uses, so both surfaces read identically), then ONE
@@ -47,7 +48,7 @@ import { parseJsonLoose } from './json-tree'
 import { JsonPretty } from './json-pretty'
 import { t, type Lang } from './locales'
 import { markdownLabels } from './markdown-labels'
-import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
+import { MarkdownResult, RawText, looksLikeMarkdown } from './markdown-result'
 import { ToolIcon } from './tool-icon'
 import { inkOf, summarizeToolCall, type ToolIconKind, type ToolSummary } from './tool-summary'
 import {
@@ -56,7 +57,7 @@ import {
   downloadJson,
   formatBytes,
 } from './ui-shared'
-import type { ResultView, DetailTab } from './detail-types'
+import type { DetailTab } from './detail-types'
 
 // ── Re-export surface (TrailTab / tests import these from './ZoomOverlay') ──
 // The implementations physically moved to ui-shared.tsx / detail-types.ts in
@@ -300,14 +301,7 @@ function paneTextOf(step: TrailStep, tab: DetailTab): string {
     }
     return familyOf(step) === 'shell' ? commandOf(step) : step.args ?? ''
   }
-  if (tab !== 'result') return step.args ?? ''
-  const result = step.result
-  if (result === undefined) return ''
-  if (isFailedStep(step)) {
-    const headline = errorHeadlineOf(step)
-    return result.text.length > 0 ? `${headline}\n${result.text}` : headline
-  }
-  return result.text
+  return step.args ?? ''
 }
 
 /** Page-level selection shortcut: the overlay's own 8 MiB-safe JSON payload. */
@@ -386,15 +380,14 @@ function closeIcon(): React.ReactElement {
 
 /**
  * The full-size step viewer: a body-portal dialog with the current turn's
- * steps on the left and a wide reading pane on the right (摘要 / 结果 / 参数 /
- * 原始). Keyboard: Esc close, ↑/↓ step, ⌘F search, ⌘C copy pane, ⌘E export.
+ * steps on the left and a wide reading pane on the right (摘要 / 原始; v0.10.29
+ * merged the former 结果 / 参数 panes into 摘要). Keyboard: Esc close, ↑/↓ step, ⌘F search, ⌘C copy pane, ⌘E export.
  */
 export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
   const { steps, initialSeq, initialTab, sessionId, lang, onClose } = props
   const copy = COPY[lang]
   const [selectedSeq, setSelectedSeq] = React.useState(initialSeq)
   const [tab, setTab] = React.useState<DetailTab>(initialTab ?? 'summary')
-  const [views, setViews] = React.useState<ReadonlyMap<number, ResultView>>(() => new Map<number, ResultView>())
   const [expandedOutputs, setExpandedOutputs] = React.useState<ReadonlySet<number>>(() => new Set<number>())
   const [query, setQuery] = React.useState('')
   const [copied, setCopied] = React.useState(false)
@@ -683,6 +676,7 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
     const result = step.result
     const images = result?.images ?? []
     const hasText = outputLines.length > 0
+    const markdown = hasText && looksLikeMarkdown(resultText)
     const hasOutput = hasText || images.length > 0
     const error = isFailedStep(step)
     const expandable = hasText && outputLines.length > OUT_PREVIEW_LINES
@@ -720,16 +714,18 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
             </div>
           )
           : hasText
-            ? (
-              <div className="ttl-outBlock">
-                {shownOutputLines.map((line, index) => {
-                  const rendered = !outputExpanded && line.length > OUT_LINE_MAX
-                    ? `${line.slice(0, OUT_LINE_MAX)}…`
-                    : line
-                  return <div className="ttl-outLine" key={index}>{rendered.length === 0 ? '\u00a0' : rendered}</div>
-                })}
-              </div>
-            )
+            ? markdown
+              ? <MarkdownResult text={resultText} labels={markdownLabels(lang)} />
+              : (
+                <div className="ttl-outBlock">
+                  {shownOutputLines.map((line, index) => {
+                    const rendered = !outputExpanded && line.length > OUT_LINE_MAX
+                      ? `${line.slice(0, OUT_LINE_MAX)}…`
+                      : line
+                    return <div className="ttl-outLine" key={index}>{rendered.length === 0 ? '\u00a0' : rendered}</div>
+                  })}
+                </div>
+              )
             : <div className="ttl-detailHint" data-testid="ttl-zoom-empty">{copy.emptyResult}</div>}
         {images.length > 0 ? <TrailImages images={images} sessionId={sessionId} lang={lang} /> : null}
       </section>
@@ -744,84 +740,10 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
     </>
   )
 
-  function setViewsWithCurrent(step: TrailStep, view: ResultView): void {
-    setViews((map) => {
-      const next = new Map(map)
-      next.set(step.seq, view)
-      return next
-    })
-  }
-
-  const renderResult = (step: TrailStep): React.ReactElement => {
-    const result = step.result
-    const images = result?.images ?? []
-    const error = isFailedStep(step)
-    const markdown = result !== undefined && looksLikeMarkdown(result.text)
-    const view = views.get(step.seq) ?? defaultViewForTool(step.name)
-    const resultMeta = result === undefined
-      ? ''
-      : `${formatBytes(byteLength(result.text))} · ${copy.lines(lineCount(result.text))}`
-    return (
-      <>
-        <div className="ttl-resultBar" data-testid="ttl-zoom-result-bar">
-          <span className="ttl-resultLabel">{t(lang, 'detailResult') as string}</span>
-          {resultMeta.length > 0 ? <span className="ttl-resultMeta">{resultMeta}</span> : null}
-          {markdown && !error
-            ? (
-              <span className="ttl-seg" role="group">
-                <button
-                  type="button"
-                  className={`ttl-segBtn${view === 'rendered' ? ' ttl-segSelected' : ''}`}
-                  data-testid="ttl-zoom-view-toggle"
-                  aria-pressed={view === 'rendered'}
-                  onClick={() => { setViewsWithCurrent(step, 'rendered') }}
-                >{t(lang, 'detailRender') as string}</button>
-                <button
-                  type="button"
-                  className={`ttl-segBtn${view === 'raw' ? ' ttl-segSelected' : ''}`}
-                  data-testid="ttl-zoom-view-raw"
-                  aria-pressed={view === 'raw'}
-                  onClick={() => { setViewsWithCurrent(step, 'raw') }}
-                >{t(lang, 'detailSource') as string}</button>
-              </span>
-            )
-            : null}
-        </div>
-        {error
-          ? (
-            <div className="ttl-errorBlock" data-testid="ttl-zoom-error">
-              <div className="ttl-errorName" data-testid="ttl-zoom-error-name">{errorHeadlineOf(step)}</div>
-              {resultText.length > 0 ? <RawText text={resultText} /> : null}
-            </div>
-          )
-          : result === undefined || (resultText.length === 0 && images.length === 0)
-            ? <div className="ttl-detailHint" data-testid="ttl-zoom-empty">{copy.emptyResult}</div>
-            : markdown && view === 'rendered'
-              ? <MarkdownResult text={resultText} labels={markdownLabels(lang)} />
-              : <RawText text={resultText} />}
-        {images.length > 0 ? <TrailImages images={images} sessionId={sessionId} lang={lang} /> : null}
-      </>
-    )
-  }
-
-  const renderParams = (step: TrailStep): React.ReactElement => {
-    const args = step.args ?? ''
-    const parsed = parseJsonLoose(args)
-    if (parsed.ok) return <JsonPretty value={parsed.value} lang={lang} />
-    return (
-      <>
-        <RawText text={args} />
-        <div className="ttl-detailHint" data-testid="ttl-zoom-unparsable">{copy.unparsable}</div>
-      </>
-    )
-  }
-
   const renderPane = (): React.ReactElement | null => {
     if (current === null) return null
     if (tab === 'summary') return renderSummary(current)
-    if (tab === 'raw') return <RawText text={current.args ?? ''} />
-    if (tab === 'params') return renderParams(current)
-    return renderResult(current)
+    return <RawText text={current.args ?? ''} />
   }
 
   if (current === null || typeof document === 'undefined') return null
@@ -1039,8 +961,6 @@ export function ZoomOverlay(props: ZoomOverlayProps): React.ReactPortal | null {
             </header>
             <div className="ttl-tabs" role="tablist" data-testid="ttl-zoom-tabs">
               {tabButton('summary', copy.summary)}
-              {tabButton('result', t(lang, 'detailResult') as string)}
-              {tabButton('params', t(lang, 'detailParams') as string)}
               {tabButton('raw', t(lang, 'detailRaw') as string)}
             </div>
             <div className="ttl-zoomPane">

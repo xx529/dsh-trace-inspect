@@ -1241,28 +1241,27 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     expect(detail.getAttribute('role')).toBe('region')
     expect(detail.getAttribute('aria-label')).toBe('read details')
     const tabs = Array.from(detail.querySelectorAll('[role="tab"]'))
-    expect(tabs.length).toBe(4)
+    // v0.10.29：结果 / 参数 页签已并入摘要。
+    expect(tabs.length).toBe(2)
     expect(tabs.map((tab) => tab.getAttribute('data-testid'))).toEqual([
       'ttl-detail-tab-summary',
-      'ttl-detail-tab-result',
-      'ttl-detail-tab-params',
       'ttl-detail-tab-raw',
     ])
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true').length).toBe(1)
     expect(detail.getAttribute('data-tab')).toBe('summary')
   })
 
-  it('H5 默认页签一律是「摘要」；参数页用 JsonTree，不可解析参数走原文+提示', async () => {
+  it('H5 默认页签一律是「摘要」；参数 JSON 在摘要，不可解析参数走原文+提示', async () => {
     await mount(readTurn())
     fireEvent.click(screen.getByTestId('ttl-step'))
-    // v0.9：默认落在摘要，与是否有 result 无关；结果页此时还没挂载。
     expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
     expect(screen.getByTestId('ttl-detail-tab-summary').getAttribute('aria-selected')).toBe('true')
-    expect(screen.queryByTestId('ttl-detail-body-result')).toBeNull()
+    expect(screen.queryByTestId('ttl-detail-tab-params')).toBeNull()
 
-    fireEvent.click(screen.getByTestId('ttl-detail-tab-params'))
-    expect(screen.getByTestId('ttl-json')).toBeTruthy() // {"path":"a.md"} 可解析 → JSON 树
-    expect(screen.getByTestId('ttl-json').textContent).toContain('a.md')
+    // v0.10.29：参数 JSON（原「参数」页）就在摘要里。
+    const params = screen.getByTestId('ttl-params')
+    expect(params.querySelector('[data-testid="ttl-json-pretty"]')).toBeTruthy()
+    expect(params.textContent).toContain('a.md')
 
     cleanup()
     await mount([
@@ -1273,34 +1272,24 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     ])
     fireEvent.click(screen.getByTestId('ttl-step'))
     expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
-    fireEvent.click(screen.getByTestId('ttl-detail-tab-params'))
     expect(screen.getByTestId('ttl-detail-unparsable')).toBeTruthy()
   })
 
-  it('H6 AC12：渲染/原文切换即时生效且折叠再展开后保持', async () => {
+  it('H6 Markdown 结果在摘要直接渲染；原始页保留 wire 原文（v0.10.29）', async () => {
     setPrimitivesForTest(fakePrimitives())
     await mount(readTurn())
     fireEvent.click(screen.getByTestId('ttl-step'))
-    // v0.9：默认摘要不含结果正文；渲染/原文切换在「结果」页。
-    expect(screen.queryByTestId('fake-md')).toBeNull()
-    fireEvent.click(screen.getByTestId('ttl-detail-tab-result'))
-    // read → 默认渲染视图。
+    // 原「结果」页的 Markdown 渲染并入摘要；渲染/原文开关随页签一起移除。
     expect(screen.getByTestId('fake-md')).toBeTruthy()
-    expect(screen.queryByTestId('ttl-md-raw')).toBeNull()
-    expect(screen.getByTestId('ttl-view-toggle').getAttribute('aria-pressed')).toBe('true')
-
-    fireEvent.click(screen.getByTestId('ttl-view-toggle'))
-    expect(screen.queryByTestId('fake-md')).toBeNull()
-    expect(screen.getByTestId('ttl-md-raw')).toBeTruthy()
-    expect(screen.getByTestId('ttl-view-toggle').getAttribute('aria-pressed')).toBe('false')
-
-    fireEvent.click(screen.getByTestId('ttl-step')) // 折叠
+    expect(screen.queryByTestId('ttl-view-toggle')).toBeNull()
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-raw'))
+    expect(screen.getByTestId('ttl-raw-result').textContent).toContain('# Title')
+    // 折叠再展开：回到摘要，Markdown 仍在。
+    fireEvent.click(screen.getByTestId('ttl-step'))
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
-    fireEvent.click(screen.getByTestId('ttl-step')) // 再展开 → 摘要
+    fireEvent.click(screen.getByTestId('ttl-step'))
     expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
-    fireEvent.click(screen.getByTestId('ttl-detail-tab-result'))
-    expect(screen.queryByTestId('fake-md')).toBeNull()
-    expect(screen.getByTestId('ttl-md-raw')).toBeTruthy()
+    expect(screen.getByTestId('fake-md')).toBeTruthy()
   })
 
   it('H7 AC14：错误结果的错误名/码 + 原文都可见', async () => {
@@ -1322,9 +1311,8 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     const rows = screen.getAllByTestId('ttl-step')
     expect(rows.length).toBe(2)
     fireEvent.click(rows[1]!) // 第二行 = error 步骤
-    // 错误正文在摘要的输出预览里也可见；错误块在「结果」页。
+    // v0.10.29：错误块与正文都在摘要里。
     expect(screen.getByTestId('ttl-detail').textContent).toContain('rollback failed: E1')
-    fireEvent.click(screen.getByTestId('ttl-detail-tab-result'))
     expect(screen.getByTestId('ttl-error-block')).toBeTruthy()
     expect(screen.getByTestId('ttl-error-name').textContent).toBe('CommandError · E1')
     expect(screen.getByTestId('ttl-detail').textContent).toContain('rollback failed: E1')
@@ -1370,9 +1358,9 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
     expect(screen.getByTestId('ttl-detail-replaced').textContent)
       .toContain('Replaced by compaction (seq #182)')
 
-    // 「参数」页仍是原始命令；替换文本只出现在「结果」页。
-    fireEvent.click(screen.getByTestId('ttl-detail-tab-params'))
-    const paramsBody = screen.getByTestId('ttl-detail-body-params')
+    // 摘要里的参数块仍是原始命令；替换文本只出现在输出里。
+    fireEvent.click(screen.getByTestId('ttl-detail-tab-summary'))
+    const paramsBody = screen.getByTestId('ttl-params')
     expect(paramsBody.textContent).toContain('cat big.log')
     expect(paramsBody.textContent).not.toContain('COMPACTED')
   })
@@ -1398,9 +1386,8 @@ describe('H. 折叠态行结构（对比 HEAD）', () => {
       { type: 'turn/end', seq: 5, data: { turn: 1 } },
     ])
     fireEvent.click(screen.getByTestId('ttl-step'))
-    // 摘要页先展示文本输出，图片块在「结果」页（v0.9 默认摘要）。
+    // v0.10.26/29：摘要页同时展示文本输出与图片块。
     expect(screen.getByTestId('ttl-detail-body-summary').textContent).toContain('caption')
-    fireEvent.click(screen.getByTestId('ttl-detail-tab-result'))
     const chip = screen.getByTestId('ttl-img-chip')
     expect(chip.textContent).toContain('Image: shot.png')
     expect(chip.textContent).toContain('image/png')

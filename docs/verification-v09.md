@@ -534,3 +534,19 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话；`scrollTop` 被撑住期间若收到新事件，会按 follow-latest 恢复到底部（正常行为）。
 
 ![收起后卡片原地不动（下方为临时留白，滚动即消失）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0128-scroll-anchor.jpg)
+
+## 40. v0.10.29 详情收敛为「摘要 / 原始」两页签
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 结果 / 参数 两个 tab 的内容已经没必要了 | 摘要已含完整参数 JSON（v0.10.18）、输出与图片（v0.10.26），单独两页重复。`StepDetail` 与放大浮层都收敛为 `摘要 / 原始`：摘要 = 工具族区块 + 参数 JSON + 输出（Markdown 渲染 / 文本预览 / 图片）+ 错误块 + 合并提示；原始 = wire 参数/结果 + replace 提示。删除每一步的渲染/原文开关与 JsonTree 参数树；不可解析参数在摘要里显示原文 + 提示 | 内联带 2 个页签、摘要同时有 Markdown（`Deploy notes`）与参数 JSON（`ttl-json-pretty`）；原始页显示 `{"file_path":…}` 与结果原文；浮层 2 个页签、无 `ttl-view-toggle`；0 console error |
+| 放大浮层 | 同规则；⌘C：摘要在 shell 步复制命令，原始页复制参数 | zoom tabs = 摘要 / 原始 |
+| 失败 / 合并 | 错误名/码块与「Merged from N results」提示都进摘要 | 契约用例更新后全绿 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **570 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-detail-tabs.mjs`（mock `read` + Markdown 结果，量页签、摘要内容、原始页与浮层页签）。
+- 已知偏差：删除「参数」页后，参数只能看格式化 JSON（不可逐层折叠的树），wire 原文仍可在「原始」页查看。
+
+![详情带：摘要 / 原始两页签，Markdown、参数 JSON、图片块都在摘要](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0129-detail-tabs.jpg)
+
+![放大浮层：同样是摘要 / 原始两页签](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0129-zoom-tabs.jpg)

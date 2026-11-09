@@ -12,7 +12,8 @@
  * the assertions now follow the new DOM (`.ttl-stepName` / `.ttl-stepDesc` /
  * `.ttl-turnHead` / `.ttl-turnFoot`, `#N` tags, `N 轮 · M 步` count line,
  * always-on status bar) and the detail band moved from the shell to
- * `StepDetail.tsx` (tabs are `ttl-detail-tab-{summary,result,params,raw}`,
+ * `StepDetail.tsx` (tabs are `ttl-detail-tab-{summary,raw}` — v0.10.29 merged
+ * 结果 / 参数 into 摘要,
  * default `summary`; seq lives in the foot as `ttl-detail-foot-seq`).
  * The INTENT of every original test is preserved; only structure/copy moved.
  */
@@ -203,7 +204,7 @@ const openStepDetail = async (index = 0): Promise<HTMLElement> => {
 }
 
 /** Switch the detail band to one of the four v0.9 tabs. */
-const openDetailTab = (tab: 'summary' | 'result' | 'params' | 'raw'): void => {
+const openDetailTab = (tab: 'summary' | 'raw'): void => {
   fireEvent.click(screen.getByTestId(`ttl-detail-tab-${tab}`))
 }
 
@@ -454,20 +455,23 @@ describe('TrailTab', () => {
     expect(screen.queryByTestId('ttl-detail')).toBeNull()
   })
 
-  it('the detail band exposes the four v0.9 tabs and defaults to summary', async () => {
+  it('the detail band exposes 摘要 / 原始 only and defaults to summary (v0.10.29)', async () => {
     renderTab(oneTurn())
     const detail = await openStepDetail()
     expect(detail.getAttribute('data-tab')).toBe('summary')
-    const tabs = (['summary', 'result', 'params', 'raw'] as const).map((tab) => screen.getByTestId(`ttl-detail-tab-${tab}`))
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Summary', 'Result', 'Params', 'Raw'])
+    const tabs = (['summary', 'raw'] as const).map((tab) => screen.getByTestId(`ttl-detail-tab-${tab}`))
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Summary', 'Raw'])
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
     expect(screen.getByTestId('ttl-detail-body-summary')).toBeTruthy()
+    // The merged panes are gone (结果 / 参数 were folded into 摘要).
+    expect(screen.queryByTestId('ttl-detail-tab-result')).toBeNull()
+    expect(screen.queryByTestId('ttl-detail-tab-params')).toBeNull()
     // seq is visible twice: status row + footer.
     expect(screen.getByTestId('ttl-detail-seq').textContent).toBe('seq #3')
     expect(screen.getByTestId('ttl-detail-foot-seq').textContent).toBe('seq #3')
-    openDetailTab('params')
-    expect(screen.getByTestId('ttl-detail-tab-params').getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByTestId('ttl-detail-body-params')).toBeTruthy()
+    openDetailTab('raw')
+    expect(screen.getByTestId('ttl-detail-tab-raw').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('ttl-detail-body-raw')).toBeTruthy()
   })
 
   it('the row-end ↗ still locates the step in the conversation (AC8)', async () => {
@@ -505,30 +509,17 @@ describe('TrailTab', () => {
     expect(step.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('remembers the rendered/raw view per step across collapse (AC12)', async () => {
+  it('renders a Markdown result in 摘要 and keeps the wire text on 原始 (v0.10.29)', async () => {
     setPrimitivesForTest(fakePrimitives())
     renderTab(readTurn())
     const step = await screen.findByTestId('ttl-step')
     fireEvent.click(step)
     await screen.findByTestId('ttl-detail')
-    // v0.9 opens on 摘要; the rendered/raw switch lives in 结果.
-    openDetailTab('result')
+    // The 结果 tab's rendered view lives in 摘要 now.
     expect(await screen.findByTestId('ttl-md')).toBeTruthy()
-    const toggle = screen.getByTestId('ttl-view-toggle')
-    expect(toggle.getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(toggle)
-    expect(screen.queryByTestId('ttl-md')).toBeNull()
-    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('# Title')
-    // Collapse + reopen: the switched view is remembered, not re-seeded.
-    fireEvent.click(step)
-    expect(screen.queryByTestId('ttl-detail')).toBeNull()
-    fireEvent.click(step)
-    await screen.findByTestId('ttl-detail')
-    expect(screen.getByTestId('ttl-detail').getAttribute('data-tab')).toBe('summary')
-    openDetailTab('result')
-    await waitFor(() => { expect(screen.getByTestId('ttl-view-toggle').getAttribute('aria-pressed')).toBe('false') })
-    expect(screen.queryByTestId('ttl-md')).toBeNull()
-    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('# Title')
+    expect(screen.queryByTestId('ttl-view-toggle')).toBeNull()
+    openDetailTab('raw')
+    expect(screen.getByTestId('ttl-raw-result').textContent).toContain('# Title')
   })
 
   it('an error step shows errorName · errorCode plus the raw text (AC14)', async () => {
@@ -541,7 +532,6 @@ describe('TrailTab', () => {
     expect(errorStep.querySelector('.ttl-stepIcon.ttl-ink-red .ttl-rowIcon')).toBeTruthy()
     fireEvent.click(errorStep)
     await screen.findByTestId('ttl-detail')
-    openDetailTab('result')
     const block = await screen.findByTestId('ttl-error-block')
     expect(screen.getByTestId('ttl-error-name').textContent).toBe('CommandError · E1')
     expect(within(block).getByTestId('ttl-md-raw').textContent).toContain('rollback failed: E1')
@@ -785,14 +775,13 @@ describe('TrailTab', () => {
     const steps = await screen.findAllByTestId('ttl-step')
     fireEvent.click(steps[0])
     await screen.findByTestId('ttl-detail')
-    openDetailTab('params')
-    expect(await screen.findByTestId('ttl-json')).toBeTruthy()
-    expect(screen.getByTestId('ttl-json').textContent).toContain('cmd')
-    expect(screen.getByTestId('ttl-json').textContent).toContain('ls')
+    // v0.10.29: the 参数 JSON lives in 摘要 (the 参数 tab is gone).
+    expect(await screen.findByTestId('ttl-params')).toBeTruthy()
+    expect(screen.getByTestId('ttl-params').textContent).toContain('cmd')
+    expect(screen.getByTestId('ttl-params').textContent).toContain('ls')
     // Unparseable arguments degrade to the raw text plus the hint.
     fireEvent.click(steps[1])
     expect(screen.getAllByTestId('ttl-detail')).toHaveLength(1)
-    openDetailTab('params')
     expect(await screen.findByTestId('ttl-detail-unparsable')).toBeTruthy()
     expect(screen.getByTestId('ttl-md-raw').textContent).toBe('not json at all')
   })
@@ -847,10 +836,9 @@ describe('TrailTab', () => {
     const mcp = await openStep(3)
     expect(within(mcp).getByTestId('ttl-mcpBlock')).toBeTruthy()
     expect(within(mcp).getByTestId('ttl-params').textContent).toContain('"nodeIds"')
-
-    // The 参数 tab keeps its interactive JSON tree (unchanged by this round).
-    openDetailTab('params')
-    expect(within(mcp).getByTestId('ttl-json')).toBeTruthy()
+    // v0.10.29: the 参数 JSON lives in 摘要; the separate tree tab is gone.
+    expect(within(mcp).getByTestId('ttl-params').querySelector('[data-testid="ttl-json-pretty"]')).toBeTruthy()
+    expect(screen.queryByTestId('ttl-detail-tab-params')).toBeNull()
   })
 
   it('a filter that hides an expanded step drops its detail band', async () => {
@@ -1125,9 +1113,7 @@ describe('TrailTab', () => {
     const step = await screen.findByTestId('ttl-step')
     fireEvent.click(step)
     await screen.findByTestId('ttl-detail')
-    // Image blocks live on the 结果 pane in v0.9.
-    openDetailTab('result')
-
+    // v0.10.26/29: images render directly in the 摘要 pane.
     const thumb = (await screen.findByTestId('ttl-img-thumb')) as HTMLImageElement
     expect(thumb.getAttribute('loading')).toBe('lazy')
     expect(thumb.className).toBe('ttl-imgThumb')
@@ -1164,7 +1150,6 @@ describe('TrailTab', () => {
     const step = await screen.findByTestId('ttl-step')
     fireEvent.click(step)
     await screen.findByTestId('ttl-detail')
-    openDetailTab('result')
 
     const thumb = await screen.findByTestId('ttl-img-thumb')
     fireEvent.error(thumb)
@@ -1181,19 +1166,15 @@ describe('TrailTab', () => {
     renderTruncatedTab(detail)
     fireEvent.click(await screen.findByTestId('ttl-step'))
     await screen.findByTestId('ttl-detail')
-    openDetailTab('result')
 
     // Success: the footer pill flips to 已加载, the truncation banner is gone.
     await waitFor(() => { expect(screen.getByTestId('ttl-detail-pill').textContent).toBe('Loaded') })
     expect(screen.queryByTestId('ttl-detail-load')).toBeNull()
-    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('full result body')
+    expect(screen.getByTestId('ttl-outBlock').textContent).toContain('full result body')
 
-    // 参数 now renders the complete arguments, not the clipped wire preview
+    // 摘要 renders the complete arguments, not the clipped wire preview
     // (the wire value was `{"path":"big.md"}` — the `full` key proves the swap).
-    openDetailTab('params')
-    const params = screen.getByTestId('ttl-detail-body-params')
-    expect(params.querySelector('[data-testid="ttl-json"]')).toBeTruthy()
-    expect(params.textContent).toContain('full')
+    expect(screen.getByTestId('ttl-params').textContent).toContain('full')
 
     expect(detail).toHaveBeenCalledTimes(1)
     expect(detail.mock.calls[0][0]).toBe('s1')
@@ -1206,13 +1187,10 @@ describe('TrailTab', () => {
     renderTruncatedTab(() => pending)
     fireEvent.click(await screen.findByTestId('ttl-step'))
     await screen.findByTestId('ttl-detail')
-    // The truncation banner (and its load strip) is part of 结果 / 参数.
-    openDetailTab('result')
-
     const strip = await screen.findByTestId('ttl-detail-load')
     expect(strip.textContent).toContain('Loading full content…')
     // The wire preview stays on screen during the load.
-    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('wire preview')
+    expect(screen.getByTestId('ttl-outBlock').textContent).toContain('wire preview')
 
     await act(async () => { settle({ ok: true, items: [] }) })
     // An answer without a matching item degrades to the failure branch.
@@ -1224,12 +1202,11 @@ describe('TrailTab', () => {
     renderTruncatedTab(detail)
     fireEvent.click(await screen.findByTestId('ttl-step'))
     await screen.findByTestId('ttl-detail')
-    openDetailTab('result')
 
     const banner = await screen.findByTestId('ttl-bannerWarn')
     expect(banner.textContent).toContain('Result truncated to 32 KiB')
     expect(banner.textContent).toContain('Failed to load full content — showing the truncated preview')
-    expect(screen.getByTestId('ttl-md-raw').textContent).toContain('wire preview')
+    expect(screen.getByTestId('ttl-outBlock').textContent).toContain('wire preview')
     const retry = (await screen.findByTestId('ttl-detail-retry')) as HTMLButtonElement
     expect(retry.textContent).toBe('Retry')
     expect(retry.disabled).toBe(false)
@@ -1246,7 +1223,6 @@ describe('TrailTab', () => {
     renderTruncatedTab(detail)
     fireEvent.click(await screen.findByTestId('ttl-step'))
     await screen.findByTestId('ttl-detail')
-    openDetailTab('result')
 
     fireEvent.click(await screen.findByTestId('ttl-detail-retry'))
     await waitFor(() => {
@@ -1282,7 +1258,6 @@ describe('TrailTab', () => {
     renderTab(mergedTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
     await screen.findByTestId('ttl-detail')
-    openDetailTab('result')
     const note = await screen.findByTestId('ttl-detail-merged')
     expect(note.getAttribute('role')).toBe('note')
     expect(note.textContent).toBe('Merged from 2 results — the events declared no surfaceOp')
@@ -1418,13 +1393,11 @@ describe('TrailTab — row semantics and centered viewer (v0.6.0)', () => {
     renderTab(markdownTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
     await screen.findByTestId('ttl-detail')
-    // Markdown result → the 结果 pane offers the 渲染/原文 switch.
-    openDetailTab('result')
-    fireEvent.click(await screen.findByTestId('ttl-view-toggle'))
+    fireEvent.click(screen.getByTestId('ttl-detail-copy'))
     expect(screen.queryByTestId('ttl-zoom')).toBeNull() // a control click must not open the viewer
     fireEvent.click(screen.getByTestId('ttl-pane-clickable'))
     expect(await screen.findByTestId('ttl-zoom')).toBeTruthy()
-    expect(screen.getByTestId('ttl-zoom-tab-result').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
   })
 
   it('renders the tool summary instead of the raw argument JSON', async () => {
@@ -1578,7 +1551,7 @@ const jsonOutputTurn = (): Ev[] => [
 ]
 
 describe('tool output formatting (JSON → Markdown → text)', () => {
-  it('pretty-prints JSON in the summary preview and renders JsonPretty in 结果', async () => {
+  it('pretty-prints JSON in the summary output', async () => {
     renderTab(jsonOutputTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
     const out = await screen.findByTestId('ttl-outBlock')
@@ -1586,8 +1559,8 @@ describe('tool output formatting (JSON → Markdown → text)', () => {
     const rows = out.querySelectorAll('.ttl-outLine')
     expect(rows.length).toBeGreaterThan(1)
     expect(out.textContent).toContain('"previousStatus": "running"')
-    openDetailTab('result')
-    expect(document.querySelector('.ttl-jsonPretty')).not.toBeNull()
+    // 结果 tab is gone (v0.10.29): the summary output is the only text view.
+    expect(screen.queryByTestId('ttl-detail-tab-result')).toBeNull()
   })
 })
 

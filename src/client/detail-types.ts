@@ -10,5 +10,5 @@
 /** How a tool result is rendered: Markdown by default, raw text on demand. */
 export type ResultView = 'rendered' | 'raw'
 
-/** Tabs of the detail band / overlay. `summary` is the redesigned default. */
-export type DetailTab = 'summary' | 'result' | 'params' | 'raw'
+/** Tabs of the detail band / overlay (v0.10.29: 结果/参数 merged into 摘要). */
+export type DetailTab = 'summary' | 'raw'

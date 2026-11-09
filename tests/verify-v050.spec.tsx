@@ -1098,11 +1098,9 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
     fireEvent.keyDown(window, { key: 'c', metaKey: true })
     expect(writeText).toHaveBeenCalledWith('ls -la')
 
-    // 切到「结果」页后复制的是结果文本。
-    fireEvent.click(screen.getByTestId('ttl-zoom-tab-result'))
-    writeText.mockClear()
-    fireEvent.keyDown(window, { key: 'c', metaKey: true })
-    expect(writeText).toHaveBeenCalledWith('total 0')
+    // v0.10.29：「结果」页签已并入摘要；⌘C 的摘要语义仍是命令。
+    expect(screen.queryByTestId('ttl-zoom-tab-result')).toBeNull()
+    expect(screen.queryByTestId('ttl-zoom-tab-params')).toBeNull()
 
     // 切到「原始」页后复制的是参数。
     fireEvent.click(screen.getByTestId('ttl-zoom-tab-raw'))
@@ -1159,8 +1157,7 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
 
     const row = await screen.findByTestId('ttl-step')
     fireEvent.click(row)
-    // v0.9：默认 tab 是「摘要」，截断横幅/加载入口在「结果」页。
-    fireEvent.click(await screen.findByTestId('ttl-detail-tab-result'))
+    // v0.10.29：截断横幅/加载入口就在摘要里。
     expect(await screen.findByTestId('ttl-detail-load')).toBeTruthy()
     expect(detail).toHaveBeenCalledTimes(1)
 
@@ -1180,9 +1177,7 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
     const detail = vi.fn<DetailFetch>(async () => ({ ok: false, reason: 'http' }))
     renderTab(truncatedStepTurn(), detail)
     fireEvent.click(await screen.findByTestId('ttl-step'))
-    // v0.9：重试入口在「结果」页的截断横幅里。
-    fireEvent.click(await screen.findByTestId('ttl-detail-tab-result'))
-
+    // v0.10.29：重试入口在摘要的截断横幅里。
     const retry = await screen.findByTestId('ttl-detail-retry')
     fireEvent.click(retry)
     // 唯一一次手动重试也失败 → 按钮回来且禁用（不会再有第 3 次请求）。
@@ -1197,9 +1192,7 @@ describe('F · components (ZoomOverlay / lazy detail / thumbnails / collapsed DO
   it('F9 缩略图：授权 URL + lazy + alt；onError 隐藏 img、保留 chip 并告警', async () => {
     renderTab(imageStepTurn())
     fireEvent.click(await screen.findByTestId('ttl-step'))
-    // v0.9：默认摘要不含图片块，缩略图在「结果」页。
-    fireEvent.click(await screen.findByTestId('ttl-detail-tab-result'))
-
+    // v0.10.26/29：缩略图直接在摘要里。
     const thumb = (await screen.findByTestId('ttl-img-thumb')) as HTMLImageElement
     expect(thumb.getAttribute('loading')).toBe('lazy')
     expect(thumb.getAttribute('src')).toBe('/trace-inspect/api/attachment?sessionId=v050-ui&attachmentId=sha256%3Aabc')

@@ -52,14 +52,13 @@ import {
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
 import { inkOf, splitMcpName, summarizeToolCall, toolIconKind, type ToolIconKind, type ToolInk } from './tool-summary'
 import { ToolIcon } from './tool-icon'
-import { MarkdownResult, RawText, defaultViewForTool, looksLikeMarkdown } from './markdown-result'
-import { detectOutputKind } from './output-format'
+import { MarkdownResult, RawText, looksLikeMarkdown } from './markdown-result'
 import { markdownLabels } from './markdown-labels'
 import { formatClock, formatDuration, toolFamily, turnDuration, type ToolFamily } from './format'
 import { StepDetail } from './StepDetail'
 import { ZoomOverlay } from './ZoomOverlay'
 import { copyToClipboard } from './ui-shared'
-import type { DetailTab, ResultView } from './detail-types'
+import type { DetailTab } from './detail-types'
 
 /** Transport for the on-demand full tool detail (契约 §10.3.4). */
 export type FetchToolDetail = (sessionId: string, seqs: number[], signal?: AbortSignal) => Promise<ToolDetailResult>
@@ -305,12 +304,6 @@ function stepMatches(step: TrailStep, filter: StepFilter, query: string): boolea
 
 // ── Family helpers (colors come from the chip class in styles.ts) ────────
 
-/** Default pane: JSON/Markdown results prefer rendered, plain logs stay raw. */
-function initialResultView(step: TrailStep): ResultView {
-  if (step.result !== undefined && detectOutputKind(step.result.text) !== 'text') return 'rendered'
-  return defaultViewForTool(step.name)
-}
-
 /** Glyph family for one tool family (reuse ToolIcon, no new icon sets). */
 function familyIconKind(family: ToolFamily): ToolIconKind {
   switch (family) {
@@ -397,14 +390,12 @@ interface StepRowProps {
   step: TrailStep
   turn: TrailTurn
   open: boolean
-  view: ResultView
   lang: Lang
   sessionId: string
   onJump: (target: JumpTarget, turn: TrailTurn) => void
   onToggleStep: (step: TrailStep, multi: boolean) => void
   onStepOpen: (step: TrailStep) => void
   onStepClose: (step: TrailStep) => void
-  onSetView: (seq: number, view: ResultView) => void
   onLoadDetail: (seq: number) => Promise<ToolDetailResult>
   onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null, tab?: DetailTab) => void
 }
@@ -419,8 +410,8 @@ interface StepRowProps {
  */
 const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactElement {
   const {
-    step, turn, open, view, lang, sessionId,
-    onJump, onToggleStep, onStepOpen, onStepClose, onSetView, onLoadDetail, onZoom,
+    step, turn, open, lang, sessionId,
+    onJump, onToggleStep, onStepOpen, onStepClose, onLoadDetail, onZoom,
   } = props
   const summary = React.useMemo(
     () => summarizeToolCall(step.name, step.args, step.argsPreview, lang),
@@ -500,8 +491,6 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
             step={step}
             sessionId={sessionId}
             lang={lang}
-            view={view}
-            onSetView={onSetView}
             onLoadDetail={onLoadDetail}
             onZoom={openZoomForStep}
             onClose={closeDetail}
@@ -527,14 +516,12 @@ interface TurnRowProps {
   lang: Lang
   sessionId: string
   openSeqs: ReadonlySet<number>
-  resultView: ReadonlyMap<number, ResultView>
   onToggle: (id: string) => void
   onShowEarlier: (id: string) => void
   onJump: (target: JumpTarget, turn: TrailTurn) => void
   onToggleStep: (step: TrailStep, multi: boolean) => void
   onStepOpen: (step: TrailStep) => void
   onStepClose: (step: TrailStep) => void
-  onSetView: (seq: number, view: ResultView) => void
   onLoadDetail: (seq: number) => Promise<ToolDetailResult>
   onZoom: (step: TrailStep, turn: TrailTurn, trigger: HTMLElement | null, tab?: DetailTab) => void
 }
@@ -547,8 +534,8 @@ interface TurnRowProps {
  */
 const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactElement {
   const {
-    turn, index, expanded, active, showFull, filter, query, isToolFilter, lang, sessionId, openSeqs, resultView,
-    onToggle, onShowEarlier, onJump, onToggleStep, onStepOpen, onStepClose, onSetView, onLoadDetail, onZoom,
+    turn, index, expanded, active, showFull, filter, query, isToolFilter, lang, sessionId, openSeqs,
+    onToggle, onShowEarlier, onJump, onToggleStep, onStepOpen, onStepClose, onLoadDetail, onZoom,
   } = props
   const ui = uiStrings(lang)
   const id = turnByIdentity(turn)
@@ -669,14 +656,12 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
       step={step}
       turn={turn}
       open={openSeqs.has(step.seq)}
-      view={resultView.get(step.seq) ?? initialResultView(step)}
       lang={lang}
       sessionId={sessionId}
       onJump={onJump}
       onToggleStep={onToggleStep}
       onStepOpen={onStepOpen}
       onStepClose={onStepClose}
-      onSetView={onSetView}
       onLoadDetail={onLoadDetail}
       onZoom={onZoom}
     />
@@ -964,8 +949,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   const [showFullTurn, setShowFullTurn] = React.useState<Set<string>>(new Set())
   /** Expanded step seqs (inline detail band). Plain click opens exactly one. */
   const [openSeqs, setOpenSeqs] = React.useState<ReadonlySet<number>>(() => new Set<number>())
-  /** Per-step result rendering, seeded on first open and remembered after. */
-  const [resultView, setResultView] = React.useState<ReadonlyMap<number, ResultView>>(() => new Map())
   /** The open overlay: which turn it was opened from and which step it shows. */
   const [zoom, setZoom] = React.useState<{ turnId: string; seq: number; tab?: DetailTab } | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
@@ -1212,15 +1195,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   }, [])
 
   // ── Inline step detail (v0.4.0, 契约 §6) ───────────────────────────────
-  /** Seed `resultView` for a step the first time it opens (read → rendered, bash → raw). */
-  const seedView = React.useCallback((step: TrailStep): void => {
-    setResultView((current) => {
-      if (current.has(step.seq)) return current
-      const next = new Map(current)
-      next.set(step.seq, initialResultView(step))
-      return next
-    })
-  }, [])
 
   /** Row click: toggle one step; without Alt only that step stays open. */
   const toggleStep = React.useCallback((step: TrailStep, multi: boolean): void => {
@@ -1235,8 +1209,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       next.add(step.seq)
       return next
     })
-    seedView(step)
-  }, [seedView])
+  }, [])
 
   /** ArrowRight: open (never close) this step, exclusive unless Alt is held. */
   const openStep = React.useCallback((step: TrailStep, multi = false): void => {
@@ -1248,8 +1221,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       next.add(step.seq)
       return next
     })
-    seedView(step)
-  }, [seedView])
+  }, [])
 
   /** ArrowLeft: collapse this step. */
   const closeStep = React.useCallback((step: TrailStep): void => {
@@ -1258,15 +1230,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       if (!current.has(step.seq)) return current
       const next = new Set(current)
       next.delete(step.seq)
-      return next
-    })
-  }, [])
-
-  const setView = React.useCallback((seq: number, view: ResultView): void => {
-    setResultView((current) => {
-      if (current.get(seq) === view) return current
-      const next = new Map(current)
-      next.set(seq, view)
       return next
     })
   }, [])
@@ -1332,7 +1295,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   // (contract §6) so a re-shown panel never resurrects a stale open band.
   React.useEffect(() => {
     setOpenSeqs(new Set<number>())
-    setResultView(new Map())
     setZoom(null)
     setQuery('')
     setExpandedTurns(null)
@@ -1340,7 +1302,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   React.useEffect(() => {
     if (visible) return
     setOpenSeqs(new Set<number>())
-    setResultView(new Map())
     setZoom(null)
   }, [visible])
 
@@ -1664,14 +1625,12 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
             lang={lang}
             sessionId={sessionId}
             openSeqs={openSeqs}
-            resultView={resultView}
             onToggle={toggleTurn}
             onShowEarlier={toggleShowFull}
             onJump={doJump}
             onToggleStep={toggleStep}
             onStepOpen={openStep}
             onStepClose={closeStep}
-            onSetView={setView}
             onLoadDetail={loadDetail}
             onZoom={openZoom}
           />

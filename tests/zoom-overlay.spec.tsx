@@ -94,10 +94,11 @@ describe('ZoomOverlay', () => {
     // The outline lists the whole current turn, with the initial step selected.
     expect(screen.getAllByTestId('ttl-zoom-step')).toHaveLength(3)
     expect(currentRow().textContent).toContain('bash')
-    // v0.9 has four tabs and 摘要 is the default.
-    expect(screen.getAllByRole('tab')).toHaveLength(4)
+    // v0.10.29: only 摘要 / 原始 remain (结果 / 参数 merged into 摘要).
+    expect(screen.getAllByRole('tab')).toHaveLength(2)
     expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByTestId('ttl-zoom-tab-result').getAttribute('aria-selected')).toBe('false')
+    expect(screen.queryByTestId('ttl-zoom-tab-result')).toBeNull()
+    expect(screen.queryByTestId('ttl-zoom-tab-params')).toBeNull()
     // Footer shortcuts: Esc / ↑↓ / ⌘F / ⌘C / ⌘E.
     const hint = screen.getByTestId('ttl-zoom-hint').textContent ?? ''
     for (const key of ['Esc', '↑↓', '⌘F', '⌘C', '⌘E']) expect(hint).toContain(key)
@@ -164,7 +165,7 @@ describe('ZoomOverlay', () => {
     expect(currentRow().textContent).toContain('bash')
   })
 
-  it('⌘C copies the active pane: the command on 摘要, the raw args on 参数', () => {
+  it('⌘C copies the active pane: the command on 摘要, the raw args on 原始', () => {
     const writeText = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { language: 'en-US', clipboard: { writeText } })
     renderOverlay([stepOf(3, 'bash', '{"command":"ls -la"}')], 3)
@@ -182,22 +183,11 @@ describe('ZoomOverlay', () => {
     fireEvent.keyDown(window, { key: 'C', ctrlKey: true })
     expect(writeText).toHaveBeenCalledWith('ls -la')
 
-    // 参数 tab copies the raw arguments.
-    fireEvent.click(screen.getByTestId('ttl-zoom-tab-params'))
+    // 原始 tab copies the raw arguments (the 参数 tab is gone).
+    fireEvent.click(screen.getByTestId('ttl-zoom-tab-raw'))
     writeText.mockClear()
     fireEvent.keyDown(window, { key: 'c', metaKey: true })
     expect(writeText).toHaveBeenCalledWith('{"command":"ls -la"}')
-  })
-
-  it('⌘C copies the result pane once the 结果 tab is active', () => {
-    const writeText = vi.fn(async () => undefined)
-    vi.stubGlobal('navigator', { language: 'en-US', clipboard: { writeText } })
-    renderOverlay([stepOf(3, 'bash', 'cmd', { text: 'total 0' })], 3)
-    expect(screen.getByTestId('ttl-zoom-tab-summary').getAttribute('aria-selected')).toBe('true')
-    fireEvent.click(screen.getByTestId('ttl-zoom-tab-result'))
-    expect(screen.getByTestId('ttl-zoom-tab-result').getAttribute('aria-selected')).toBe('true')
-    fireEvent.keyDown(window, { key: 'c', metaKey: true })
-    expect(writeText).toHaveBeenCalledWith('total 0')
   })
 
   it('the export action downloads the selected step as JSON', async () => {
@@ -293,18 +283,16 @@ describe('ZoomOverlay', () => {
     }
   })
 
-  it('switches panes: 参数/原始 render the arguments, 结果 the result text', () => {
+  it('switches panes: 原始 renders the arguments, 摘要 the params JSON + output', () => {
     renderOverlay([stepOf(3, 'bash', '{"command":"ls"}', { text: 'total 0' })], 3)
 
     fireEvent.click(screen.getByTestId('ttl-zoom-tab-raw'))
     expect(screen.getByTestId('ttl-zoom-body-raw').textContent).toBe('{"command":"ls"}')
 
-    fireEvent.click(screen.getByTestId('ttl-zoom-tab-params'))
-    // Valid JSON arguments → the JSON tree.
-    expect(screen.getByTestId('ttl-zoom-body-params').querySelector('[data-testid="ttl-json-pretty"]')).toBeTruthy()
-
-    fireEvent.click(screen.getByTestId('ttl-zoom-tab-result'))
-    expect(screen.getByTestId('ttl-zoom-body-result').textContent).toContain('total 0')
+    fireEvent.click(screen.getByTestId('ttl-zoom-tab-summary'))
+    // v0.10.29: the params JSON and the result text both live in 摘要.
+    expect(screen.getByTestId('ttl-zoom-params').querySelector('[data-testid="ttl-json-pretty"]')).toBeTruthy()
+    expect(screen.getByTestId('ttl-zoom-body-summary').textContent).toContain('total 0')
   })
 
   it('the summary 参数 block is the full argument JSON, not a key/value table (v0.10.18)', () => {

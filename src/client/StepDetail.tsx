@@ -7,7 +7,7 @@
  *
  *   head    tool-family chip + name + human description + copy/zoom/close
  *   status  success/failure dot + text + duration + seq + contextual meta
- *   tabs    摘要 / 结果 / 参数 / 原始
+ *   tabs    摘要 / 原始（v0.10.29：结果、参数两页并入摘要）
  *   body    one pane per tab (see below)
  *   foot    完整度 pill + seq + 「在中央查看」
  *
@@ -40,14 +40,14 @@ import { formatDuration, toolFamily, type ToolFamily } from './format'
 import { t, type Lang } from './locales'
 import { markdownLabels } from './markdown-labels'
 import { MarkdownResult, RawText, looksLikeMarkdown, unwrapFileResult } from './markdown-result'
-import { JsonTree, parseJsonLoose } from './json-tree'
+import { parseJsonLoose } from './json-tree'
 import { JsonPretty } from './json-pretty'
 import { detectOutputKind, parseJsonLines, parseJsonValue, prettyJsonText } from './output-format'
 import { fileBaseName, inkOf, splitMcpName, summarizeToolCall, type ToolSummary } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { TrailImages, copyToClipboard } from './ui-shared'
 import { commandStats, splitCommand } from './command-format'
-import type { DetailTab, ResultView } from './detail-types'
+import type { DetailTab } from './detail-types'
 import type { ToolDetailItem, ToolDetailResult } from './useTrail'
 
 /** Wire-side caps of the preview (src/wire.ts ARGS_CAP / RESULT_CAP = 32 KiB). */
@@ -484,8 +484,10 @@ function OutputSection(props: {
   images?: readonly TrailResultImage[]
   sessionId?: string
   lang?: Lang
+  /** v0.10.29: markdown results render as Markdown (was the 结果 tab's job). */
+  markdown?: boolean
 }): React.ReactElement | null {
-  const { text, labels, error, images = [], sessionId, lang } = props
+  const { text, labels, error, images = [], sessionId, lang, markdown = false } = props
   const [expanded, setExpanded] = React.useState(false)
   const lines = React.useMemo(() => {
     // JSON / JSONL results are pretty-printed first; the preview clamp then
@@ -515,12 +517,16 @@ function OutputSection(props: {
           )
           : null}
       </div>
-      <div className={`ttl-outBlock${error ? ' ttl-outBlockError' : ''}`} data-testid="ttl-outBlock">
-        {shown.map((line, index) => {
-          const rendered = !expanded && line.length > OUT_LINE_MAX ? `${line.slice(0, OUT_LINE_MAX)}…` : line
-          return <div className="ttl-outLine" key={index}>{rendered.length === 0 ? '\u00a0' : rendered}</div>
-        })}
-      </div>
+      {markdown && !error && lang !== undefined
+        ? <MarkdownResult text={text} labels={markdownLabels(lang)} />
+        : (
+          <div className={`ttl-outBlock${error ? ' ttl-outBlockError' : ''}`} data-testid="ttl-outBlock">
+            {shown.map((line, index) => {
+              const rendered = !expanded && line.length > OUT_LINE_MAX ? `${line.slice(0, OUT_LINE_MAX)}…` : line
+              return <div className="ttl-outLine" key={index}>{rendered.length === 0 ? '\u00a0' : rendered}</div>
+            })}
+          </div>
+        )}
       {images.length > 0 && sessionId !== undefined && lang !== undefined
         ? <TrailImages images={images} sessionId={sessionId} lang={lang} />
         : null}
@@ -601,9 +607,6 @@ export interface StepDetailProps {
   step: TrailStep
   sessionId: string
   lang: Lang
-  /** Markdown result: rendered or literal source (owned by the shell, per seq). */
-  view: ResultView
-  onSetView(seq: number, view: ResultView): void
   /** Load (or join) the on-demand full detail of this step (契约 §10.5.2). */
   onLoadDetail(seq: number): Promise<ToolDetailResult>
   /** Open the centered viewer for this step on a given pane (契约 §10.5.4). */
@@ -615,10 +618,8 @@ export interface StepDetailProps {
 /** How the automatic on-demand load of a clipped step went. */
 type DetailPhase = 'loading' | 'ready' | 'failed'
 
-const TABS: ReadonlyArray<{ value: DetailTab; key: keyof Pick<StepLabels, 'summary' | 'result' | 'params' | 'raw'> }> = [
+const TABS: ReadonlyArray<{ value: DetailTab; key: keyof Pick<StepLabels, 'summary' | 'raw'> }> = [
   { value: 'summary', key: 'summary' },
-  { value: 'result', key: 'result' },
-  { value: 'params', key: 'params' },
   { value: 'raw', key: 'raw' },
 ]
 
@@ -628,7 +629,7 @@ const TABS: ReadonlyArray<{ value: DetailTab; key: keyof Pick<StepLabels, 'summa
  * @returns The band element.
  */
 export function StepDetail(props: StepDetailProps): React.ReactElement {
-  const { id, step, sessionId, lang, view, onSetView, onLoadDetail, onZoom, onClose } = props
+  const { id, step, sessionId, lang, onLoadDetail, onZoom, onClose } = props
   const labels = React.useMemo(() => labelsFor(lang), [lang])
   const result: TrailResult | undefined = step.result
   const args = step.args ?? ''
@@ -710,7 +711,7 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
 
   /** Contextual right-hand meta of the status row (参数 N 字符 / 参数 N 项 / 结果 N KB). */
   const statusMeta = (): string => {
-    if (tab === 'result' || tab === 'raw') {
+    if (tab === 'raw') {
       return fullText.length > 0 ? labels.metaResult(formatSize(utf8Bytes(fullText))) : ''
     }
     if (isMcp && parsedArgs !== null) return labels.metaArgsItems(Object.keys(parsedArgs).length)
@@ -774,71 +775,6 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
     )
   }
 
-  const renderParams = (): React.ReactElement => (
-    <>
-      {parsed.ok
-        ? <JsonTree value={parsed.value} />
-        : (
-          <>
-            {fullArgs.length > 0 ? <RawText text={fullArgs} /> : null}
-            <div className="ttl-detailHint" data-testid="ttl-detail-unparsable">{labels.unparsable}</div>
-          </>
-        )}
-      {loadBanner()}
-    </>
-  )
-
-  const renderResult = (): React.ReactElement => {
-    if (result === undefined && !loaded) {
-      return <div className="ttl-detailHint" data-testid="ttl-detail-empty">{labels.empty}</div>
-    }
-    if (isError) {
-      const errorName = detail?.error?.name ?? result?.errorName ?? step.name
-      const errorCode = detail?.error?.code ?? result?.errorCode ?? step.errorCode
-      return (
-        <>
-          <div className="ttl-errorBlock" data-testid="ttl-error-block">
-            <div className="ttl-errorName" data-testid="ttl-error-name">
-              {errorCode !== undefined ? `${errorName} · ${errorCode}` : errorName}
-            </div>
-            {fullText.length > 0 ? <RawText text={fullText} /> : null}
-            {fullImages.length > 0 ? <TrailImages images={fullImages} sessionId={sessionId} lang={lang} /> : null}
-            {mergedNote}
-          </div>
-          {loadBanner()}
-        </>
-      )
-    }
-    if (fullText.length === 0 && fullImages.length === 0) {
-      return (
-        <>
-          <div className="ttl-detailHint" data-testid="ttl-detail-empty">{labels.empty}</div>
-          {loadBanner()}
-          {mergedNote}
-        </>
-      )
-    }
-    const kind = detectOutputKind(fullText)
-    const jsonValue = kind === 'json' ? parseJsonValue(fullText) : null
-    const jsonLines = kind === 'jsonl' ? parseJsonLines(fullText) : null
-    return (
-      <>
-        {view === 'raw'
-          ? <RawText text={fullText} />
-          : kind === 'json'
-            ? <JsonPretty value={jsonValue} lang={lang} />
-            : kind === 'jsonl'
-              ? <JsonPretty value={jsonLines} lang={lang} />
-              : kind === 'markdown'
-                ? <MarkdownResult text={fullText} labels={markdownLabels(lang)} />
-                : <RawText text={fullText} />}
-        {fullImages.length > 0 ? <TrailImages images={fullImages} sessionId={sessionId} lang={lang} /> : null}
-        {loadBanner()}
-        {mergedNote}
-      </>
-    )
-  }
-
   const renderRaw = (): React.ReactElement => (
     <>
       {result?.replacedBy !== undefined
@@ -870,8 +806,23 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
     </>
   )
 
+  /** v0.10.29: failures keep the headline block that used to live in 结果. */
+  const renderErrorHead = (): React.ReactElement | null => {
+    if (!isError) return null
+    const errorName = detail?.error?.name ?? result?.errorName ?? step.name
+    const errorCode = detail?.error?.code ?? result?.errorCode ?? step.errorCode
+    return (
+      <div className="ttl-errorBlock" data-testid="ttl-error-block">
+        <div className="ttl-errorName" data-testid="ttl-error-name">
+          {errorCode !== undefined ? `${errorName} · ${errorCode}` : errorName}
+        </div>
+        {fullText.length > 0 ? <RawText text={fullText} /> : null}
+      </div>
+    )
+  }
+
   /** The 摘要 pane: the tool-family blocks + one uniform 参数 JSON block (契约 §3.3). */
-  const renderSummary = (): React.ReactElement => {
+  const renderSummaryBody = (): React.ReactElement => {
     /** The parsed arguments as JSON (v0.10.18: one shape for every tool family). */
     const paramsValue: unknown = parsed.ok ? parsed.value : null
     const paramsTotal = Array.isArray(paramsValue)
@@ -879,7 +830,17 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
       : isPlainObject(paramsValue) ? Object.keys(paramsValue).length : 0
     const params = (): React.ReactElement | null => parsed.ok
       ? <ParamsJsonSection value={paramsValue} total={paramsTotal} lang={lang} labels={labels} />
-      : null
+      : fullArgs.length > 0
+        ? (
+          <section className="ttl-section" data-testid="ttl-params">
+            <div className="ttl-sectionHead">
+              <span className="ttl-sectionLabel">{labels.params}</span>
+            </div>
+            <RawText text={fullArgs} />
+            <div className="ttl-detailHint" data-testid="ttl-detail-unparsable">{labels.unparsable}</div>
+          </section>
+        )
+        : null
     const outputText = ((): string => {
       if (isError && fullText.length === 0) return step.error
       if (family === 'read' || family === 'edit') {
@@ -896,6 +857,7 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
         images={fullImages}
         sessionId={sessionId}
         lang={lang}
+        markdown={!isError && detectOutputKind(outputText) === 'markdown'}
       />
     )
 
@@ -958,18 +920,18 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
     )
   }
 
+  const renderSummary = (): React.ReactElement => (
+    <>
+      {renderErrorHead()}
+      {renderSummaryBody()}
+      {mergedNote}
+    </>
+  )
+
   const duration = formatDuration(
     step.startedAt !== undefined && step.endedAt !== undefined ? step.endedAt - step.startedAt : undefined,
   )
   const meta = statusMeta()
-  const resultKind = detectOutputKind(fullText)
-  const markdown = resultKind === 'markdown'
-  const kindLabel = resultKind === 'json'
-    ? 'JSON'
-    : resultKind === 'jsonl' ? 'JSONL' : markdown ? labels.markdownKind : labels.textKind
-  const resultMeta = fullText.length > 0
-    ? [kindLabel, formatSize(utf8Bytes(fullText)), labels.lines(lineCount(fullText))].join(' · ')
-    : ''
   const pillText = pillTruncated ? labels.truncatedPill : loaded ? labels.loadedPill : labels.fullPill
 
   return (
@@ -1060,44 +1022,6 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
           onClick={openZoomFromPane}
         >
           {tab === 'summary' ? renderSummary() : null}
-          {tab === 'result'
-            ? (
-              <>
-                <div className="ttl-resultBar" data-testid="ttl-resultBar">
-                  <span className="ttl-resultLabel">{labels.result}</span>
-                  {resultMeta.length > 0 ? <span className="ttl-resultMeta">{resultMeta}</span> : null}
-                  {resultKind !== 'text'
-                    ? (
-                      <span className="ttl-seg" role="group">
-                        <button
-                          type="button"
-                          className={`ttl-segBtn${view === 'rendered' ? ' ttl-segSelected' : ''}`}
-                          data-testid="ttl-view-toggle"
-                          aria-pressed={view === 'rendered'}
-                          onClick={() => { onSetView(step.seq, view === 'rendered' ? 'raw' : 'rendered') }}
-                        >{labels.render}</button>
-                        <button
-                          type="button"
-                          className={`ttl-segBtn${view === 'raw' ? ' ttl-segSelected' : ''}`}
-                          data-testid="ttl-view-raw"
-                          aria-pressed={view === 'raw'}
-                          onClick={() => { onSetView(step.seq, 'raw') }}
-                        >{labels.source}</button>
-                      </span>
-                    )
-                    : null}
-                  <CopyButton
-                    text={fullText}
-                    testid="ttl-result-copy"
-                    label={labels.copy}
-                    className="ttl-resultCopy"
-                  />
-                </div>
-                {renderResult()}
-              </>
-            )
-            : null}
-          {tab === 'params' ? renderParams() : null}
           {tab === 'raw' ? renderRaw() : null}
         </div>
       </div>

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.29] - 2026-11-09
+
+### Changed
+
+- **详情只保留「摘要 / 原始」两个页签**：v0.10.18 起「参数」页的内容（完整参数 JSON）已经在摘要里，v0.10.26 起图片块也在摘要里渲染，单独的「结果」「参数」页签纯属重复。现在 `StepDetail` 与放大浮层都只保留两页：
+  - **摘要**：工具族区块（命令 / 文件 / MCP）+ 完整参数 JSON + 输出（Markdown 渲染、纯文本预览、图片块）+ 失败时的错误名/码块 + 合并提示；原「结果」页的 Markdown 渲染与渲染/原文开关并入这里（开关不再需要，wire 原文看「原始」）。
+  - **原始**：wire 参数 / 结果原文 + replace 提示，未变。
+- 同步删除：`ResultView` 的每一步记忆状态、`ttl-view-toggle` 开关、摘要外的 JsonTree 参数树、`DetailTab` 的 `result` / `params` 取值。放大浮层的 ⌘C 语义改为「摘要在 shell 步复制命令，原始页复制参数」。
+- 不可解析的参数不再另开页：摘要里直接显示原文 + 「无法解析」提示。
+
+### Verification
+
+- 更新/合并 15 例既有契约测试（trail-tab、verify-detail、verify-v050、zoom-overlay）到两页签契约，并新增两页签/合并内容的断言。测试 **570 例 / 22 文件**（571 → 570：删除与合并了旧的「结果/参数」页、渲染/原文开关用例）。
+- `pnpm typecheck` 0；`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 420px，Playwright 路由 mock 一条 `read` 结果 = Markdown 文档）：摘要页签共 2 个（摘要 / 原始），摘要同时出现 Markdown 渲染（`Deploy notes`）与参数 JSON（`ttl-json-pretty`）；「原始」页显示 wire 参数与结果原文；放大浮层同样是 2 个页签、无 `ttl-view-toggle`；0 条 console error。截图 `docs/assets/v0129-detail-tabs.jpg`、`docs/assets/v0129-zoom-tabs.jpg`，脚本 `scripts/verify/shoot-detail-tabs.mjs`。
+
 ## [0.10.28] - 2026-11-09
 
 ### Changed
