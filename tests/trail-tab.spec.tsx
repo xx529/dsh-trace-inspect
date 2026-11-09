@@ -950,6 +950,41 @@ describe('TrailTab', () => {
     expect(selection).toBeTypeOf('function')
   })
 
+  it('collapsing near the list end keeps the clicked card in place (v0.10.28)', async () => {
+    renderTab(twoTurns())
+    const turns = await readyTurns(2)
+    const list = document.querySelector('[data-testid="ttl-list"]') as HTMLElement
+    expect(list).toBeTruthy()
+
+    // jsdom has no layout: emulate a scroll box whose content shrinks when the
+    // expanded turn below the viewport collapses (1000 → 700 px).
+    let baseHeight = 1000
+    let scrollTop = 600 // = old max (1000 − 400)
+    Object.defineProperty(list, 'scrollHeight', {
+      configurable: true,
+      get: () => baseHeight + (Number.parseFloat(list.style.paddingBottom) || 0),
+    })
+    Object.defineProperty(list, 'clientHeight', { configurable: true, get: () => 400 })
+    Object.defineProperty(list, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => { scrollTop = value },
+    })
+
+    baseHeight = 700 // the collapsed card removed 300px of content
+    fireEvent.click(within(turns[1]).getByTestId('ttl-turn-tag'))
+    // The layout effect holds the scroll with temporary bottom padding instead
+    // of letting the browser clamp 600 → 300 (which would jump the list).
+    expect(scrollTop).toBe(600)
+    expect(list.style.paddingBottom).toBe('300px')
+
+    // Scrolling back into the real content releases the hold without a jump.
+    scrollTop = 200
+    fireEvent.scroll(list)
+    expect(list.style.paddingBottom).toBe('')
+    expect(scrollTop).toBe(200)
+  })
+
   it('a click inside the expanded body does not collapse the turn (v0.10.21)', async () => {
     renderTab(twoTurns())
     const cards = await readyTurns(2)

@@ -520,3 +520,17 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话；铅笔等不对称字形的墨迹中心天然略有偏差（≤0.25 CSS px）。
 
 ![统计数字与图标墨迹中心对齐（Δ0）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0127-mix-align.jpg)
+
+## 39. v0.10.28 展开 / 收起保持滚动位置
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 展开和收起没有保持原有位置，收起后整个列表跳到另一处（有闪烁感） | 点击前记下 `scrollTop`；layout 阶段若收缩后的列表装不下原位置，就用**临时 `padding-bottom`** 撑住滚动位并把 `scrollTop` 放回原值 —— 被点的卡片原地不动；用户滚动进入真实内容后立即释放 padding（不残留）。覆盖轮次开合、步骤详情带开合、`显示更早` | 收起前 `scrollTop 1027` / 卡片 top 144 → 收起后 `scrollTop 1027` / 卡片 top 144 / `padding-bottom 621px`（零位移）；滚轮向上后 padding 恢复 8px |
+| 不能影响新消息/筛选 | 新事件（follow-latest）、切换筛选/搜索时先释放临时 padding，再按原逻辑滚动 | 回归用例覆盖释放路径；0 console error |
+
+- 说明：收起「列表末尾的长展开项」时，卡片不动在几何上必然表现为卡片下方留白（内容已折叠），该留白为临时状态。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **571 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-scroll-anchor.mjs`（18 轮 × 18 步 mock，收起前后量卡片 top / scrollTop / padding，并用真实滚轮验证释放）。
+- 已知偏差：mock 会话；`scrollTop` 被撑住期间若收到新事件，会按 follow-latest 恢复到底部（正常行为）。
+
+![收起后卡片原地不动（下方为临时留白，滚动即消失）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0128-scroll-anchor.jpg)

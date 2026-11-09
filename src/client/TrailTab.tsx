@@ -969,6 +969,17 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   /** The open overlay: which turn it was opened from and which step it shows. */
   const [zoom, setZoom] = React.useState<{ turnId: string; seq: number; tab?: DetailTab } | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
+  /**
+   * v0.10.28: when a toggle makes the list shorter than the current scroll
+   * offset (collapsing a turn near the end), the browser clamps `scrollTop`
+   * and the whole list visibly jumps. `pendingScroll` remembers the offset at
+   * click time; `holdExtra` is the temporary bottom padding that keeps the
+   * scroll valid (blank space below, released as soon as the user scrolls
+   * back into the real content).
+   */
+  const pendingScrollRef = React.useRef<number | null>(null)
+  const holdExtraRef = React.useRef(0)
+  const basePadRef = React.useRef('')
   const searchRef = React.useRef<HTMLInputElement | null>(null)
   const jumpingRef = React.useRef(false)
   /** The row to focus again once the dialog closes (契约: 焦点回到触发行). */
@@ -1037,24 +1048,71 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   const hiddenToolSelected = isToolFilter && hiddenTools.some((tool) => tool.name === filter)
 
   // ── Follow-latest auto-scroll (rAF-coalesced; no forced reflow per burst) ─
+  /** Drop the temporary bottom padding (never called while it would clamp). */
+  const releaseScrollHold = React.useCallback((): void => {
+    const el = listRef.current
+    if (el === null) return
+    if (holdExtraRef.current > 0) {
+      el.style.paddingBottom = basePadRef.current
+      holdExtraRef.current = 0
+    }
+  }, [])
+
+  /** Remember where the list was scrolled before a toggle changes its height. */
+  const captureScrollAnchor = React.useCallback((): void => {
+    const el = listRef.current
+    pendingScrollRef.current = el === null ? null : el.scrollTop
+  }, [])
+
+  // Layout effect (before paint): a toggle must not move the viewport. If the
+  // resulting list is too short for the old offset, hold the scroll with a
+  // temporary bottom pad instead of letting the browser clamp it.
+  React.useLayoutEffect(() => {
+    const desired = pendingScrollRef.current
+    if (desired === null) return
+    pendingScrollRef.current = null
+    const el = listRef.current
+    if (el === null) return
+    const naturalMax = el.scrollHeight - el.clientHeight - holdExtraRef.current
+    const need = desired - naturalMax
+    if (need > 0.5) {
+      if (basePadRef.current === '' && holdExtraRef.current === 0) {
+        const computed = Number.parseFloat(window.getComputedStyle(el).paddingBottom)
+        basePadRef.current = Number.isFinite(computed) && computed > 0 ? `${computed}px` : ''
+      }
+      holdExtraRef.current = need
+      const base = Number.parseFloat(basePadRef.current)
+      const basePx = Number.isFinite(base) ? base : 0
+      el.style.paddingBottom = `${basePx + need}px`
+      el.scrollTop = desired
+    } else {
+      releaseScrollHold()
+    }
+  })
+
   const onScroll = React.useCallback((): void => {
     const el = listRef.current
     if (el === null) return
+    if (holdExtraRef.current > 0) {
+      const naturalMax = el.scrollHeight - el.clientHeight - holdExtraRef.current
+      if (el.scrollTop <= naturalMax + 0.5) releaseScrollHold()
+    }
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32
     setFollowPaused(!nearBottom)
-  }, [])
+  }, [releaseScrollHold])
 
   React.useEffect(() => {
     if (!followLatest || followPaused) return undefined
     const el = listRef.current
     if (el === null) return undefined
+    releaseScrollHold()
     if (typeof window.requestAnimationFrame === 'function') {
       const raf = window.requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
       return () => window.cancelAnimationFrame(raf)
     }
     const timeout = window.setTimeout(() => { el.scrollTop = el.scrollHeight }, 0)
     return () => window.clearTimeout(timeout)
-  }, [turns, followLatest, followPaused])
+  }, [turns, followLatest, followPaused, releaseScrollHold])
 
   const scrollToBottom = React.useCallback((): void => {
     const el = listRef.current
@@ -1105,6 +1163,10 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     })
   }, [searchActive, visibleTurns])
 
+  React.useEffect(() => {
+    releaseScrollHold()
+  }, [filter, query, releaseScrollHold])
+
   // Leaving search returns to the default expansion (latest turn only), so a
   // transient search does not leave every matched turn open afterwards.
   const prevSearchRef = React.useRef(false)
@@ -1119,6 +1181,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   }, [expandedTurns, turns.length])
 
   const toggleTurn = React.useCallback((id: string): void => {
+    captureScrollAnchor()
     setExpandedTurns((current) => {
       if (current === null) {
         // Default state = only the latest turn expanded. Materialize THAT
@@ -1139,6 +1202,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   }, [])
 
   const toggleShowFull = React.useCallback((id: string): void => {
+    captureScrollAnchor()
     setShowFullTurn((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
@@ -1160,6 +1224,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
 
   /** Row click: toggle one step; without Alt only that step stays open. */
   const toggleStep = React.useCallback((step: TrailStep, multi: boolean): void => {
+    captureScrollAnchor()
     setOpenSeqs((current) => {
       const next = new Set(current)
       if (next.has(step.seq)) {
@@ -1175,6 +1240,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
 
   /** ArrowRight: open (never close) this step, exclusive unless Alt is held. */
   const openStep = React.useCallback((step: TrailStep, multi = false): void => {
+    captureScrollAnchor()
     setOpenSeqs((current) => {
       if (current.has(step.seq) && (multi || current.size === 1)) return current
       const next = new Set(current)
@@ -1187,6 +1253,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
 
   /** ArrowLeft: collapse this step. */
   const closeStep = React.useCallback((step: TrailStep): void => {
+    captureScrollAnchor()
     setOpenSeqs((current) => {
       if (!current.has(step.seq)) return current
       const next = new Set(current)
