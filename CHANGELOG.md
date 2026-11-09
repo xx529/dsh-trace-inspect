@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.27] - 2026-11-09
+
+### Fixed
+
+- **轮次头的统计数字又比图标高 1px（上对齐）**：v0.10.20 把「13px 行盒」加在 `.ttl-turnMeta` 上让计数与 13px 图标居中，但 v0.10.25 把 chips 移出 meta、挪到「时长」一侧后，`.ttl-mix` 重新继承了头部 18px 行高，数字又偏上约 1px。现在 `.ttl-mix` 自己带 `line-height: 13px`，与图标同为 13px 墨迹网格；`.ttl-turnMeta` 的规则保留给右侧徽标 / `N 步` / chevron。
+- 覆盖：折叠态与展开态、窄面板换行后的每一行 chips 都生效（行盒在 chips 容器上，不依赖父级）。
+
+### Verification
+
+- 新增 1 例 CSS 回归：`.ttl-mix {` 必须含 `line-height: 13px;`。测试 **570 例 / 22 文件**（569 → 570）。
+- 实机（独立 `trace-verify` web profile，19487，dock 400，mock 一轮 10 步 + 12m00s 时长）：`.ttl-mix` 与 `.ttl-mixCount` 计算行高均 `13px`，mix 高度 13px 且与 `dur`/`meta` 同中心线（203）；2× 截图像素量测：图标墨迹中心 23.0 vs 数字墨迹中心 23.0（Δ0；铅笔字形自身不对称，Δ0.25 CSS px）；0 条 console error。截图 `docs/assets/v0127-mix-align.jpg`，脚本 `scripts/verify/shoot-turnhead-mix.mjs`（新增 line-height 指标）。
+
 ## [0.10.26] - 2026-11-09
 
 ### Fixed

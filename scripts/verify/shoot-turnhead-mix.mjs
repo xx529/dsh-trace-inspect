@@ -149,6 +149,11 @@ try {
       mixInMeta: meta?.querySelector('.ttl-mix') !== null && meta?.querySelector('.ttl-mix') !== undefined,
       dur: rr(dur), mix: rr(mix), spacer: rr(spacer), meta: rr(meta),
       durText: dur?.textContent ?? null,
+      mixLineHeight: mix === null || mix === undefined ? null : getComputedStyle(mix).lineHeight,
+      countLineHeight: (() => {
+        const count = mix?.querySelector('.ttl-mixCount')
+        return count === null || count === undefined ? null : getComputedStyle(count).lineHeight
+      })(),
       chips,
       sameRow: dur !== null && dur !== undefined && mix !== null && mix !== undefined
         ? Math.abs(rr(dur).cy - rr(mix).cy) < 2
@@ -178,6 +183,7 @@ try {
   log('children:', JSON.stringify(metrics.children))
   log('dur:', metrics.durText, JSON.stringify(metrics.dur), 'mix:', JSON.stringify(metrics.mix), 'meta:', JSON.stringify(metrics.meta))
   log('sameRow:', metrics.sameRow, 'mixRightOfDur:', metrics.mixRightOfDur, 'mixLeftOfMeta:', metrics.mixLeftOfMeta, 'mixInMeta:', metrics.mixInMeta)
+  log('lineHeight mix/count:', metrics.mixLineHeight, metrics.countLineHeight)
   log('chips:', JSON.stringify(metrics.chips))
   log('console errors:', consoleErrors.length)
   const bad = [

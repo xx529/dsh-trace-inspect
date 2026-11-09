@@ -221,6 +221,12 @@ describe('v0.10.10: 工具族不再有灰色字形', () => {
   })
 })
 
+describe('v0.10.27: 挪出 meta 后统计数字仍与图标居中', () => {
+  it('.ttl-mix 自带 13px 行盒（不再依赖 .ttl-turnMeta 继承）', () => {
+    expect(rule('.ttl-mix {')).toContain('line-height: 13px;')
+  })
+})
+
 describe('v0.10.25: 簇统计挪到「时长」一侧', () => {
   it('.ttl-mix 在左侧分组里换行时左对齐', () => {
     const mix = rule('.ttl-mix {')

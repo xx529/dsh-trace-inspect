@@ -918,6 +918,11 @@ export const trailCss = `
   row-gap: 3px;
   min-width: 0;
   color: var(--dsw-alias-label-quaternary, #7b8086);
+  /* v0.10.27: the v0.10.20 centring fix (13px line box) lived on
+     .ttl-turnMeta; moving the chips out of that group (v0.10.25) left them
+     inheriting the 18px header line height, so the counters sat 1px high
+     again. Pin the glyph grid here too. */
+  line-height: 13px;
 }
 .ttl-mixItem { display: inline-flex; align-items: center; gap: 2px; font-size: 9.5px; font-variant-numeric: tabular-nums; }
 .ttl-mixItem svg { display: block; }

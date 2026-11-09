@@ -507,3 +507,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 已知偏差：mock 会话；缩略图走既有的 `/trace-inspect/api/attachment` 授权路由，非该会话引用的附件仍会回退占位 chip。
 
 ![read_image 摘要页：图片本体 + 元数据 chip](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0126-read-image.jpg)
+
+## 38. v0.10.27 统计数字与图标重新居中
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 现在这个 icon 和数字怎么又不对齐了 | v0.10.20 的 `line-height: 13px` 加在 `.ttl-turnMeta` 上；v0.10.25 把 chips 移出 meta 后它们继承回头部 18px 行高 → 数字偏上 1px。现在 `.ttl-mix` 自带 `line-height: 13px`（行盒在容器上，折叠/展开、换行后的每一行都成立） | `.ttl-mix` / `.ttl-mixCount` 计算行高均 `13px`；2× 像素量测图标墨迹中心 23.0 vs 数字 23.0（Δ0，铅笔 0.25 CSS px 为其字形不对称） |
+
+- 覆盖：折叠态、展开态、窄面板多行 chips；右侧 `.ttl-turnMeta`（徽标 / `N 步` / chevron）规则不变。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **570 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-turnhead-mix.mjs`（新增 mix/count line-height 指标与 2× 像素对齐量测）。
+- 已知偏差：mock 会话；铅笔等不对称字形的墨迹中心天然略有偏差（≤0.25 CSS px）。
+
+![统计数字与图标墨迹中心对齐（Δ0）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0127-mix-align.jpg)
