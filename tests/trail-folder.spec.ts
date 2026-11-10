@@ -46,8 +46,10 @@ function referenceStats(turns: TrailTurn[]): { total: number; failed: number; to
   for (const turn of turns) {
     total += turn.stepsCount
     for (const step of stepsOf(turn)) {
-      if (step.kind === 'error') failed += 1
-      if (step.kind === 'tool') byTool.set(step.name, (byTool.get(step.name) ?? 0) + 1)
+      // v0.10.36: the same predicate the rows / per-turn badge use.
+      const isFailed = step.kind === 'error' || step.result?.isError === true
+      if (isFailed) failed += 1
+      else byTool.set(step.name, (byTool.get(step.name) ?? 0) + 1)
     }
   }
   return {
@@ -71,6 +73,53 @@ function assertIncrementalEqualsBatch(events: Ev[]): void {
     if (i < events.length) folder.push(events[i] as unknown as SessionEventLike)
   }
 }
+
+const toolFailedResult = (seq: number, callId: string, text = 'boom'): Ev => ev('tool/result', seq, {
+  callId,
+  message: { source: { callId }, isError: true, content: [{ type: 'text', text }] },
+})
+
+describe('TrailFolder stats predicate (v0.10.36)', () => {
+  it('a plain isError result is a failure and stays out of the tool mix', () => {
+    const folder = new TrailFolder()
+    const events = [
+      user(1, 'go'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"x"}', 'c3'),
+      toolFailedResult(4, 'c3'),
+      turnEnd(5, 1),
+    ]
+    for (const e of events) folder.push(e as unknown as SessionEventLike)
+    // Old behaviour counted only kind === 'error' → this showed 0 failures while
+    // the turn badge showed 1.
+    expect(folder.stats()).toEqual({ total: 1, failed: 1, tools: [] })
+  })
+
+  it('wire errors and isError results are counted the same way (and total = failed + tools)', () => {
+    const folder = new TrailFolder()
+    const events = [
+      user(1, 'go'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"ok"}', 'c3'),
+      ev('tool/result', 4, { callId: 'c3', content: [{ type: 'text', text: 'ok' }] }),
+      toolCall(5, 'bash', '{"command":"bad"}', 'c5'),
+      toolFailedResult(6, 'c5'),
+      toolCall(7, 'mcp__figma__use_figma', '{"code":"x"}', 'c7'),
+      toolError(8, 'c7'),
+      turnEnd(9, 1),
+    ]
+    for (const e of events) folder.push(e as unknown as SessionEventLike)
+    const stats = folder.stats()
+    expect(stats.failed).toBe(2)
+    // Wire errors keep their v0.3.1 shape: the call row survives next to the
+    // error row, so `total` counts both (4 = bash ok + bash call + mcp call +
+    // mcp error row).
+    expect(stats.total).toBe(4)
+    expect(stats.tools).toEqual([{ name: 'bash', count: 1 }, { name: 'mcp__figma__use_figma', count: 1 }])
+    // The invariant the UI relies on: 全部 = 失败 + 分布合计.
+    expect(stats.total).toBe(stats.failed + stats.tools.reduce((n, t) => n + t.count, 0))
+  })
+})
 
 describe('TrailFolder ≡ foldTurns (batch reference)', () => {
   it('turn-mode: full multi-turn session with tools, errors, contexts', () => {

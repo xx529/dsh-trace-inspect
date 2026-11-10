@@ -106,8 +106,10 @@ function referenceStats(turns: TrailTurn[]): { total: number; failed: number; to
   for (const turn of turns) {
     total += turn.stepsCount
     for (const step of stepsOf(turn)) {
-      if (step.kind === 'error') failed += 1
-      if (step.kind === 'tool') byTool.set(step.name, (byTool.get(step.name) ?? 0) + 1)
+      // v0.10.36: the same predicate the rows / per-turn badge use.
+      const isFailed = step.kind === 'error' || step.result?.isError === true
+      if (isFailed) failed += 1
+      else byTool.set(step.name, (byTool.get(step.name) ?? 0) + 1)
     }
   }
   return {

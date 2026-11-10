@@ -296,6 +296,29 @@ describe('TrailTab', () => {
     expect(summary?.querySelector('.ttl-summaryDur')).toBeNull()
   })
 
+  it('global failure stats use the row predicate (v0.10.36)', async () => {
+    renderTab([
+      user(1, 'mixed failures'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"ok"}', 'c3'),
+      toolResult(4, 'c3', 'fine'),
+      toolCall(5, 'bash', '{"command":"bad"}', 'c5'),
+      ev('tool/result', 6, { callId: 'c5', message: { isError: true, content: [{ type: 'text', text: 'boom' }] } }),
+      toolCall(7, 'custom_tool', '{"x":1}', 'c7'),
+      ev('tool/result', 8, { callId: 'c7', error: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' } }),
+      turnEnd(9, 1),
+    ])
+    const turn = (await screen.findAllByTestId('ttl-turn'))[0]
+    // Turn badge counts both failures…
+    expect(turn.querySelector('[data-testid="ttl-error-count"]')?.textContent).toBe('2')
+    // …and the global chip / summary must agree (was 1: only the wire error).
+    expect((await screen.findByTestId('ttl-chip-failed')).textContent).toContain('2')
+    const summary = document.querySelector('.ttl-summary') as HTMLElement | null
+    expect(summary?.querySelector('.ttl-summaryFail')?.textContent).toBe('2 failed')
+    // Failed rows are not double-counted in the tool distribution.
+    expect(summary?.querySelector('.ttl-legend')?.textContent).toContain('bash 1')
+  })
+
   it('chips show counts; failed chip filters steps', async () => {
     renderTab(twoTurns())
     await readyTurns(2)

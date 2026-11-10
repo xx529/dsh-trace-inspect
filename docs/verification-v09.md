@@ -637,3 +637,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![详情里的缩略图（可点击）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0135-image-inline.jpg)
 
 ![大图查看器：背景模糊 + 元信息 + Esc/遮罩关闭](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0135-image-lightbox.jpg)
+
+## 47. v0.10.36 失败统计口径统一（全局 = 轮次 = 行）
+
+| 反馈 | 原因 | 方案 | 实测 |
+| --- | --- | --- | --- |
+| 总体错误统计数据对不上（轮次 ⚠2、工具栏「失败 1」） | `TrailFolder.stats().failed` 只数 `kind==='error'`（wire `error` 行）；行/徽标谓词是 `kind==='error' \\|\\| result.isError`，普通 `tool/result` 带 `message.isError` 的失败被漏掉 | 统计改用同一谓词；按 step 维护 `failedState`，在 `applyContent`（含 replace）后做翻转校正，避免重复计数；失败步同时从 `byTool` 移除 | mock 7 步/2 轮（1 个 isError + 1 个 wire error）：轮次徽标 ⚠2、工具栏 `全部 7 · 失败 2`、概览 `2 失败`、图例合计 5（2+5=7） |
+| 分布对不上 | 失败步此前只在部分路径排除 | 统一：失败行不进 `byTool`，`total = failed + tools` 恒等 | `total = failed + legend sum` 脚本断言通过 |
+
+- 覆盖：`trail-folder` 2 例（isError only / 混合 + 恒等式）、`trail-tab` 1 例（同轮 ⚠2 时 chip、概览、图例一致）；两处 `referenceStats` 同步到新谓词。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **551 例 / 21 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-error-stats.mjs`（mock 2 轮 7 步，量徽标/chip/概览/图例与恒等式）。
+
+![失败统计一致：轮次 ⚠2 = 工具栏失败 2 = 概览 2 失败，图例 5 项](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0136-error-stats.jpg)

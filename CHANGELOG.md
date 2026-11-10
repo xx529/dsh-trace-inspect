@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.36] - 2026-11-10
+
+### Fixed
+
+- **总体失败统计与轮次徽标对不上**：`stats.failed` 只累加 `kind === 'error'`（wire `error` 行），而轮次头 ⚠N、行上的红色 alert 用的是 `kind === 'error' || result.isError`；普通 `tool/result` 带 `message.isError: true` 的失败因此只出现在轮次里（截图：轮次 ⚠2，工具栏「失败 1」）。现在 `TrailFolder` 用与行/徽标相同的谓词增量维护失败数，并在结果被 replace 改写时按“失败状态翻转”校正（不会重复计数）。
+- **失败步不再混进工具分布**：失败行从 `byTool` 中移除，分布条 / 图例与「失败」chip 互补——`全部 = 失败 + 分布合计`（截图数据：7 = 2 + 5）。轮次内的簇统计本来就不计失败行，两处口径终于一致。
+
+### Verification
+
+- 更新两处 `referenceStats` 到新谓词，并新增 3 例回归：`trail-folder`（普通 isError → failed 1、工具 mix 为空；wire error + isError 混合 → failed 2 且 `total = failed + tools`）、`trail-tab`（同轮 ⚠2 时工具栏 chip 2、概览「2 失败」、图例不含失败）。测试 **551 例 / 21 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 420，mock 2 轮 7 步：1 个普通 isError + 1 个 wire error）：轮次徽标 `⚠2`、工具栏 `全部 7 · 失败 2`、概览 `2 失败`、图例 `bash 2 · read 1 · mcp 1 · figma 1`（合计 5，2+5=7）；0 条 console error。截图 `docs/assets/v0136-error-stats.jpg`，脚本 `scripts/verify/shoot-error-stats.mjs`。
+
 ## [0.10.35] - 2026-11-10
 
 ### Added

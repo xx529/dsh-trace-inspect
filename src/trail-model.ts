@@ -617,6 +617,7 @@ class ResultIndex {
   constructor(
     private readonly addStep: (builder: Builder, step: TrailStep) => void,
     private readonly markDirty: (builder: Builder) => void,
+    private readonly syncFailed: (step: TrailStep) => void = () => {},
   ) {}
 
   /** Drop every registration (used when the folder flips from user mode). */
@@ -783,6 +784,7 @@ class ResultIndex {
     }
     state.segments.set(seq, segmentOf(seq, bits))
     rebuildResult(step, state)
+    this.syncFailed(step)
     this.markDirty(builder)
   }
 }
@@ -1078,6 +1080,9 @@ export class TrailFolder {
   private lastSeq = -1
   private total = 0
   private failed = 0
+  /** Last known failed state per step, so the global counter can follow
+   * replacements that turn a failed result back into a healthy one. */
+  private failedState = new WeakMap<TrailStep, boolean>()
   private readonly byTool = new Map<string, number>()
 
   /**
@@ -1089,6 +1094,7 @@ export class TrailFolder {
   private readonly results = new ResultIndex(
     (builder, step) => { this.addStep(builder, { kind: 'tool', step }) },
     (builder) => { this.markDirty(builder) },
+    (step) => { this.syncFailed(step) },
   )
 
   /** Highest event seq consumed so far (duplicates / re-pages are skipped). */
@@ -1211,9 +1217,28 @@ export class TrailFolder {
   private addStep(builder: Builder, item: TurnItem & { kind: 'tool' }): void {
     appendItem(builder, item)
     this.total += 1
-    if (item.step.kind === 'error') this.failed += 1
-    else this.byTool.set(item.step.name, (this.byTool.get(item.step.name) ?? 0) + 1)
+    this.byTool.set(item.step.name, (this.byTool.get(item.step.name) ?? 0) + 1)
+    this.syncFailed(item.step)
     this.markDirty(builder)
+  }
+
+  /**
+   * Keep `failed` / `byTool` in sync with the SAME predicate the rows and the
+   * per-turn badge use (`kind === 'error' || result.isError`). A plain
+   * `tool/result` with `isError` is not a kind `error` row, so counting only
+   * the kind made the global chip disagree with the turn badge; replacements
+   * can also flip a step back, hence the per-step transition check.
+   */
+  private syncFailed(step: TrailStep): void {
+    const now = step.kind === 'error' || step.result?.isError === true
+    const before = this.failedState.get(step) === true
+    if (before === now) return
+    this.failedState.set(step, now)
+    this.failed += now ? 1 : -1
+    const count = this.byTool.get(step.name) ?? 0
+    const next = now ? Math.max(0, count - 1) : count + 1
+    if (next === 0) this.byTool.delete(step.name)
+    else this.byTool.set(step.name, next)
   }
 
   private materializeTurn(builder: Builder, position: number): TrailTurn {
@@ -1408,6 +1433,7 @@ export class TrailFolder {
     this.pendingUser.push(...pending)
     this.total = 0
     this.failed = 0
+    this.failedState = new WeakMap<TrailStep, boolean>()
     this.byTool.clear()
     this.results.reset()
     this.mode = 'turn'
