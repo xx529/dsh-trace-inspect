@@ -859,38 +859,42 @@ export const trailCss = `
   gap: 12px;
   margin-top: 5px;
 }
-/* v0.10.37: the merged row keeps the legend's quiet text look — no filled
-   chip backgrounds; the active filter is marked by an underline + brighter
-   text instead of a white pill. */
+/* v0.10.38: the merged row mirrors the ORIGINAL legend exactly — dot, then
+   one quiet text run of name + count (same sans font/colour for both) with a
+   comfortable gap. The active filter is only brighter (no underline/pill). */
 .ttl-summaryFilters .ttl-chip {
   height: 16px;
   padding: 0;
-  gap: 5px;
+  gap: 6px;
   border: none;
   border-radius: 3px;
   background: transparent;
   color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  font-family: inherit;
   font-size: 10.5px;
 }
-.ttl-summaryFilters .ttl-chip:hover {
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, #cfd3d6);
-}
+.ttl-summaryFilters .ttl-chip:hover { background: transparent; color: var(--dsw-alias-label-secondary, #cfd3d6); }
 .ttl-summaryFilters .ttl-chipSelected {
   border: none;
   background: transparent;
   color: var(--dsw-alias-label-primary, #f3f4f6);
-  text-decoration: underline;
-  text-underline-offset: 2.5px;
-  text-decoration-color: var(--dsw-alias-label-secondary, #cfd3d6);
-  text-decoration-thickness: 1.5px;
+  text-decoration: none;
+  font-weight: 500;
 }
-.ttl-summaryFilters .ttl-chipSelected .ttl-chipCount { color: var(--dsw-alias-label-secondary, #cfd3d6); }
-.ttl-summaryFilters .ttl-chipCount { font-size: 10.5px; }
+/* Selected family: a quiet ring around the colour dot (no underline / pill). */
+.ttl-summaryFilters .ttl-chipSelected .ttl-legendDot {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.24);
+}
+.ttl-summaryFilters .ttl-chipSelected .ttl-chipCount { color: inherit; }
+.ttl-summaryFilters .ttl-chipCount {
+  color: inherit;
+  font-family: inherit;
+  font-size: 10.5px;
+}
 .ttl-summaryFilters .ttl-chipDot { width: 5px; height: 5px; }
 .ttl-summaryFilters .ttl-legendDot { flex: none; }
 .ttl-familyChip { height: 16px; }
-
+.ttl-chip {
   box-sizing: border-box;
   flex: none;
   display: inline-flex;

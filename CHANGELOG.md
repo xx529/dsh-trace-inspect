@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.10.39] - 2026-11-10
+
+### Added
+
+- **首轮自动打开右侧栏**：新对话发出第一条消息时，右侧栏自动展开并切到「轮次轨迹」，不必再从 `+` 菜单里找这个 tab。触发条件按「本会话第一轮」判定，**不是**每次打开会话：
+  - 只看**还没开始过轮次的空白会话**（客户端 `sessions.list` 行的 `blank` 提示，与 `session.create` 复用空白会话的判据同一来源）；有历史的会话永远不会被自动打开。
+  - 活动信号来自 `sessions.list` 快照（`blank`/`running` 翻转）与已 retain 会话的 `session`/`eventSource` 两个 feed；触发前再用插件自己的 `POST /trace-inspect/api/events {afterSeq: 0}` **确认一次**已写入事件——列表行可能滞后，durable log 才作数。
+  - **每个会话只自动打开一次**：翻开后即上锁，你手动关掉 tab 或收起右栏都不会再被弹开；同一个会话切走再切回也不重复弹。
+  - 打开方式是 `ctx.betterSidebar.openTab({ type: 'trace-inspect' }, { sessionId })`：在 better-sidebar 0.30 的原生面下落进 DSH 右侧栏，由宿主自己展开该列（宿主不为未展开的列开内容），插件再兜底 `isExpanded/toggleExpanded`；不重复开 tab 由宿主去重保证。
+  - 门控：新增**插件自有开关**「首轮自动打开」（侧边卡片设置 → 轮次轨迹 → 齿轮/设置行，默认开，存 `prefs.pluginSettings['trace-inspect'].autoOpenFirstTurn`）；同时尊重 tab 的启用开关；**窄屏（< 768px，宿主会把右列画成全屏）不触发**。
+- 插件级监听（不是 tab 组件）：触发时这个 tab 还不存在，所以 watcher 由 `apply()` 注册——服务缺失（没有 better-sidebar / 没有原生右列）时保持惰性、不报错。
+
+### Verification
+
+- 单测 **570 例 / 22 文件** 全绿（新增 `tests/client-auto-open.spec.ts` 18 例 + `client-apply` 1 例），`pnpm typecheck` 0、`pnpm build`（含 bundle 契约检查）通过。
+- 覆盖：空白会话臂上→首轮事件→只开一次；有历史会话不探测不打开；开关关/tab 禁用/窄屏三条门控均在「触发时」判定；未发布列表行先用一次探针 settle；原生 tab 类型注册竞态走重试；传输失败保持 armed；dispose 后不再触发；重复进入同一会话不重复打开；已展开列不再 toggle、收起列走兜底展开。
+
+## [0.10.38] - 2026-11-10
+
+### Changed
+
+- **家族筛选行进一步对齐原图例样式**：去掉选中项的下划线；选中态改为「文字提亮 + 500 字重 + 圆点外一圈细环」，不再是任何形式的胶囊/白底/下划线。
+- 间距与字体按原图例校准：item 间距 12px，圆点与文字 6px；名称与数字统一用界面同款 sans 字体、同字号（10.5px）与同一颜色（选中前 tertiary，选中后 primary），不再用等宽小一号的暗色数字，`● bash 645` 读起来与旧图例一致。
+
+### Verification
+
+- 测试 **570 例 / 22 文件** 全绿（`ttl-chip-bash` / `ttl-chip-read` 等家族 chip 断言不变）；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（`trace-verify`，19487，dock 440，mock 1 轮 9 步含 1 失败）：一行 `全部 9 / 失败 1 / ● bash 2 / ● read 2 / ● edit 1 / ● mcp 1 / ● figma 1 / ● skill 1`；点 bash 后无下划线、圆点出现细环且文字提亮，行只剩 2 条 bash；0 条 console error。截图 `docs/assets/v0138-summary-chips.jpg`、`docs/assets/v0138-summary-filtered.jpg`，脚本 `scripts/verify/shoot-summary-chips.mjs`。
+
 ## [0.10.37] - 2026-11-10
 
 ### Changed

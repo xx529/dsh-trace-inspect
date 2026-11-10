@@ -85,6 +85,14 @@ interface Descriptor {
   title: () => string
   description: () => string
   component: unknown
+  settings?: {
+    pluginToggles?: Array<{
+      key: string
+      type?: string
+      title: () => string
+      desc?: () => string
+    }>
+  }
 }
 
 function descriptorOf(registerTab: ReturnType<typeof vi.fn>): Descriptor {
@@ -143,6 +151,22 @@ describe('client apply — registration entry', () => {
     // cordis contract: the registerTab disposer is the effect cleanup.
     expect(disposables.length).toBeGreaterThan(0)
     expect(typeof disposables[disposables.length - 1]).toBe('function')
+  })
+
+  it('declares the first-turn auto-open switch as a plugin-owned setting', () => {
+    // v0.10.39: the switch must be a `pluginToggles` row (persisted in
+    // prefs.pluginSettings['trace-inspect']), NOT a host `toggles` row — host
+    // rows name fields of better-sidebar's own PrefsSchema and drop unknown
+    // keys, which would silently lose the setting.
+    const registerTab = vi.fn(() => () => {})
+    apply(makeCtx('service', registerTab, localeService('zh')).ctx)
+    const descriptor = descriptorOf(registerTab as ReturnType<typeof vi.fn>)
+    const toggles = descriptor.settings?.pluginToggles ?? []
+    expect(toggles).toHaveLength(1)
+    expect(toggles[0]?.key).toBe('autoOpenFirstTurn')
+    expect(toggles[0]?.type).toBe('switch')
+    expect(toggles[0]?.title()).toBe('首轮自动打开')
+    expect(toggles[0]?.desc?.()).toContain('新对话')
   })
 })
 

@@ -44,6 +44,10 @@ export interface Dict {
   tabTitle: string
   /** One-liner shown under the tab title in better-sidebar's native guide page. */
   tabDescription: string
+  /** Side-card settings row title: auto-open the tab on a conversation's first turn. */
+  autoOpenTitle: string
+  /** Side-card settings row description: when the automatic open happens. */
+  autoOpenDesc: string
   turnsCount: (n: number) => string
   followLatest: string
   followPaused: string
@@ -154,6 +158,8 @@ export interface Dict {
 const zh: Dict = {
   tabTitle: '轮次轨迹',
   tabDescription: '按用户轮次折叠会话轨迹，一键定位回对话原位',
+  autoOpenTitle: '首轮自动打开',
+  autoOpenDesc: '新对话发出第一条消息时，自动在右侧栏展开轮次轨迹（每个会话只自动打开一次，窄屏不触发）',
   turnsCount: (n) => `${n} 轮`,
   followLatest: '跟随',
   followPaused: '已暂停跟随',
@@ -250,6 +256,8 @@ const zh: Dict = {
 const en: Dict = {
   tabTitle: 'Turn Outline',
   tabDescription: 'Fold the session into per-turn steps and jump back to any of them',
+  autoOpenTitle: 'Open on the first turn',
+  autoOpenDesc: 'Pop the trail open in the right sidebar when a new conversation sends its first message (once per conversation; skipped on narrow screens)',
   turnsCount: (n) => `${n} turns`,
   followLatest: 'Follow',
   followPaused: 'Follow paused',

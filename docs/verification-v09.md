@@ -665,3 +665,36 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![概览一行：全部/失败 + 每个家族的点击筛选 chip](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0137-summary-chips.jpg)
 
 ![点击 bash 家族后只显示 bash 行](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0137-summary-filtered.jpg)
+
+## 49. v0.10.38 家族筛选行对齐原图例
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 点击后下面的横线不要了 | 去掉选中项 `text-decoration`；选中态 = 文字 primary + 500 字重 + 圆点外 2px 细环（`box-shadow`） | 点 bash 后无下划线，圆点出现细环、文字提亮 |
+| 颜色点与文本/数字距离太紧凑，参考原图例 | item 间距 12px、圆点↔文字 6px（原图例 5px 基础上略松）；名称与数字统一界面 sans、10.5px、同一颜色（默认 tertiary，选中 primary），去掉等宽小字号暗色数字 | `● bash 2` 与旧图例 `● bash 635` 的间距/字重/颜色一致 |
+
+- 结构不变：`.ttl-summaryFilters`（内嵌 `data-testid="ttl-chips"`）一行完成「聚合 + 点击筛选」；`全部 = 失败 + 家族合计`。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **570 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-summary-chips.mjs`（同一脚本复核一行 chips、恒等式、点击筛选与选中态）。
+
+![一行家族筛选项：无胶囊/无下划线，间距与字体对齐原图例](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0138-summary-chips.jpg)
+
+![选中 bash：文字提亮 + 圆点细环，无下划线](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0138-summary-filtered.jpg)
+
+## 50. v0.10.39 首轮自动打开右侧栏 tab
+
+需求（2026-11-10）：「第一次对话运行时候就在右侧面的 better sidebar 自动弹出这个轮次轨迹」。
+
+| 决策点 | 实现 |
+| --- | --- |
+| 触发时机 | 会话**第一轮**开始：client `sessions.list` 行仍为 `blank: true`（未开始过轮次）时 arm，随后该行 `blank→false` / `running→true`，或已 retain 会话的 `session`/`eventSource` feed 触发，最后用插件自己的 `POST /trace-inspect/api/events {afterSeq:0}` 确认 durable log 已写入事件 |
+| 只弹一次 | 每个会话触发即上锁（内存 latch）；手动关 tab / 收起右栏不再弹；切走再切回不重复；有历史的会话永不 arm |
+| 打开方式 | `ctx.betterSidebar.openTab({ type:'trace-inspect' }, { sessionId })` → better-sidebar 0.30 原生面 → DSH 右侧栏；宿主每次 open 都会展开该列（不为看不到的列开内容），插件再 `isExpanded()===false → toggleExpanded()` 兜底 |
+| 开关 | `descriptor.settings.pluginToggles['autoOpenFirstTurn']`（switch，默认开）→ prefs `pluginSettings['trace-inspect']`；插件级用 `betterSidebar.getSnapshot().prefs` 读 |
+| 门控 | 开关关闭 / tab 被禁用（`isTabEnabled`）/ 视口 < 768px（宿主会把右列画成全屏）都不触发；全部在**触发时**判定 |
+| 注册层级 | 插件级 `apply()`（tab 组件在触发时还不存在）；无 better-sidebar / 无原生右列时惰性退出，不报错 |
+| 竞态 | 原生 tab 类型未注册时 `sidebarRightTabs.get('trace-inspect')` 探测失败 → 400ms×5 重试；open throw（无上屏 surface）吞掉，绝不弹错误条 |
+
+- 代码：`src/client/auto-open.ts`（新，watcher + 纯谓词 `armDecisionOf`）、`src/client/index.tsx`（`settings.pluginToggles` + `ctx.effect(() => installFirstTurnAutoOpen(ctx))`）、`src/client/locales.ts`（中英开关文案）。
+- 单测：`tests/client-auto-open.spec.ts` **18 例**（arm/skip/unknown 谓词；空白会话→首轮事件→只开一次；历史会话不探测；切会话重新 arm；未发布列表行单次探针；探针失败保持 pending；三条门控在触发时判定；已展开列不 toggle / 收起列兜底展开；原生类型注册竞态重试；传输失败保持 armed；dispose 不触发）+ `tests/client-apply.spec.tsx` 1 例（`pluginToggles` 契约）。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **570 例 / 22 文件**；`pnpm build`（含 bundle 契约检查）通过。

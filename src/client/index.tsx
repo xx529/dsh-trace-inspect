@@ -12,6 +12,7 @@ import * as React from 'react'
 import { trailCss } from './styles'
 import { TrailTab } from './TrailTab'
 import { detectLang, setHostLocale, t } from './locales'
+import { AUTO_OPEN_SETTING_KEY, installFirstTurnAutoOpen } from './auto-open'
 
 /** The slice of DSH's client `locale` service this plugin consumes. */
 interface LocaleFace {
@@ -130,6 +131,22 @@ export function apply(ctx: {
     icon: (size: number) => routeIcon(size),
     order: 46,
     single: true,
+    // v0.10.39: the first-turn auto-open switch lives in the side-card settings
+    // page under this tab's own row. It is a PLUGIN-OWNED toggle
+    // (`pluginToggles` → prefs `pluginSettings['trace-inspect']`), not a host
+    // `toggles` row: host rows must name a field of better-sidebar's own
+    // PrefsSchema, and unknown keys are dropped there. `auto-open.ts` reads the
+    // same blob at plugin level (documented default: on).
+    settings: {
+      pluginToggles: [
+        {
+          key: AUTO_OPEN_SETTING_KEY,
+          type: 'switch',
+          title: () => t(detectLang(), 'autoOpenTitle') as string,
+          desc: () => t(detectLang(), 'autoOpenDesc') as string,
+        },
+      ],
+    },
     component: (props: {
       ctx: { get(name: string): unknown }
       store?: unknown
@@ -143,4 +160,10 @@ export function apply(ctx: {
       tab: props.tab,
     }),
   }))
+
+  // v0.10.39: pop the panel out on a conversation's FIRST turn. Plugin level on
+  // purpose — the tab does not exist yet when the turn starts, so a component
+  // could never trigger it. Inert on hosts without the optional services the
+  // watcher probes; `auto-open.ts` owns the arm/confirm/open contract.
+  ctx.effect(() => installFirstTurnAutoOpen(ctx))
 }
