@@ -63,6 +63,32 @@ export const AUTO_OPEN_MIN_WIDTH = 768
 /** Tab type this module opens (the descriptor id registered in `index.tsx`). */
 export const AUTO_OPEN_TAB_ID = 'trace-inspect'
 
+/**
+ * Event types that prove a TURN has started.
+ *
+ * A brand-new DSH 0.2.2 conversation is NOT an empty event log: session
+ * creation writes housekeeping events first (`sandbox/mode`,
+ * `approval/policy` — verified on a live 0.2.2-rc.1 instance). So "the log has
+ * events" is not first-turn evidence — that gate fired the auto-open on a
+ * 0-turn conversation. Only a user message or a turn boundary proves the first
+ * turn actually ran.
+ */
+const FIRST_TURN_EVENT_TYPES = new Set(['user/message', 'turn/start'])
+
+/**
+ * Whether a page of session events carries a started turn.
+ * @param events - one `/events` page (unknown data; structural check only).
+ * @returns true when the log proves a turn exists (not just session setup).
+ */
+export function hasFirstTurnEvidence(events: unknown): boolean {
+  if (!Array.isArray(events)) return false
+  return events.some((event) => {
+    if (event === null || typeof event !== 'object') return false
+    const type = (event as { type?: unknown }).type
+    return typeof type === 'string' && FIRST_TURN_EVENT_TYPES.has(type)
+  })
+}
+
 /** Retry cadence/count while the native tab type is not registered yet. */
 const TAB_READY_RETRIES = 5
 const TAB_READY_RETRY_MS = 400
@@ -249,13 +275,22 @@ export function installFirstTurnAutoOpen(ctx: AutoOpenCtxLike, deps: AutoOpenDep
     }
   }
 
-  /** The on-screen session: the native column's mounted seat, else the store's. */
+  /**
+   * The on-screen session: the native column's mounted seat when that face
+   * exists, else the better-sidebar store's session id. A PRESENT `mounted`
+   * observable is authoritative even while it reports "no session" (a global
+   * panel) — falling back to the store there could arm a session nobody is
+   * looking at, and the native open would then be queued behind it.
+   */
   const onScreenSession = (): string | undefined => {
-    try {
-      const mounted = right?.mounted?.getSnapshot?.()
-      if (typeof mounted === 'string' && mounted.length > 0) return mounted
-    } catch {
-      // fall through to the store face
+    const mountedFace = right?.mounted
+    if (mountedFace !== undefined && typeof mountedFace.getSnapshot === 'function') {
+      try {
+        const mounted = mountedFace.getSnapshot()
+        return typeof mounted === 'string' && mounted.length > 0 ? mounted : undefined
+      } catch {
+        return undefined
+      }
     }
     try {
       const id = sidebar.getSnapshot?.()?.sessionId
@@ -359,7 +394,9 @@ export function installFirstTurnAutoOpen(ctx: AutoOpenCtxLike, deps: AutoOpenDep
     void fetchEvents(sessionId, 0)
       .then((result) => {
         if (disposed || phase !== 'armed' || watched !== sessionId) return
-        if (Array.isArray(result.events) && result.events.length > 0) open(sessionId)
+        // Housekeeping-only pages (a just-created session) keep the watch
+        // armed: the pop-up waits for the turn, never for session setup.
+        if (hasFirstTurnEvidence(result.events)) open(sessionId)
       })
       .catch(() => {
         // stay armed: the next activity signal re-runs the confirm
@@ -378,6 +415,9 @@ export function installFirstTurnAutoOpen(ctx: AutoOpenCtxLike, deps: AutoOpenDep
   /** Subscription hub for the armed session's activity signals. */
   const arm = (sessionId: string): void => {
     phase = 'armed'
+    // Every freshly armed conversation gets the full registration-retry budget
+    // (the budget is spent per open attempt, not once per plugin lifetime).
+    retriesLeft = TAB_READY_RETRIES
     const disposers: Array<() => void> = []
     const binding = sessions?.binding?.(sessionId)
     for (const feed of [binding?.session, binding?.eventSource]) {
@@ -427,7 +467,9 @@ export function installFirstTurnAutoOpen(ctx: AutoOpenCtxLike, deps: AutoOpenDep
       .then((result) => {
         probing = false
         if (disposed || watched !== sessionId || phase !== 'pending') return
-        if (Array.isArray(result.events) && result.events.length > 0) {
+        // A session that already logged a turn is history (skip); one whose log
+        // holds only creation housekeeping is still a blank conversation (arm).
+        if (hasFirstTurnEvidence(result.events)) {
           skipped.add(sessionId)
           phase = 'skipped'
           return

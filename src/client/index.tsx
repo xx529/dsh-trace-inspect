@@ -52,6 +52,34 @@ function routeIcon(size: number): React.ReactNode {
   )
 }
 
+/**
+ * Materialise the documented default of the first-turn switch into the
+ * persisted plugin blob.
+ *
+ * better-sidebar's declarative toggle rows have NO `default` field: a switch
+ * reads `pluginSettings[<descriptor id>][key] === true`, so an absent value
+ * renders UNCHECKED while this plugin treats "absent" as ON (the owner asked
+ * for the feature to default to on). Rendering this no-op panel alongside the
+ * row (v0.12+ `settings.render` is an extension of the row list, not a
+ * replacement) writes the default the first time the popup opens, so the
+ * switch tells the truth from then on. No settings service is reachable from
+ * plugin level, which is why the row cannot simply be initialised at apply().
+ * @param props - the popup's plugin-owned blob + its persist helper.
+ * @returns null (renderless).
+ */
+function FirstTurnAutoOpenDefault(props: {
+  pluginSettings: Record<string, unknown>
+  updatePluginSetting: (key: string, value: unknown) => void
+}): null {
+  const { pluginSettings, updatePluginSetting } = props
+  React.useEffect(() => {
+    if (pluginSettings[AUTO_OPEN_SETTING_KEY] === undefined) {
+      updatePluginSetting(AUTO_OPEN_SETTING_KEY, true)
+    }
+  }, [pluginSettings, updatePluginSetting])
+  return null
+}
+
 export const inject = ['sessions', 'uiConversation', 'betterSidebar']
 
 /**
@@ -146,6 +174,16 @@ export function apply(ctx: {
           desc: () => t(detectLang(), 'autoOpenDesc') as string,
         },
       ],
+      // Declarative rows have no default: this renderless panel persists the
+      // documented ON default the first time the popup opens (see the
+      // component above), so the switch is not shown OFF while the feature runs.
+      render: (props: {
+        pluginSettings?: Record<string, unknown>
+        updatePluginSetting?: (key: string, value: unknown) => void
+      }) => React.createElement(FirstTurnAutoOpenDefault, {
+        pluginSettings: props.pluginSettings ?? {},
+        updatePluginSetting: props.updatePluginSetting ?? (() => {}),
+      }),
     },
     component: (props: {
       ctx: { get(name: string): unknown }

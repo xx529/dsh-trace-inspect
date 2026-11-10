@@ -515,7 +515,7 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 现在这个 icon 和数字怎么又不对齐了 | v0.10.20 的 `line-height: 13px` 加在 `.ttl-turnMeta` 上；v0.10.25 把 chips 移出 meta 后它们继承回头部 18px 行高 → 数字偏上 1px。现在 `.ttl-mix` 自带 `line-height: 13px`（行盒在容器上，折叠/展开、换行后的每一行都成立） | `.ttl-mix` / `.ttl-mixCount` 计算行高均 `13px`；2× 像素量测图标墨迹中心 23.0 vs 数字 23.0（Δ0，铅笔 0.25 CSS px 为其字形不对称） |
 
 - 覆盖：折叠态、展开态、窄面板多行 chips；右侧 `.ttl-turnMeta`（徽标 / `N 步` / chevron）规则不变。
-- 门禁：`pnpm typecheck` 0；`pnpm test` **570 例 / 22 文件**；`pnpm build` 通过。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **576 例 / 22 文件**；`pnpm build` 通过。
 - 采集脚本：`scripts/verify/shoot-turnhead-mix.mjs`（新增 mix/count line-height 指标与 2× 像素对齐量测）。
 - 已知偏差：mock 会话；铅笔等不对称字形的墨迹中心天然略有偏差（≤0.25 CSS px）。
 
@@ -529,7 +529,7 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 不能影响新消息/筛选 | 新事件（follow-latest）、切换筛选/搜索时先释放临时 padding，再按原逻辑滚动 | 回归用例覆盖释放路径；0 console error |
 
 - 说明：收起「列表末尾的长展开项」时，卡片不动在几何上必然表现为卡片下方留白（内容已折叠），该留白为临时状态。
-- 门禁：`pnpm typecheck` 0；`pnpm test` **571 例 / 22 文件**；`pnpm build` 通过。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **576 例 / 22 文件**；`pnpm build` 通过。
 - 采集脚本：`scripts/verify/shoot-scroll-anchor.mjs`（18 轮 × 18 步 mock，收起前后量卡片 top / scrollTop / padding，并用真实滚轮验证释放）。
 - 已知偏差：mock 会话；`scrollTop` 被撑住期间若收到新事件，会按 follow-latest 恢复到底部（正常行为）。
 
@@ -543,7 +543,7 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 放大浮层 | 同规则；⌘C：摘要在 shell 步复制命令，原始页复制参数 | zoom tabs = 摘要 / 原始 |
 | 失败 / 合并 | 错误名/码块与「Merged from N results」提示都进摘要 | 契约用例更新后全绿 |
 
-- 门禁：`pnpm typecheck` 0；`pnpm test` **570 例 / 22 文件**；`pnpm build` 通过。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **576 例 / 22 文件**；`pnpm build` 通过。
 - 采集脚本：`scripts/verify/shoot-detail-tabs.mjs`（mock `read` + Markdown 结果，量页签、摘要内容、原始页与浮层页签）。
 - 已知偏差：删除「参数」页后，参数只能看格式化 JSON（不可逐层折叠的树），wire 原文仍可在「原始」页查看。
 
@@ -674,7 +674,7 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 颜色点与文本/数字距离太紧凑，参考原图例 | item 间距 12px、圆点↔文字 6px（原图例 5px 基础上略松）；名称与数字统一界面 sans、10.5px、同一颜色（默认 tertiary，选中 primary），去掉等宽小字号暗色数字 | `● bash 2` 与旧图例 `● bash 635` 的间距/字重/颜色一致 |
 
 - 结构不变：`.ttl-summaryFilters`（内嵌 `data-testid="ttl-chips"`）一行完成「聚合 + 点击筛选」；`全部 = 失败 + 家族合计`。
-- 门禁：`pnpm typecheck` 0；`pnpm test` **570 例 / 22 文件**；`pnpm build` 通过。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **576 例 / 22 文件**；`pnpm build` 通过。
 - 采集脚本：`scripts/verify/shoot-summary-chips.mjs`（同一脚本复核一行 chips、恒等式、点击筛选与选中态）。
 
 ![一行家族筛选项：无胶囊/无下划线，间距与字体对齐原图例](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0138-summary-chips.jpg)
@@ -687,7 +687,7 @@ node scripts/verify/shoot-extra.mjs --port 19487
 
 | 决策点 | 实现 |
 | --- | --- |
-| 触发时机 | 会话**第一轮**开始：client `sessions.list` 行仍为 `blank: true`（未开始过轮次）时 arm，随后该行 `blank→false` / `running→true`，或已 retain 会话的 `session`/`eventSource` feed 触发，最后用插件自己的 `POST /trace-inspect/api/events {afterSeq:0}` 确认 durable log 已写入事件 |
+| 触发时机 | 会话**第一轮**开始：client `sessions.list` 行仍为 `blank: true`（未开始过轮次）时 arm，随后该行 `blank→false` / `running→true`，或已 retain 会话的 `session`/`eventSource` feed 触发，最后用插件自己的 `POST /trace-inspect/api/events {afterSeq:0}` 确认 durable log 已写入**轮次证据**（`user/message` 或 `turn/start`；创建期 `sandbox/mode`/`approval/policy` 不算，见下方「实机校验」） |
 | 只弹一次 | 每个会话触发即上锁（内存 latch）；手动关 tab / 收起右栏不再弹；切走再切回不重复；有历史的会话永不 arm |
 | 打开方式 | `ctx.betterSidebar.openTab({ type:'trace-inspect' }, { sessionId })` → better-sidebar 0.30 原生面 → DSH 右侧栏；宿主每次 open 都会展开该列（不为看不到的列开内容），插件再 `isExpanded()===false → toggleExpanded()` 兜底 |
 | 开关 | `descriptor.settings.pluginToggles['autoOpenFirstTurn']`（switch，默认开）→ prefs `pluginSettings['trace-inspect']`；插件级用 `betterSidebar.getSnapshot().prefs` 读 |
@@ -696,5 +696,35 @@ node scripts/verify/shoot-extra.mjs --port 19487
 | 竞态 | 原生 tab 类型未注册时 `sidebarRightTabs.get('trace-inspect')` 探测失败 → 400ms×5 重试；open throw（无上屏 surface）吞掉，绝不弹错误条 |
 
 - 代码：`src/client/auto-open.ts`（新，watcher + 纯谓词 `armDecisionOf`）、`src/client/index.tsx`（`settings.pluginToggles` + `ctx.effect(() => installFirstTurnAutoOpen(ctx))`）、`src/client/locales.ts`（中英开关文案）。
-- 单测：`tests/client-auto-open.spec.ts` **18 例**（arm/skip/unknown 谓词；空白会话→首轮事件→只开一次；历史会话不探测；切会话重新 arm；未发布列表行单次探针；探针失败保持 pending；三条门控在触发时判定；已展开列不 toggle / 收起列兜底展开；原生类型注册竞态重试；传输失败保持 armed；dispose 不触发）+ `tests/client-apply.spec.tsx` 1 例（`pluginToggles` 契约）。
-- 门禁：`pnpm typecheck` 0；`pnpm test` **570 例 / 22 文件**；`pnpm build`（含 bundle 契约检查）通过。
+- 单测：`tests/client-auto-open.spec.ts` **23 例**（arm/skip/unknown 谓词；空白会话→首轮事件→只开一次；历史会话不探测；切会话重新 arm；未发布列表行单次探针；探针失败保持 pending；三条门控在触发时判定；已展开列不 toggle / 收起列兜底展开；原生类型注册竞态重试；传输失败保持 armed；dispose 不触发）+ `tests/client-apply.spec.tsx` 1 例（`pluginToggles` 契约）。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **576 例 / 22 文件**；`pnpm build`（含 bundle 契约检查）通过。
+
+### 实机校验（2026-11-10，独立 web 实例）
+
+- 环境：`DSH_HOME=/tmp/verify/dsh-home7 dsh --profile trace-verify --no-open --port 19497`（profile 的 `node_modules/dsh-trace-inspect` 是仓库 symlink，直接加载构建产物），DSH 0.2.2-rc.1 + better-sidebar 0.30.1，Chromium 1440×1000@2x dark zh-CN。
+- **第一轮实测暴露的两个缺陷（已修）**：
+  1. 新会话出生即非空日志：`POST /trace-inspect/api/events {afterSeq:0}` 在新会话上返回 `sandbox/mode`(seq1) + `approval/policy`(seq2)，原确认门「有事件就开」导致面板在 `0 轮 · 0 步` 时就自动展开（发送前后 `expandedChangedByTheTurn=false`）。修复：确认门只认 `user/message`/`turn/start`（`hasFirstTurnEvidence`），创建期事件只保持 armed。
+  2. 声明式开关无默认值：`pluginSettings['trace-inspect'].autoOpenFirstTurn` 缺席时行渲染 `checked=false`，与「默认开」的实现相反。修复：`settings.render` 挂一个 renderless 面板，在设置弹窗首次打开时把 `true` 写进插件自己的 blob。
+- 结论（修复后复跑，**5/5 PASS**，exit 0，42.58s）：① 首轮前右栏折叠（`baseline.png`），发首条消息后由该轮触发展开并落到「轮次轨迹」（`positive.png`，`expandedChangedByTheTurn=true`、`prematureOpen=false`）；② 有历史的会话 reload 不弹（`negative.png`）；③ 设置页「首轮自动打开」渲染为已勾选（`settings.png`，默认值已物化）；④ 关掉开关后新会话首轮不弹（`switch-off.png`，7 次采样右栏始终折叠）；⑤ 0 console / 0 pageerror。
+- 复跑要求：全新隔离 `DSH_HOME`（item ③/④ 会持久化开关状态）+ 全新浏览器上下文；**时序断言**必须包含「发送前 `expanded=false`、发送后才 `expanded=true`」，不能用「打开着」充当 PASS。
+
+## 51. v0.10.40 首轮自动打开：E2E 暴露的两个缺陷
+
+| 现象（E2E） | 根因 | 修复 | 复测 |
+| --- | --- | --- | --- |
+| 面板在 `0 轮 · 0 步` 的新会话上**提前弹出**：goto 后 1.99s 右栏就展开，发送前后 `expandedChangedByTheTurn=false` | DSH 0.2.2 的新会话**出生即非空日志**：创建瞬间写入 `sandbox/mode`(seq1) + `approval/policy`(seq2)（`POST /trace-inspect/api/events {afterSeq:0}` 实测）。确认门原判据是「page 里有事件」→ 会话创建时就通过；once 闩锁随即吞掉真正首轮 | 新增 `hasFirstTurnEvidence(events)`：只认 `user/message` / `turn/start`；确认门与「列表行未发布」的 settle 探针都用它——只有 housekeeping 的日志 = 空白会话（继续 armed），有轮次 = 历史（skip） | PASS：6s 静置 + 首轮前采样均 `ttlRoot=false`；发送后 `expandedChangedByTheTurn=true` |
+| 默认开启的开关在设置页渲染成**未勾选**（`INPUT.checked=false`） | better-sidebar `SidebarSettingToggle` 没有 `default` 字段，声明式开关行读 `pluginSettings[id][key] === true`，值缺席即 unchecked；而实现把「缺席」当 ON | `settings.render` 挂 renderless 面板 `FirstTurnAutoOpenDefault`：设置弹窗首次打开时把 `true` 写进插件自己的 blob（不改 better-sidebar、不写宿主 prefs） | PASS：`INPUT.checked=true`，与同页 better-sidebar 原生开关视觉一致 |
+| （顺带）原生 tab 类型注册竞态的重试预算只在插件装载时初始化一次 | 第二个会话遇到竞态时 `retriesLeft` 已耗尽 → 不重试 | 每次 `arm()` 重置 `retriesLeft = TAB_READY_RETRIES` | 单测覆盖 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **576 例 / 22 文件**；`pnpm build`（含 bundle 契约检查）通过。
+- 实机：独立 `dsh web` 实例（`DSH_HOME=/tmp/verify/dsh-home15 dsh --profile trace-verify --no-open --port 19505`，profile 的 `dsh-trace-inspect` 为仓库 symlink；DSH 0.2.2-rc.1 + better-sidebar 0.30.1），被测构建 `lib/client.js` 281566B / sha256 `6a155604…`；脚本 `scripts/verify/auto-open-first-turn.mjs`（652 行，`--port/--url/--server-log/--home/--out/--message`，失败 exit 2）。
+
+![首轮前：新会话 0 轮，右栏保持折叠](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0140-autoopen-baseline.png)
+
+![发出第一条消息后：右栏自动展开并落到「轮次轨迹」](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0140-autoopen-positive.png)
+
+![侧边卡片设置里的「首轮自动打开」，默认即勾选](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0140-autoopen-settings.png)
+
+![关掉开关后，新会话首轮不再自动弹出](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0140-autoopen-switchoff.png)
+
+- 脚本：`scripts/verify/auto-open-first-turn.mjs`（`--port/--url/--server-log/--out/--message`，失败 exit 2）；产物 `/tmp/verify/autoopen/`（`baseline/positive/negative/settings.png` + `metrics.json` + `control-experiment.md`）。

@@ -92,6 +92,10 @@ interface Descriptor {
       title: () => string
       desc?: () => string
     }>
+    render?: (props: {
+      pluginSettings?: Record<string, unknown>
+      updatePluginSetting?: (key: string, value: unknown) => void
+    }) => unknown
   }
 }
 
@@ -167,6 +171,25 @@ describe('client apply — registration entry', () => {
     expect(toggles[0]?.type).toBe('switch')
     expect(toggles[0]?.title()).toBe('首轮自动打开')
     expect(toggles[0]?.desc?.()).toContain('新对话')
+  })
+
+  it('ships a renderless panel that materialises the default ON value', () => {
+    // better-sidebar's declarative switch rows have no `default` field: they
+    // render `pluginSettings[id][key] === true`, so an absent value shows the
+    // feature as OFF while the plugin runs it. The popup must therefore seed
+    // the documented default once; this panel exists for exactly that.
+    const registerTab = vi.fn(() => () => {})
+    apply(makeCtx('service', registerTab).ctx)
+    const descriptor = descriptorOf(registerTab as ReturnType<typeof vi.fn>)
+    const render = descriptor.settings?.render
+    expect(typeof render).toBe('function')
+    const element = render?.({ pluginSettings: {}, updatePluginSetting: () => {} }) as {
+      type: unknown
+      props: { pluginSettings: Record<string, unknown>; updatePluginSetting: unknown }
+    }
+    expect(element.type).toBeTypeOf('function')
+    expect(element.props.pluginSettings).toEqual({})
+    expect(element.props.updatePluginSetting).toBeTypeOf('function')
   })
 })
 

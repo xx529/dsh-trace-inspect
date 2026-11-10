@@ -21,6 +21,7 @@ import {
   AUTO_OPEN_SETTING_KEY,
   AUTO_OPEN_TAB_ID,
   armDecisionOf,
+  hasFirstTurnEvidence,
   installFirstTurnAutoOpen,
   type AutoOpenCtxLike,
 } from '../src/client/auto-open'
@@ -256,6 +257,27 @@ describe('armDecisionOf — the pure arming probe', () => {
   })
 })
 
+describe('hasFirstTurnEvidence — a started turn, not session setup', () => {
+  /** The two housekeeping events DSH 0.2.2 writes when a session is created. */
+  const BIRTH = [
+    { seq: 1, type: 'sandbox/mode' },
+    { seq: 2, type: 'approval/policy' },
+  ]
+
+  it('rejects a log that only holds creation housekeeping', () => {
+    expect(hasFirstTurnEvidence(BIRTH)).toBe(false)
+    expect(hasFirstTurnEvidence([])).toBe(false)
+    expect(hasFirstTurnEvidence(undefined)).toBe(false)
+    expect(hasFirstTurnEvidence('nope')).toBe(false)
+  })
+
+  it('accepts a user message or a turn boundary', () => {
+    expect(hasFirstTurnEvidence([...BIRTH, { seq: 3, type: 'user/message' }])).toBe(true)
+    expect(hasFirstTurnEvidence([{ seq: 1, type: 'turn/start' }])).toBe(true)
+    expect(hasFirstTurnEvidence([{ seq: 1 }, null, 'x', { seq: 2, type: 7 }])).toBe(false)
+  })
+})
+
 describe('installFirstTurnAutoOpen — inert paths', () => {
   it('stays inert without a usable betterSidebar service', () => {
     const ctx: AutoOpenCtxLike = {
@@ -279,7 +301,7 @@ describe('installFirstTurnAutoOpen — the first-turn trigger', () => {
     const h = makeHarness({
       mounted: 'sess-new',
       rows: { 'sess-new': { blank: true } },
-      events: { 'sess-new': [{ seq: 1, type: 'user/message' }] },
+      events: { 'sess-new': [{ seq: 3, type: 'user/message' }] },
     })
     // Blank at mount: armed, but nothing opened yet.
     expect(h.openTab).not.toHaveBeenCalled()
@@ -297,7 +319,7 @@ describe('installFirstTurnAutoOpen — the first-turn trigger', () => {
     const h = makeHarness({
       mounted: 'sess-old',
       rows: { 'sess-old': { blank: false, running: false } },
-      events: { 'sess-old': [{ seq: 1 }] },
+      events: { 'sess-old': [{ seq: 3, type: 'user/message' }] },
     })
     h.setRows({ 'sess-old': { blank: false, running: true } })
     h.timers.run()
@@ -310,7 +332,7 @@ describe('installFirstTurnAutoOpen — the first-turn trigger', () => {
     const h = makeHarness({
       mounted: 'sess-a',
       rows: { 'sess-a': { blank: true } },
-      events: { 'sess-a': [{ seq: 1 }] },
+      events: { 'sess-a': [{ seq: 3, type: 'user/message' }] },
     })
     h.setRows({ 'sess-a': { blank: false, running: true } })
     h.timers.run()
@@ -329,7 +351,7 @@ describe('installFirstTurnAutoOpen — the first-turn trigger', () => {
     const h = makeHarness({
       mounted: 'sess-old',
       rows: { 'sess-old': { blank: false }, 'sess-new': { blank: true } },
-      events: { 'sess-old': [{ seq: 1 }], 'sess-new': [{ seq: 1, type: 'turn/start' }] },
+      events: { 'sess-old': [{ seq: 3, type: 'user/message' }], 'sess-new': [{ seq: 3, type: 'turn/start' }] },
     })
     h.setMounted('sess-new')
     await flush()
@@ -349,17 +371,58 @@ describe('installFirstTurnAutoOpen — the first-turn trigger', () => {
     expect(h.fetchEvents).toHaveBeenCalledWith('sess-fresh', 0)
     expect(h.openTab).not.toHaveBeenCalled()
     // The first turn lands in the durable log and the feed reports activity.
-    h.setEvents('sess-fresh', [{ seq: 1, type: 'turn/start' }])
+    h.setEvents('sess-fresh', [{ seq: 3, type: 'turn/start' }])
     h.emitSessionEvent('sess-fresh')
     h.timers.run()
     await flush()
     expect(h.openTab).toHaveBeenCalledWith({ type: AUTO_OPEN_TAB_ID }, { sessionId: 'sess-fresh' })
   })
 
+  it('does NOT open on session-creation housekeeping events (regression)', async () => {
+    // Live 0.2.2-rc.1 finding: a brand-new conversation's log already holds
+    // `sandbox/mode` + `approval/policy`. "Has events" must never be mistaken
+    // for "first turn started" — that popped the panel on a 0-turn session.
+    const h = makeHarness({
+      mounted: 'sess-birth',
+      rows: { 'sess-birth': { blank: true } },
+      events: { 'sess-birth': [{ seq: 1, type: 'sandbox/mode' }, { seq: 2, type: 'approval/policy' }] },
+    })
+    // Creation activity signals the confirm probe — it must stay armed.
+    h.emitSessionEvent('sess-birth')
+    h.timers.run()
+    await flush()
+    expect(h.fetchEvents).toHaveBeenCalled()
+    expect(h.openTab).not.toHaveBeenCalled()
+    // The real first prompt lands: now the watch fires.
+    h.setEvents('sess-birth', [
+      { seq: 1, type: 'sandbox/mode' },
+      { seq: 2, type: 'approval/policy' },
+      { seq: 3, type: 'user/message' },
+    ])
+    h.setRows({ 'sess-birth': { blank: false, running: true } })
+    h.timers.run()
+    await flush()
+    expect(h.openTab).toHaveBeenCalledWith({ type: AUTO_OPEN_TAB_ID }, { sessionId: 'sess-birth' })
+  })
+
+  it('arms an unpublished session whose log holds only housekeeping events', async () => {
+    const h = makeHarness({
+      mounted: 'sess-birth2',
+      events: { 'sess-birth2': [{ seq: 1, type: 'sandbox/mode' }, { seq: 2, type: 'approval/policy' }] },
+    })
+    await flush()
+    // Not history: the settling probe armed instead of skipping.
+    h.setEvents('sess-birth2', [{ seq: 1, type: 'sandbox/mode' }, { seq: 3, type: 'user/message' }])
+    h.emitSessionEvent('sess-birth2')
+    h.timers.run()
+    await flush()
+    expect(h.openTab).toHaveBeenCalledWith({ type: AUTO_OPEN_TAB_ID }, { sessionId: 'sess-birth2' })
+  })
+
   it('skips a session whose unpublished row turns out to have history', async () => {
     const h = makeHarness({
       mounted: 'sess-history',
-      events: { 'sess-history': [{ seq: 7 }] },
+      events: { 'sess-history': [{ seq: 7, type: 'user/message' }] },
     })
     await flush()
     expect(h.fetchEvents).toHaveBeenCalledTimes(1)
@@ -373,7 +436,7 @@ describe('installFirstTurnAutoOpen — the first-turn trigger', () => {
     const h = makeHarness({
       mounted: 'sess-x',
       rows: { 'sess-x': { blank: true } },
-      events: { 'sess-x': [{ seq: 1 }] },
+      events: { 'sess-x': [{ seq: 3, type: 'user/message' }] },
     })
     h.setRows({ 'sess-x': { blank: false, running: true } })
     h.timers.run()
@@ -383,11 +446,29 @@ describe('installFirstTurnAutoOpen — the first-turn trigger', () => {
     expect(h.toggleExpanded).not.toHaveBeenCalled()
   })
 
+  it('does not fall back to the store session while the native column reports no seat', async () => {
+    // A present `mounted` observable is authoritative even when it says "no
+    // session" (a global panel): the store's session must not be armed there,
+    // or the native open would land behind a session nobody is looking at.
+    const h = makeHarness({
+      mounted: undefined,
+      storeSessionId: 'sess-store',
+      rows: { 'sess-store': { blank: true } },
+      events: { 'sess-store': [{ seq: 3, type: 'user/message' }] },
+    })
+    await flush()
+    expect(h.fetchEvents).not.toHaveBeenCalled()
+    h.setRows({ 'sess-store': { blank: false, running: true } })
+    h.timers.run()
+    await flush()
+    expect(h.openTab).not.toHaveBeenCalled()
+  })
+
   it('expands a collapsed column itself when the host open did not (fallback)', async () => {
     const h = makeHarness({
       mounted: 'sess-collapsed',
       rows: { 'sess-collapsed': { blank: true } },
-      events: { 'sess-collapsed': [{ seq: 1 }] },
+      events: { 'sess-collapsed': [{ seq: 3, type: 'user/message' }] },
       expanded: false,
     })
     h.setRows({ 'sess-collapsed': { blank: false, running: true } })
@@ -403,7 +484,7 @@ describe('installFirstTurnAutoOpen — gates', () => {
     const h = makeHarness({
       mounted: 'sess-s',
       rows: { 'sess-s': { blank: true } },
-      events: { 'sess-s': [{ seq: 1 }] },
+      events: { 'sess-s': [{ seq: 3, type: 'user/message' }] },
       pluginSettings: { [AUTO_OPEN_SETTING_KEY]: false },
     })
     h.setRows({ 'sess-s': { blank: false, running: true } })
@@ -416,7 +497,7 @@ describe('installFirstTurnAutoOpen — gates', () => {
     const h = makeHarness({
       mounted: 'sess-d',
       rows: { 'sess-d': { blank: true } },
-      events: { 'sess-d': [{ seq: 1 }] },
+      events: { 'sess-d': [{ seq: 3, type: 'user/message' }] },
       pluginSettings: { someOtherKey: true },
     })
     h.setRows({ 'sess-d': { blank: false, running: true } })
@@ -429,7 +510,7 @@ describe('installFirstTurnAutoOpen — gates', () => {
     const h = makeHarness({
       mounted: 'sess-disabled',
       rows: { 'sess-disabled': { blank: true } },
-      events: { 'sess-disabled': [{ seq: 1 }] },
+      events: { 'sess-disabled': [{ seq: 3, type: 'user/message' }] },
       tabEnabled: false,
     })
     h.setRows({ 'sess-disabled': { blank: false, running: true } })
@@ -442,7 +523,7 @@ describe('installFirstTurnAutoOpen — gates', () => {
     const h = makeHarness({
       mounted: 'sess-narrow',
       rows: { 'sess-narrow': { blank: true } },
-      events: { 'sess-narrow': [{ seq: 1 }] },
+      events: { 'sess-narrow': [{ seq: 3, type: 'user/message' }] },
       viewportWidth: AUTO_OPEN_MIN_WIDTH - 1,
     })
     h.setRows({ 'sess-narrow': { blank: false, running: true } })
@@ -457,7 +538,7 @@ describe('installFirstTurnAutoOpen — robustness', () => {
     const h = makeHarness({
       mounted: 'sess-race',
       rows: { 'sess-race': { blank: true } },
-      events: { 'sess-race': [{ seq: 1 }] },
+      events: { 'sess-race': [{ seq: 3, type: 'user/message' }] },
       tabReady: (call) => call > 1, // registered only on the second probe
     })
     h.setRows({ 'sess-race': { blank: false, running: true } })
@@ -474,7 +555,7 @@ describe('installFirstTurnAutoOpen — robustness', () => {
     const h = makeHarness({
       mounted: 'sess-net',
       rows: { 'sess-net': { blank: true } },
-      events: { 'sess-net': [{ seq: 1 }] },
+      events: { 'sess-net': [{ seq: 3, type: 'user/message' }] },
       transportError: true,
     })
     h.setRows({ 'sess-net': { blank: false, running: true } })
@@ -488,7 +569,7 @@ describe('installFirstTurnAutoOpen — robustness', () => {
     const h = makeHarness({
       mounted: 'sess-dispose',
       rows: { 'sess-dispose': { blank: true } },
-      events: { 'sess-dispose': [{ seq: 1 }] },
+      events: { 'sess-dispose': [{ seq: 3, type: 'user/message' }] },
     })
     h.dispose()
     h.setRows({ 'sess-dispose': { blank: false, running: true } })

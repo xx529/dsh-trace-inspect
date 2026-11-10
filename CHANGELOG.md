@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.40] - 2026-11-10
+
+### Fixed
+
+- **首轮自动打开会提前弹出（P1，E2E 抓到）**：面板在 `0 轮 · 0 步` 的新会话上就自己展开了，发送首条消息前后无变化。根因：DSH 0.2.2 的新会话**出生即非空日志**——创建瞬间写入 `sandbox/mode`(seq1) + `approval/policy`(seq2)（`POST /trace-inspect/api/events {afterSeq:0}` 实测），而确认门原判据是「这一页里有事件」，会话创建时就已满足；once-per-session 闩锁随即把真正首轮吞掉。修复：新增 `hasFirstTurnEvidence(events)`，只认 `user/message` 与 `turn/start`；确认门和「列表行未发布」的 settle 探针共用它——只有 housekeeping 的日志算空白会话（继续 armed），已出现轮次才算历史（skip）。
+- **默认开启的开关显示成关闭**：better-sidebar 的声明式开关行（`SidebarSettingToggle`）没有 `default` 字段，读的是 `pluginSettings[<id>][key] === true`，值缺席即渲染为未勾选；而实现把「缺席」当 ON，于是出现「显示关着、实际在跑」。修复：`settings.render` 挂一个 renderless 面板 `FirstTurnAutoOpenDefault`，在设置弹窗首次打开时把默认值 `true` 写进插件自己的 blob——不改 better-sidebar、不写宿主 prefs，开关从第一次打开就是勾选状态。
+- **每个会话重置原生 tab 注册重试预算**：重试预算只在插件装载时初始化一次，第二个会话遇到「原生类型尚未注册」的竞态时已耗尽、不再重试；改为每次 `arm()` 重置。
+
+### Verification
+
+- 单测 **576 例 / 22 文件** 全绿（`tests/client-auto-open.spec.ts` 23 例 + `client-apply` 2 例，新增 housekeeping 事件回归、开关默认值面板、mounted 无上屏会话不回退 store 等用例）；`pnpm typecheck` 0；`pnpm build`（含 bundle 契约检查）通过。
+- 实机复跑 **5/5 PASS**（独立 `dsh web` 实例，隔离 `DSH_HOME`，`trace-verify` profile symlink 本仓库；DSH 0.2.2-rc.1 + better-sidebar 0.30.1；被测 `lib/client.js` 281566B / sha256 `6a155604…`）：① 首轮前右栏保持折叠（静置 6s 无 `ttl-root`），发首条消息后由该轮触发展开并落到「轮次轨迹」（`expandedChangedByTheTurn=true`、`prematureOpen=false`）；② 有历史的会话 reload 不弹；③ 设置页「首轮自动打开」渲染为已勾选（`INPUT.checked=true`）；④ 关掉开关后新会话首轮不弹（7 次采样右栏始终折叠）；⑤ 0 console / 0 pageerror。
+- 证据：`docs/assets/v0140-autoopen-{baseline,positive,settings,switchoff}.png`，脚本 `scripts/verify/auto-open-first-turn.mjs`（可复跑，失败 exit 2），细节见 `docs/verification-v09.md` §50–§51。
+
 ## [0.10.39] - 2026-11-10
 
 ### Added
