@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.42] - 2026-11-10
+
+### Fixed
+
+- **失败信息跑到「参数」上面**：摘要里错误块此前统一放在最前面，失败步骤看起来像「先报错、后参数」。现在错误块占用原「输出」的位置——**在参数之后**（shell / 文件 / MCP / 通用各家族一致）；MCP 失败时也优先显示错误块而不是文件列表，不会被文件列表顶掉。
+
+### Verification
+
+- 新增 1 例回归：错误块的 DOM 位置在 `ttl-params` 之后（`compareDocumentPosition`），且正文仍在。测试 **579 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（`trace-verify`，19487，dock 440，mock `rv_exec` 356 字符单行失败）：摘要顺序 = 参数 → 错误块（完整 356 字符），无重复输出；0 条 console error。截图 `docs/assets/v0142-error-order.jpg`，脚本 `scripts/verify/shoot-error-full.mjs`。
+
 ## [0.10.41] - 2026-11-10
 
 ### Fixed

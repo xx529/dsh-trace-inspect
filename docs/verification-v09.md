@@ -740,3 +740,15 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 采集脚本：`scripts/verify/shoot-error-full.mjs`（mock `rv_exec` 失败 + 超长成功输出，量错误块完整性/去重/展开）。
 
 ![失败详情：错误块完整显示整段报错，无重复输出](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0141-error-full.jpg)
+
+## 53. v0.10.42 失败信息排在参数之后
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| error 信息在参数上面了，应该在参数下面 | 错误块不再统一放在摘要开头，而是占用原「输出」区块的位置（参数之后）；shell / 文件 / MCP / 通用各家族一致；MCP 失败优先错误块，避免被文件列表顶掉 | 摘要顺序 = `参数` → `错误块`（356 字符完整），无重复输出 |
+| 不回归 v0.10.41 | 错误块仍是失败文本唯一展示位置，不截断；非失败长单行输出仍可「展开全文」 | 579 例全绿 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **579 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-error-full.mjs`（同一脚本复核错误完整性/去重/展开，并更新截图顺序）。
+
+![失败详情：参数在上，错误块在下](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0142-error-order.jpg)

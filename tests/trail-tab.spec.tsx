@@ -1218,6 +1218,26 @@ describe('TrailTab', () => {
     expect(screen.queryByTestId('ttl-outBlock')).toBeNull()
   })
 
+  it('the failure block sits AFTER the params, not above them (v0.10.42)', async () => {
+    renderTab([
+      user(1, 'docker ps'),
+      turnStart(2, 1),
+      toolCall(3, 'rv_exec', '{"command":"docker ps"}', 'c3'),
+      ev('tool/result', 4, {
+        callId: 'c3',
+        message: { isError: true, content: [{ type: 'text', text: 'Error: no remote workspace' }] },
+      }),
+      turnEnd(5, 1),
+    ])
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    const detail = await screen.findByTestId('ttl-detail')
+    const params = await screen.findByTestId('ttl-params')
+    const errorBlock = await screen.findByTestId('ttl-error-block')
+    // DOCUMENT_POSITION_FOLLOWING === 4: the error block follows the params.
+    expect(params.compareDocumentPosition(errorBlock) & 4).toBe(4)
+    expect(detail.textContent).toContain('Error: no remote workspace')
+  })
+
   it('a single-line output longer than the preview budget can be expanded in full (v0.10.40)', async () => {
     const line = `start ${'y'.repeat(300)} TAIL-OF-OUTPUT`
     renderTab([

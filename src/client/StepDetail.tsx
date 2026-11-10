@@ -832,8 +832,10 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
       }
       return fullText
     })()
+    // v0.10.42: the failure block takes the 输出 slot — i.e. AFTER the params —
+    // instead of sitting above everything in the summary.
     const output = (): React.ReactElement | null => isError
-      ? null
+      ? renderErrorHead()
       : (
         <OutputSection
           text={outputText}
@@ -862,7 +864,7 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
         <>
           <McpSection labels={labels} />
           {params()}
-          {files !== null ? <FilesSection entries={files} labels={labels} /> : output()}
+          {isError || files === null ? output() : <FilesSection entries={files} labels={labels} />}
           {loadBanner()}
         </>
       )
@@ -906,7 +908,6 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
 
   const renderSummary = (): React.ReactElement => (
     <>
-      {renderErrorHead()}
       {renderSummaryBody()}
       {mergedNote}
     </>
