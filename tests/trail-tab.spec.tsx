@@ -1196,6 +1196,50 @@ describe('TrailTab', () => {
     expect(screen.queryByTestId('ttl-error')).toBeNull()
   })
 
+  it('a long single-line failure is shown completely, without a duplicate 输出 block (v0.10.40)', async () => {
+    const longError = `Error: rw_exec: this session is LOCAL — ${'detail '.repeat(40)}END-OF-ERROR`
+    renderTab([
+      user(1, 'docker ps'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"docker ps"}', 'c3'),
+      ev('tool/result', 4, {
+        callId: 'c3',
+        message: { isError: true, content: [{ type: 'text', text: longError }] },
+      }),
+      turnEnd(5, 1),
+    ])
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    const errorBlock = await screen.findByTestId('ttl-error-block')
+    // The single place for the failure message carries the whole text…
+    expect(errorBlock.textContent).toContain(longError)
+    expect(errorBlock.textContent).toContain('END-OF-ERROR')
+    // …and the old 输出 preview that cut it off is not rendered for failures.
+    expect(screen.queryByTestId('ttl-outBlock')).toBeNull()
+  })
+
+  it('a single-line output longer than the preview budget can be expanded in full (v0.10.40)', async () => {
+    const line = `start ${'y'.repeat(300)} TAIL-OF-OUTPUT`
+    renderTab([
+      user(1, 'run'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"x"}', 'c3'),
+      toolResult(4, 'c3', line),
+      turnEnd(5, 1),
+    ])
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    const out = await screen.findByTestId('ttl-outBlock')
+    expect(out.textContent).not.toContain('TAIL-OF-OUTPUT')
+    // The old toggle only appeared when there were >20 lines; one long line
+    // was silently cut. It must be expandable now.
+    fireEvent.click(await screen.findByTestId('ttl-out-toggle'))
+    await waitFor(() => {
+      expect(screen.getByTestId('ttl-outBlock').textContent).toContain('TAIL-OF-OUTPUT')
+    })
+    expect(screen.getByTestId('ttl-outBlock').textContent).not.toContain('…')
+  })
+
   // ── v0.5.0 · image thumbnails (契约 §10.5.1) ───────────────────────────
 
   it('renders an image block as a lazy session-authorized thumbnail plus its metadata', async () => {

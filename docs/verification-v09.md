@@ -728,3 +728,15 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![关掉开关后，新会话首轮不再自动弹出](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0140-autoopen-switchoff.png)
 
 - 脚本：`scripts/verify/auto-open-first-turn.mjs`（`--port/--url/--server-log/--out/--message`，失败 exit 2）；产物 `/tmp/verify/autoopen/`（`baseline/positive/negative/settings.png` + `metrics.json` + `control-experiment.md`）。
+
+## 52. v0.10.41 失败详情完整显示报错
+
+| 反馈 | 原因 | 方案 | 实测 |
+| --- | --- | --- | --- |
+| 报错内容现在无法完整显示 | 失败步同时渲染「错误块（完整）」与「输出块（240 字符单行截断）」；而「展开全文」只在 >20 行出现，长单行报错被切且无法展开 | 错误块成为唯一展示位置并展示完整文本（无结果文本时回退 `step.error`）；失败步不再渲染重复的「输出」区块；非失败的超长单行输出也出现「展开全文」 | 356 字符单行报错：错误块 `hasTail=true`、全文 356 字符、无 `ttl-outBlock`；超长单行成功输出：出现 `ttl-out-toggle`，展开后含尾串且无 `…` |
+| 不误伤正常输出 | — | `OutputSection` 去掉 error 分支；`clipped = 行数>20 || 任一行>240` 才给展开按钮，展开后完整换行 | 全部既有输出/详情用例通过 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **578 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-error-full.mjs`（mock `rv_exec` 失败 + 超长成功输出，量错误块完整性/去重/展开）。
+
+![失败详情：错误块完整显示整段报错，无重复输出](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0141-error-full.jpg)

@@ -473,7 +473,6 @@ function CommandSection(props: {
 function OutputSection(props: {
   text: string
   labels: StepLabels
-  error: boolean
   /** v0.10.26: image blocks (e.g. `read_image`) render as real thumbnails. */
   images?: readonly TrailResultImage[]
   sessionId?: string
@@ -481,17 +480,19 @@ function OutputSection(props: {
   /** v0.10.29: markdown results render as Markdown (was the 结果 tab's job). */
   markdown?: boolean
 }): React.ReactElement | null {
-  const { text, labels, error, images = [], sessionId, lang, markdown = false } = props
+  const { text, labels, images = [], sessionId, lang, markdown = false } = props
   const [expanded, setExpanded] = React.useState(false)
   const lines = React.useMemo(() => {
     // JSON / JSONL results are pretty-printed first; the preview clamp then
     // shows real indentation instead of one dense line.
-    const source = error ? text : (prettyJsonText(text) ?? text)
+    const source = prettyJsonText(text) ?? text
     const normalized = source.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
     return normalized.length === 0 ? [] : normalized.split('\n')
-  }, [text, error])
+  }, [text])
   if (lines.length === 0 && images.length === 0) return null
   const shown = expanded ? lines : lines.slice(0, OUT_PREVIEW_LINES)
+  /** v0.10.40: one long single line is clipped too — it must be expandable. */
+  const clipped = lines.length > OUT_PREVIEW_LINES || lines.some((line) => line.length > OUT_LINE_MAX)
   return (
     <section className="ttl-section">
       <div className="ttl-sectionHead">
@@ -499,7 +500,7 @@ function OutputSection(props: {
         <span className="ttl-sectionMeta">
           {`${formatSize(utf8Bytes(text))} · ${labels.lines(lines.length)}`}
         </span>
-        {lines.length > OUT_PREVIEW_LINES
+        {clipped
           ? (
             <button
               type="button"
@@ -511,10 +512,10 @@ function OutputSection(props: {
           )
           : null}
       </div>
-      {markdown && !error && lang !== undefined
+      {markdown && lang !== undefined
         ? <MarkdownResult text={text} labels={markdownLabels(lang)} />
         : (
-          <div className={`ttl-outBlock${error ? ' ttl-outBlockError' : ''}`} data-testid="ttl-outBlock">
+          <div className="ttl-outBlock" data-testid="ttl-outBlock">
             {shown.map((line, index) => {
               const rendered = !expanded && line.length > OUT_LINE_MAX ? `${line.slice(0, OUT_LINE_MAX)}…` : line
               return <div className="ttl-outLine" key={index}>{rendered.length === 0 ? '\u00a0' : rendered}</div>
@@ -789,12 +790,16 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
     if (!isError) return null
     const errorName = detail?.error?.name ?? result?.errorName ?? step.name
     const errorCode = detail?.error?.code ?? result?.errorCode ?? step.errorCode
+    // v0.10.40: this block is the ONE place the failure message is shown, so
+    // it must carry the whole text (a long single-line error used to be cut
+    // off by the 输出 preview underneath). The duplicate 输出 block is gone.
+    const errorText = fullText.length > 0 ? fullText : step.error
     return (
       <div className="ttl-errorBlock" data-testid="ttl-error-block">
         <div className="ttl-errorName" data-testid="ttl-error-name">
           {errorCode !== undefined ? `${errorName} · ${errorCode}` : errorName}
         </div>
-        {fullText.length > 0 ? <RawText text={fullText} /> : null}
+        {errorText.length > 0 ? <RawText text={errorText} /> : null}
       </div>
     )
   }
@@ -827,17 +832,18 @@ export function StepDetail(props: StepDetailProps): React.ReactElement {
       }
       return fullText
     })()
-    const output = (): React.ReactElement | null => (
-      <OutputSection
-        text={outputText}
-        labels={labels}
-        error={isError}
-        images={fullImages}
-        sessionId={sessionId}
-        lang={lang}
-        markdown={!isError && detectOutputKind(outputText) === 'markdown'}
-      />
-    )
+    const output = (): React.ReactElement | null => isError
+      ? null
+      : (
+        <OutputSection
+          text={outputText}
+          labels={labels}
+          images={fullImages}
+          sessionId={sessionId}
+          lang={lang}
+          markdown={detectOutputKind(outputText) === 'markdown'}
+        />
+      )
 
     if (family === 'shell' && commandText.length > 0) {
       return (
