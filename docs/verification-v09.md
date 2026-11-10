@@ -650,3 +650,18 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 采集脚本：`scripts/verify/shoot-error-stats.mjs`（mock 2 轮 7 步，量徽标/chip/概览/图例与恒等式）。
 
 ![失败统计一致：轮次 ⚠2 = 工具栏失败 2 = 概览 2 失败，图例 5 项](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0136-error-stats.jpg)
+
+## 48. v0.10.37 筛选与聚合合并为一行家族 chip
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 上下两部分语义重复；把聚合统计和点击筛选都放进下面概览 | 删除头部筛选条（全部/失败/top 工具/⋯）与概览图例行；概览块 = `步数·轮数 / 失败 / 时长` + 分布条 + **一行图例式筛选项**：`全部 N`、`失败 F`、每个工作家族一项（dot + 名称 + 计数），视觉沿用原图例（无白底/无胶囊，选中下划线 + 提亮）。点家族 chip 按家族筛选（`bash`=shell；`read` 覆盖 `read`/`read_image`…），计数只含健康步，`全部 = 失败 + 家族合计` | 只剩一行：全部9 / 失败1 / bash2 / read2 / edit1 / mcp1 / figma1 / skill1（8+1=9）；无 `.ttl-legend`、头部无筛选条；点 bash → 2 行且 `aria-pressed=true` |
+| 避免再出现两处数字不一致 | 「失败」筛选改用 `kind==='error' \|\| result.isError`（与行/徽标/全局统计同一谓词）；移除 ⋯ 工具下拉 | 0 console error；既有 chip 测试改家族语义后全绿 |
+
+- 结构：`.ttl-summaryFilters`（内嵌 `data-testid="ttl-chips"`）位于 `.ttl-summary` 内、`.ttl-dist` 之下；重置了 `.ttl-chip` 的底色/边框（透明、无胶囊），族色 dot 复用 `.ttl-legendDot` + `.ttl-ink-*`。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **551 例 / 21 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-summary-chips.mjs`（量一行 chips、恒等式、无图例/头部条、点击筛选结果）。
+
+![概览一行：全部/失败 + 每个家族的点击筛选 chip](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0137-summary-chips.jpg)
+
+![点击 bash 家族后只显示 bash 行](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0137-summary-filtered.jpg)

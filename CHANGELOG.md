@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.37] - 2026-11-10
+
+### Changed
+
+- **筛选与聚合合并成一行**：原来头部有「全部 / 失败 / top 工具 / ⋯」筛选条，概览里又有一行分布图例（同样的数字出现两次）。现在只保留概览块：`全部 N · 失败 F` + 每个工作家族一颗 **可点击** 图例项（`● bash 615` / `● read 37` / `● edit 18` / `● mcp 24` / `● figma 3` / `● skill 2` / `● 其他 4`）。视觉沿用原图例：**无胶囊/白底**，圆点 + 名称 + 计数；选中项只用**下划线 + 提亮**表示，hover 不提底色。分布条仍在上面；图例行删除。
+- 家族 chip 点击按「工作家族」筛选（`bash` = shell 家族，`read` 同时覆盖 `read`/`read_image`…），计数与健康分布严格一致：`全部 = 失败 + 家族合计`；「失败」筛选也改用行/徽标同一谓词（含普通 `isError` 结果）。
+- 移除 `⋯` 更多工具下拉（家族 chip 已覆盖全部工具）；头部少一行，列表更早露出内容。
+
+### Verification
+
+- 测试 **551 例 / 21 文件** 全绿（既有 chip 测试改用家族 chip：`ttl-chip-bash` / `ttl-chip-read` 仍然有效）；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（独立 `trace-verify` web profile，19487，dock 440，mock 1 轮 9 步含 1 失败）：只剩一行图例式筛选项：`全部 9 / 失败 1 / bash 2 / read 2 / edit 1 / mcp 1 / figma 1 / skill 1`（8 个家族 + 1 失败 = 9）；无胶囊底色，选中项为下划线+提亮；页面上没有 `.ttl-legend`、头部没有筛选条；点 `bash` 后仅 2 行 bash，chip `aria-pressed=true`；0 条 console error。截图 `docs/assets/v0137-summary-chips.jpg`、`docs/assets/v0137-summary-filtered.jpg`，脚本 `scripts/verify/shoot-summary-chips.mjs`。
+
 ## [0.10.36] - 2026-11-10
 
 ### Fixed

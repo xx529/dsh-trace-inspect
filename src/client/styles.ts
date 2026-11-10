@@ -852,7 +852,45 @@ export const trailCss = `
   scrollbar-width: none;
 }
 .ttl-filters::-webkit-scrollbar { display: none; }
-.ttl-chip {
+.ttl-summaryFilters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 5px;
+}
+/* v0.10.37: the merged row keeps the legend's quiet text look — no filled
+   chip backgrounds; the active filter is marked by an underline + brighter
+   text instead of a white pill. */
+.ttl-summaryFilters .ttl-chip {
+  height: 16px;
+  padding: 0;
+  gap: 5px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  font-size: 10.5px;
+}
+.ttl-summaryFilters .ttl-chip:hover {
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+}
+.ttl-summaryFilters .ttl-chipSelected {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #f3f4f6);
+  text-decoration: underline;
+  text-underline-offset: 2.5px;
+  text-decoration-color: var(--dsw-alias-label-secondary, #cfd3d6);
+  text-decoration-thickness: 1.5px;
+}
+.ttl-summaryFilters .ttl-chipSelected .ttl-chipCount { color: var(--dsw-alias-label-secondary, #cfd3d6); }
+.ttl-summaryFilters .ttl-chipCount { font-size: 10.5px; }
+.ttl-summaryFilters .ttl-chipDot { width: 5px; height: 5px; }
+.ttl-summaryFilters .ttl-legendDot { flex: none; }
+.ttl-familyChip { height: 16px; }
+
   box-sizing: border-box;
   flex: none;
   display: inline-flex;

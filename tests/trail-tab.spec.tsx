@@ -291,7 +291,10 @@ describe('TrailTab', () => {
     expect(summary?.querySelectorAll('.ttl-distSeg')).toHaveLength(1)
     expect(summary?.querySelector('.ttl-distSeg')?.className).toContain('ttl-ink-violet')
     expect(summary?.querySelector('.ttl-legendDot')?.className).toContain('ttl-ink-violet')
-    expect(summary?.querySelector('.ttl-legend')?.textContent).toContain('bash 2')
+    // v0.10.37: the legend IS the clickable chip row now (one row, no duplicate).
+    const bashChip = screen.getByTestId('ttl-chip-bash')
+    expect(bashChip.textContent).toContain('bash')
+    expect(bashChip.querySelector('.ttl-chipCount')?.textContent).toBe('2')
     // No wire timestamps in this fixture → no total duration is invented.
     expect(summary?.querySelector('.ttl-summaryDur')).toBeNull()
   })
@@ -316,7 +319,7 @@ describe('TrailTab', () => {
     const summary = document.querySelector('.ttl-summary') as HTMLElement | null
     expect(summary?.querySelector('.ttl-summaryFail')?.textContent).toBe('2 failed')
     // Failed rows are not double-counted in the tool distribution.
-    expect(summary?.querySelector('.ttl-legend')?.textContent).toContain('bash 1')
+    expect(screen.getByTestId('ttl-chip-bash').querySelector('.ttl-chipCount')?.textContent).toBe('1')
   })
 
   it('chips show counts; failed chip filters steps', async () => {

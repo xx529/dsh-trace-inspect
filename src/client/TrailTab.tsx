@@ -73,7 +73,6 @@ export interface TrailTabProps {
   fetchToolDetailOverride?: FetchToolDetail
 }
 
-/** `all` | `failed` | a raw tool name (the chips). */
 /** Tiny chat-bubble glyph for the assistant message block (12px, currentColor). */
 function messageIcon(): React.ReactElement {
   return React.createElement(
@@ -118,7 +117,15 @@ function groupThousands(n: number): string {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
+/** `all` | `failed` | `family:<ToolFamily>` (the summary chips). */
 type StepFilter = 'all' | 'failed' | string
+
+const FAMILY_FILTER_PREFIX = 'family:'
+
+function familyOfFilter(filter: StepFilter): ToolFamily | null {
+  if (!filter.startsWith(FAMILY_FILTER_PREFIX)) return null
+  return filter.slice(FAMILY_FILTER_PREFIX.length) as ToolFamily
+}
 
 /** Max step/items rows mounted per expanded turn (bounds the DOM). */
 const STEP_CAP = 250
@@ -279,9 +286,19 @@ function targetFor(item: TurnItem): JumpTarget {
 
 // ── Filter / search predicates (shared by the list and the turn card) ────
 
+function stepFailed(step: TrailStep): boolean {
+  return step.kind === 'error' || step.result?.isError === true
+}
+
 function stepMatchesFilter(step: TrailStep, filter: StepFilter): boolean {
   if (filter === 'all') return true
-  if (filter === 'failed') return step.kind === 'error'
+  if (filter === 'failed') return stepFailed(step)
+  const family = familyOfFilter(filter)
+  if (family !== null) {
+    // Successful rows only: the chip count comes from the healthy distribution.
+    if (stepFailed(step)) return false
+    return toolFamily(step.name, false) === family
+  }
   return step.kind === 'tool' && step.name === filter
 }
 
@@ -368,11 +385,6 @@ function familyLabel(family: ToolFamily, ui: UiStrings): string {
     case 'error': return 'error'
     default: return ui.others
   }
-}
-
-/** Short chip label: an MCP call shows its server (`figma`), not the wire name. */
-function toolChipLabel(name: string): string {
-  return summarizeToolCall(name, undefined, '').label
 }
 
 /** Span of one step from its wire timestamps — '' when either end is unknown. */
@@ -931,7 +943,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   const [activeTurnId, setActiveTurnId] = React.useState<string | null>(null)
   const [followLatest, setFollowLatest] = React.useState(true)
   const [followPaused, setFollowPaused] = React.useState(false)
-  const [moreToolsOpen, setMoreToolsOpen] = React.useState(false)
   const [showFullTurn, setShowFullTurn] = React.useState<Set<string>>(new Set())
   /** Expanded step seqs (inline detail band). Plain click opens exactly one. */
   const [openSeqs, setOpenSeqs] = React.useState<ReadonlySet<number>>(() => new Set<number>())
@@ -1006,12 +1017,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     }
     return { families, total, durationMs }
   }, [stats, turns])
-
-  const toolChips = stats.tools.slice(0, 3)
-  const hiddenTools = stats.tools.slice(4)
-  const hasMoreTools = hiddenTools.length > 0
-  /** A tool filter living behind the ⋯ chip keeps the chip selected. */
-  const hiddenToolSelected = isToolFilter && hiddenTools.some((tool) => tool.name === filter)
 
   // ── Follow-latest auto-scroll (rAF-coalesced; no forced reflow per burst) ─
   /** Drop the temporary bottom padding (never called while it would clamp). */
@@ -1425,31 +1430,40 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     </header>
   )
 
-  const chips = (
-    <>
-      <div className="ttl-filters" role="group" data-testid="ttl-chips">
-        {chipButton('all', t(lang, 'filterAll') as string, stats.total)}
-        {stats.failed > 0 ? chipButton('failed', t(lang, 'filterFailed') as string, stats.failed, 'red') : null}
-        {toolChips.map((tool) => chipButton(tool.name, toolChipLabel(tool.name), tool.count))}
-        {hasMoreTools
-          ? <button
-              type="button"
-              className={`ttl-chip ttl-moreChip${moreToolsOpen || hiddenToolSelected ? ' ttl-chipSelected' : ''}`}
-              aria-expanded={moreToolsOpen}
-              aria-label={t(lang, moreToolsOpen ? 'filterCollapse' : 'filterMore') as string}
-              title={hiddenToolSelected ? toolChipLabel(filter) : t(lang, moreToolsOpen ? 'filterCollapse' : 'filterMore') as string}
-              data-testid="ttl-chip-more"
-              onClick={() => { setMoreToolsOpen((current) => !current) }}
-            >⋯</button>
-          : null}
-      </div>
-      {moreToolsOpen && hasMoreTools
-        ? <div className="ttl-toolDropdown" data-testid="ttl-tool-dropdown">
-            {hiddenTools.map((tool) => chipButton(tool.name, toolChipLabel(tool.name), tool.count))}
-          </div>
-        : null}
-    </>
-  )
+  /** Stable testid suffix per family (labels are localized). */
+  const familySlug = (family: ToolFamily): string => {
+    if (family === 'shell') return 'bash'
+    if (family === 'generic') return 'other'
+    return family
+  }
+
+  /**
+   * v0.10.37: the overview bar and the filter chips used to repeat the same
+   * counts on two rows. The summary now owns ONE clickable row: 全部 / 失败 /
+   * one chip per work family (dot + label + count). Clicking a family narrows
+   * rows to that family's healthy steps (the counts it shows).
+   */
+  const familyChip = (family: ToolFamily, count: number): React.ReactElement => {
+    const value = `${FAMILY_FILTER_PREFIX}${family}`
+    const selected = filter === value
+    return (
+      <button
+        key={family}
+        type="button"
+        className={`ttl-chip ttl-familyChip${selected ? ' ttl-chipSelected' : ''}`}
+        aria-pressed={selected}
+        data-testid={`ttl-chip-${familySlug(family)}`}
+        onClick={() => { setFilter((current) => (current === value ? 'all' : value)) }}
+      >
+        <i
+          className={`ttl-legendDot ttl-dist-${family} ttl-ink-${familyInk(family)}`}
+          aria-hidden="true"
+        />
+        <span className="ttl-chipLabel">{familyLabel(family, ui)}</span>
+        <span className="ttl-chipCount">{String(count)}</span>
+      </button>
+    )
+  }
 
   const summaryBar = turns.length > 0
     ? (
@@ -1466,27 +1480,22 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
         </div>
         {overview.families.length > 0
           ? (
-            <>
-              <div className="ttl-dist" role="img" aria-label={ui.toolDist}>
-                {overview.families.map((entry) => (
-                  <i
-                    key={entry.family}
-                    className={`ttl-distSeg ttl-dist-${entry.family} ttl-ink-${familyInk(entry.family)}`}
-                    style={{ width: `${(entry.count / overview.total) * 100}%` }}
-                  />
-                ))}
-              </div>
-              <div className="ttl-legend">
-                {overview.families.map((entry) => (
-                  <span className="ttl-legendItem" key={entry.family}>
-                    <i className={`ttl-legendDot ttl-dist-${entry.family} ttl-ink-${familyInk(entry.family)}`} aria-hidden="true" />
-                    {`${familyLabel(entry.family, ui)} ${entry.count}`}
-                  </span>
-                ))}
-              </div>
-            </>
+            <div className="ttl-dist" role="img" aria-label={ui.toolDist}>
+              {overview.families.map((entry) => (
+                <i
+                  key={entry.family}
+                  className={`ttl-distSeg ttl-dist-${entry.family} ttl-ink-${familyInk(entry.family)}`}
+                  style={{ width: `${(entry.count / overview.total) * 100}%` }}
+                />
+              ))}
+            </div>
           )
           : null}
+        <div className="ttl-summaryFilters" role="group" data-testid="ttl-chips">
+          {chipButton('all', t(lang, 'filterAll') as string, stats.total)}
+          {stats.failed > 0 ? chipButton('failed', t(lang, 'filterFailed') as string, stats.failed, 'red') : null}
+          {overview.families.map((entry) => familyChip(entry.family, entry.count))}
+        </div>
       </div>
     )
     : null
@@ -1636,7 +1645,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       style={{ ['--ttl-step-name-w' as string]: `${stepNameWidth}px` }}
     >
       {header}
-      {turns.length > 0 ? chips : null}
       {summaryBar}
       {body}
       {statusBar}
