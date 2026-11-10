@@ -227,7 +227,9 @@ export const trailCss = `
   overflow-wrap: anywhere;
 }
 
-/* Tables scroll horizontally; a token-colored edge fade marks the cut. */
+/* Tables scroll horizontally. No edge-fade overlay: it used to span the
+ * WHOLE message body (any table turned it on) and dimmed the right edge of every
+ * line, making long replies look cut. */
 .ttl-mdTableWrap {
   position: relative;
   min-width: 0;
@@ -235,21 +237,6 @@ export const trailCss = `
   scrollbar-width: thin;
   scrollbar-color: var(--dsw-alias-scrollbar-bg-l2, #545557) transparent;
 }
-
-.ttl-mdTableWrap::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 18px;
-  pointer-events: none;
-  opacity: 0;
-  background: linear-gradient(to left, var(--dsw-alias-bg-layer-1, #232324), transparent);
-  transition: opacity 120ms var(--ds-ease-in-out, ease);
-}
-
-.ttl-mdTableWrap:has(.ttl-md table)::after { opacity: 1; }
 
 .ttl-mdTruncated {
   box-sizing: border-box;

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.44] - 2026-11-10
+
+### Fixed
+
+- **长 Markdown 回复右侧被一层「毛玻璃」盖住、看起来显示不全**：`.ttl-mdTableWrap::after` 是一条 18px 宽的右边缘渐隐（给可横向滚动的表格做提示），但开关注释写的是 `:has(.ttl-md table)` —— 只要消息**包含任何表格**，这条渐隐就覆盖**整段消息正文**（高度 = 全文高度），压暗每一行最右侧约 18px 的文字。长回复里带一个色值表就中招。现在删除该渐隐覆盖：表格仍可横向滚动，正文右边缘不再被压暗/看起来被裁。
+
+### Verification
+
+- 新增 CSS 回归：`trailCss` 不再包含 `.ttl-mdTableWrap::after` / `.ttl-mdTableWrap:has(`。测试 **580 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机：用真实会话日志回放（`~/.dsh/sessions/--Users-lzx-Documents-research--/session-1e10258c…`，最后一轮 35 步，助手消息 2171 字符含表格与列表），消息正文完整渲染到「4. 把这套流程固化…」，右边缘不再有渐隐条；0 条 console error。截图 `docs/assets/v0144-longmsg-nofade.jpg`，脚本 `scripts/verify/replay-long-message.mjs`。
+
 ## [0.10.43] - 2026-11-10
 
 ### Changed

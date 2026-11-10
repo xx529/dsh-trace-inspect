@@ -766,3 +766,16 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![命令块：展开全部 41 段移到代码块下方居中](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0143-expand-command.jpg)
 
 ![输出块：展开全文移到文本下方居中](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0143-expand-output.jpg)
+
+## 55. v0.10.44 长 Markdown 回复右侧渐隐覆盖
+
+| 反馈 | 原因 | 方案 | 实测 |
+| --- | --- | --- | --- |
+| 长回复显示不完整，旁边还有一个类似毛玻璃的东西 | `.ttl-mdTableWrap::after` 是 18px 右边缘渐隐；开关条件是 `:has(.ttl-md table)`，消息**含任意表格**时整段正文（高度 = 全文）都被这条渐隐覆盖，压暗每行最右约 18px 文字 | 删除该渐隐覆盖；表格保留 `overflow-x: auto` 横向滚动能力 | 真实会话回放（35 步 / 2171 字符消息含表格）：正文完整到「4. 把这套流程固化…」，右边缘无渐隐；0 console error |
+| 不希望动到表格能力 | — | 只删 `::after` 覆盖，`.ttl-mdTableWrap` 容器与滚动不变 | 表格仍可横向滚动 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **580 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/replay-long-message.mjs`（读取真实 session 日志回放该轮，滚动到消息体截图；无表格渐隐断言）。
+- 说明：右侧若仍有细条，可能是宿主/系统的悬浮滚动条（不属于本插件样式）。
+
+![长回复完整渲染：右边缘不再被渐隐覆盖](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0144-longmsg-nofade.jpg)

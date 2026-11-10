@@ -416,6 +416,10 @@ describe('detail stylesheet (契约 §4.5)', () => {
   ]
 
   it('ships every contracted class and the open-row rule', () => {
+    // v0.10.44: a table used to switch on an 18px edge fade over the WHOLE
+    // message body, dimming the right edge of every line in long replies.
+    expect(trailCss).not.toContain('.ttl-mdTableWrap::after')
+    expect(trailCss).not.toContain('.ttl-mdTableWrap:has(')
     for (const cls of REQUIRED) expect(trailCss).toContain(cls)
     expect(trailCss).toContain('.ttl-stepWrap[data-open="true"] .ttl-step')
   })
