@@ -419,17 +419,6 @@ function CommandSection(props: {
       <div className="ttl-sectionHead">
         <span className="ttl-sectionLabel">{labels.command}</span>
         <span className="ttl-sectionHint">{labels.commandHint}</span>
-        {segments.length > MAX_CODE_SEGMENTS
-          ? (
-            <button
-              type="button"
-              className="ttl-sectionAction ttl-sectionActionText"
-              data-testid="ttl-code-toggle"
-              aria-expanded={allSegments}
-              onClick={() => { setAllSegments(!allSegments) }}
-            >{allSegments ? labels.collapseAll : labels.showAllSegments(segments.length)}</button>
-          )
-          : null}
         <CopyButton text={command} testid="ttl-cmd-copy" label={labels.copy} className="ttl-sectionAction" />
       </div>
       <div className="ttl-code" data-testid="ttl-code">
@@ -465,6 +454,19 @@ function CommandSection(props: {
           <span className="ttl-codeTool">{toolName}</span>
         </div>
       </div>
+      {segments.length > MAX_CODE_SEGMENTS
+        ? (
+          <div className="ttl-sectionExpand">
+            <button
+              type="button"
+              className="ttl-expandBtn"
+              data-testid="ttl-code-toggle"
+              aria-expanded={allSegments}
+              onClick={() => { setAllSegments(!allSegments) }}
+            >{allSegments ? labels.collapseAll : labels.showAllSegments(segments.length)}</button>
+          </div>
+        )
+        : null}
     </section>
   )
 }
@@ -500,17 +502,6 @@ function OutputSection(props: {
         <span className="ttl-sectionMeta">
           {`${formatSize(utf8Bytes(text))} · ${labels.lines(lines.length)}`}
         </span>
-        {clipped
-          ? (
-            <button
-              type="button"
-              className="ttl-sectionAction ttl-sectionActionText"
-              data-testid="ttl-out-toggle"
-              aria-expanded={expanded}
-              onClick={() => { setExpanded(!expanded) }}
-            >{expanded ? labels.collapse : labels.showFull}</button>
-          )
-          : null}
       </div>
       {markdown && lang !== undefined
         ? <MarkdownResult text={text} labels={markdownLabels(lang)} />
@@ -522,6 +513,19 @@ function OutputSection(props: {
             })}
           </div>
         )}
+      {clipped
+        ? (
+          <div className="ttl-sectionExpand">
+            <button
+              type="button"
+              className="ttl-expandBtn"
+              data-testid="ttl-out-toggle"
+              aria-expanded={expanded}
+              onClick={() => { setExpanded(!expanded) }}
+            >{expanded ? labels.collapse : labels.showFull}</button>
+          </div>
+        )
+        : null}
       {images.length > 0 && sessionId !== undefined && lang !== undefined
         ? <TrailImages images={images} sessionId={sessionId} lang={lang} />
         : null}

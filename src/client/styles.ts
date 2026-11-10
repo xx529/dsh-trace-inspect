@@ -1667,6 +1667,24 @@ export const trailCss = `
 .ttl-sectionLabel { color: var(--dsw-alias-label-tertiary, #9ba1a7); font-size: 10px; font-weight: 500; letter-spacing: 0.5px; }
 .ttl-sectionHint { color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 9.5px; }
 .ttl-sectionMeta { color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 9.5px; }
+/* v0.10.43: expand/collapse affordances sit centred BELOW the block — readers
+   reach the cut at the bottom, so they never have to scroll back up. */
+.ttl-sectionExpand { display: flex; justify-content: center; padding: 6px 0 2px; }
+.ttl-expandBtn {
+  padding: 2px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-static-blue-300, #7cb2ff);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 16px;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.ttl-expandBtn:hover { background: rgba(124, 178, 255, 0.10); }
+.ttl-expandBtn:focus-visible { outline: 2px solid var(--dsw-static-blue-300, #7cb2ff); outline-offset: 1px; }
+
 .ttl-sectionAction {
   margin-left: auto;
   padding: 0;

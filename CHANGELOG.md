@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.43] - 2026-11-10
+
+### Changed
+
+- **「展开全文 / 展开全部 N 段」移到内容下方居中**：原来在区块标题右侧，读者读到下方发现被截断时要回到顶部去点。现在命令块与输出块的展开按钮都放在内容下方、水平居中（展开后同一位置变「收起」），hover 浅蓝底、键盘可聚焦；标题行只保留段数/字节数等元信息与复制按钮。
+
+### Verification
+
+- 新增 2 例回归：输出展开按钮父容器为 `.ttl-sectionExpand` 且 DOM 在 `ttl-outBlock` 之后、标题行内不存在；命令展开按钮同理在 `ttl-code` 之后。测试 **580 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（`trace-verify`，19487，dock 440，mock 41 段 bash 命令 + 34 行输出）：两个按钮均 `parentClass=ttl-sectionExpand`、`inHeader=false`、`afterBlock=true`、与区块中心对齐（±2px）；0 条 console error。截图 `docs/assets/v0143-expand-command.jpg`、`docs/assets/v0143-expand-output.jpg`，脚本 `scripts/verify/shoot-expand-placement.mjs`。
+
 ## [0.10.42] - 2026-11-10
 
 ### Fixed

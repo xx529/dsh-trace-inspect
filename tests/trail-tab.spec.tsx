@@ -1196,6 +1196,24 @@ describe('TrailTab', () => {
     expect(screen.queryByTestId('ttl-error')).toBeNull()
   })
 
+  it('the command expander sits centred under the code block (v0.10.43)', async () => {
+    const command = Array.from({ length: 20 }, (_, i) => `echo ${i}`).join(' && ')
+    renderTab([
+      user(1, 'run'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', JSON.stringify({ command }), 'c3'),
+      toolResult(4, 'c3', 'ok'),
+      turnEnd(5, 1),
+    ])
+    fireEvent.click(await screen.findByTestId('ttl-step'))
+    await screen.findByTestId('ttl-detail')
+    const code = await screen.findByTestId('ttl-code')
+    const toggle = await screen.findByTestId('ttl-code-toggle')
+    expect(toggle.parentElement?.className).toBe('ttl-sectionExpand')
+    // …and after the code block (readers find it where the content is cut).
+    expect(code.compareDocumentPosition(toggle) & 4).toBe(4)
+  })
+
   it('a long single-line failure is shown completely, without a duplicate 输出 block (v0.10.40)', async () => {
     const longError = `Error: rw_exec: this session is LOCAL — ${'detail '.repeat(40)}END-OF-ERROR`
     renderTab([
@@ -1253,7 +1271,11 @@ describe('TrailTab', () => {
     expect(out.textContent).not.toContain('TAIL-OF-OUTPUT')
     // The old toggle only appeared when there were >20 lines; one long line
     // was silently cut. It must be expandable now.
-    fireEvent.click(await screen.findByTestId('ttl-out-toggle'))
+    const toggle = await screen.findByTestId('ttl-out-toggle')
+    // v0.10.43: the expander lives centred below the block, not in the header.
+    expect(toggle.parentElement?.className).toBe('ttl-sectionExpand')
+    expect(out.compareDocumentPosition(toggle) & 4).toBe(4)
+    fireEvent.click(toggle)
     await waitFor(() => {
       expect(screen.getByTestId('ttl-outBlock').textContent).toContain('TAIL-OF-OUTPUT')
     })

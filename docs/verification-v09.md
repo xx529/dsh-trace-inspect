@@ -752,3 +752,17 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 采集脚本：`scripts/verify/shoot-error-full.mjs`（同一脚本复核错误完整性/去重/展开，并更新截图顺序）。
 
 ![失败详情：参数在上，错误块在下](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0142-error-order.jpg)
+
+## 54. v0.10.43 展开按钮移到底部居中
+
+| 反馈 | 方案 | 实测 |
+| --- | --- | --- |
+| 展开全文放在文本下方中央；bash 命令也是——习惯是滚到下方发现没看全才展开，回到上方交互不友好 | 命令块「展开全部 N 段 / 收起全部」与输出块「展开全文 / 收起」都从标题行右侧移出，放到内容下方、水平居中（`.ttl-sectionExpand` + `.ttl-expandBtn`）；标题行只留段数/字节等元信息与复制按钮 | 两个按钮 `parentClass=ttl-sectionExpand`、`inHeader=false`、`afterBlock=true`、与区块中心差 ≤2px |
+| 状态与可达性 | 展开后同一位置变「收起」；hover 浅蓝底、`focus-visible` 2px 蓝描边；按钮可键盘聚焦 | 41 段命令 / 34 行输出均正常展开 |
+
+- 门禁：`pnpm typecheck` 0；`pnpm test` **580 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-expand-placement.mjs`（量父容器、DOM 位置、是否在标题行、与区块中心对齐）。
+
+![命令块：展开全部 41 段移到代码块下方居中](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0143-expand-command.jpg)
+
+![输出块：展开全文移到文本下方居中](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0143-expand-output.jpg)
