@@ -871,3 +871,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 门禁：`pnpm typecheck` 0；`pnpm test` **596 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
 
 ![注入行：英文 context + 内容区顶部的注入名](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0152-context-word.jpg)
+
+### v0.10.53 补充：`context <name>` 两列
+
+- 反馈：行里第二列应展示注入名（如 `time-context`），并与上面的工具描述文本左对齐。
+- 改法：角色词 `context` 占工具名列（`width: var(--ttl-step-name-w)`），注入名用 `.ttl-ctxName` 落在描述列（mono 11 / `#dfe2e5`），行内摘要与「还有 N 字符」移除；展开区回到「弯曲说明 + 正文」，并撤掉重复的注入名标题。
+- 实测：`context  time-context` 与 `bash  列目录` 的描述同列；展开体只剩「取代先前的快照」+ 正文。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **596 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![注入行两列：context + 与工具描述对齐的注入名](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0153-context-name.jpg)

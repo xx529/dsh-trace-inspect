@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.53] - 2026-11-13
+
+### Changed
+
+- **注入行改为 `context <name>` 两列**：角色词 `context` 占工具名列，注入名（`time-context` / `runtime-context` / 技能名 / 指令路径）落在**工具描述那一列**，与上下工具行的描述严格左对齐；行内不再显示正文摘要，也不再显示「还有 N 字符」。
+- 正文只在展开区出现；展开区不再重复注入名标题（上一版加的那行撤掉），`snapshot` 分节名与注入名相同时仍不重复渲染。
+- 设计稿 `06e`（面板行、① 卡、副标题、版本号）同步为两列结构。
+
+### Verification
+
+- 更新 3 例断言：`ttl-context-role` = `context`、`ttl-context-name` = 注入名（`time-context` / 指令路径 / `context`）、展开区不再有 `ttl-context-title`。全量 **596 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 渲染证据（wire 投影后渲染）：`context  time-context` / `context  runtime-context`，注入名与 `bash` 的描述列对齐（同 x）；展开体只有「取代先前的快照」+ 正文。截图 `docs/assets/v0153-context-name.jpg`。
+
 ## [0.10.52] - 2026-11-13
 
 ### Changed

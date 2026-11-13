@@ -747,8 +747,6 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     const open = openContexts.has(key)
     const expandable = item.sections.length > 0 || item.text.trim().length > 0
     const title = item.sections.length > 0 ? item.sections[0].text : item.text
-    /** Chars beyond what the folded line already shows (output-row budget hint). */
-    const rest = Math.max(0, item.text.length - item.summary.length)
     return (
       <div
         className="ttl-msg ttl-ctx"
@@ -770,16 +768,11 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
               (`time-context`, `runtime-context`, a skill name, an instruction
               path) — no generic 「上下文」 prefix, so the column reads like the
               tool-name column it sits in. */}
-          {/* v0.10.52: the row says `context` + the content's first line; the
-              injection's own name (`time-context`, …) heads the content area
-              below, where it actually labels what the reader is looking at. */}
+          {/* v0.10.53: `context <name>` — the role word takes the tool-name
+              column, the injection's own name sits exactly where a tool row's
+              description starts, so both columns line up. */}
           <span className="ttl-ctxRole" data-testid="ttl-context-role">{ui.contextRole}</span>
-          <span className="ttl-msgPreview" data-testid="ttl-context-summary">{item.summary}</span>
-          {/* v0.10.47: same budget hint as an assistant-output row — the folded
-              line names what is hidden, the opened body renders all of it. */}
-          {rest > 0
-            ? <span className="ttl-msgRest" data-testid="ttl-context-rest">{ui.charsLeft(rest)}</span>
-            : null}
+          <span className="ttl-ctxName" data-testid="ttl-context-name" title={item.label}>{item.label}</span>
           {expandable
             ? (
               <span
@@ -792,7 +785,6 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
         {open && expandable
           ? (
             <div className="ttl-msgBody ttl-ctxBody" data-testid="ttl-context-body">
-              <div className="ttl-ctxTitle" data-testid="ttl-context-title">{item.label}</div>
               {item.sections.length > 0
                 ? (
                   <>

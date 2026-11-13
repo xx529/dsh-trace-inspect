@@ -2191,15 +2191,23 @@ export const trailCss = `
    whole rest of the line. */
 .ttl-ctxRole {
   flex: none;
+  /* Sits in the tool-name column, so the injection name starts exactly at the
+     description column of the tool rows above and below. */
+  width: var(--ttl-step-name-w, 52px);
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary, #9ba1a7);
   font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
   font-size: 10.5px;
 }
-.ttl-ctxTitle {
-  margin: 0 0 6px;
-  color: var(--dsw-alias-label-tertiary, #9ba1a7);
+.ttl-ctxName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #dfe2e5;
   font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
-  font-size: 10.5px;
+  font-size: 11px;
 }
 .ttl-ctxNote {
   margin: 0 0 8px;
