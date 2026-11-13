@@ -900,3 +900,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 视觉（4×）：`figma`、`playwright` 两个 MCP 行是环状 mark，`bash` 行仍 `>_`。
 
 ![MCP 行图标：官方环状 mark（4×）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0155-mcp-mark.jpg)
+
+### v0.10.56 补充：注入图标改成 teal
+
+- 旧：`.ttl-ctxIcon` 用 violet `#a78bfa`，和并行分组的 violet（`∥`、并行组 rail）撞色。
+- 新：teal `#63c9d1`（本设计里「上下文 / 会话」的色相，`skill` / `session` 同色），行图标、汇总行「注入 N」圆点、turn 头部 mix 三处一起换；violet 只留给并行分组。
+- 实测（3×）：`context` 行图标、`注入 N` 圆点、头部 inbox 计数均为 teal，`bash` 仍 violet。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **598 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![注入图标 teal：行图标 / 汇总圆点 / 头部 mix 同步](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0156-context-teal.jpg)

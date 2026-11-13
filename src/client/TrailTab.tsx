@@ -1001,7 +1001,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                 {clusterMix.map((entry) => (
                   <i
                     key={entry.kind}
-                    className={`ttl-mixItem ttl-ink-${entry.kind === 'context' ? 'violet' : inkOf(entry.kind)}`}
+                    className={`ttl-mixItem ttl-ink-${entry.kind === 'context' ? 'teal' : inkOf(entry.kind)}`}
                     data-cluster={entry.kind}
                     title={`${entry.kind === 'context' ? ui.injectLabel : clusterLabel(entry.kind, lang)} ${entry.count}`}
                   >
@@ -1713,7 +1713,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
         <div className="ttl-summaryFilters" role="group" data-testid="ttl-chips">
           {chipButton('all', t(lang, 'filterAll') as string, stats.total)}
           {stats.failed > 0 ? chipButton('failed', t(lang, 'filterFailed') as string, stats.failed, 'red') : null}
-          {injectionCount > 0 ? chipButton('inject', ui.injectLabel, injectionCount, 'violet') : null}
+          {injectionCount > 0 ? chipButton('inject', ui.injectLabel, injectionCount, 'teal') : null}
           {overview.families.map((entry) => familyChip(entry.family, entry.count))}
         </div>
       </div>

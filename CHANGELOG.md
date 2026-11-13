@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.56] - 2026-11-13
+
+### Changed
+
+- **注入图标换成 teal**：行内 inbox 从 violet `#a78bfa` 改为 teal `#63c9d1`，汇总行「注入 N」的圆点与 turn 头部 mix 的注入字形同步。teal 是本设计里「上下文 / 会话」一类（`skill`、`session`）的色相；violet 只留给并行分组（`∥` / 并行组 rail），两者不再撞色。
+- 设计稿 `06e`（v0.10.56）里四个注入 chip 与 ① 卡同步为 teal。
+
+### Verification
+
+- 颜色在既有冻结调色板内（`#63c9d1`），无需扩色板；全量 **598 例 / 22 文件** 仍绿，`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 视觉证据（3×）：行图标、汇总行圆点、turn 头部 mix 三处都是 teal；`bash` 行仍 violet 的 `>_`。截图 `docs/assets/v0156-context-teal.jpg`。
+
 ## [0.10.55] - 2026-11-13
 
 ### Changed

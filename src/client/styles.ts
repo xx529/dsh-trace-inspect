@@ -1296,6 +1296,7 @@ export const trailCss = `
 .ttl-dot-blue { background: #60a5fa; }
 .ttl-dot-amber { background: #f2b45c; }
 .ttl-dot-violet { background: #b39cf5; }
+.ttl-dot-teal { background: #63c9d1; }
 .ttl-dot-pink { background: #f08fb8; }
 .ttl-dot-red { background: #f2726f; }
 .ttl-dot-neutral { background: #9ba1a7; }
@@ -2185,7 +2186,7 @@ export const trailCss = `
    slot carries the injection's own title, aligned with the tool-name column.
    It never draws a status / duration: it is material the model read, not a
    tool call. */
-.ttl-ctxIcon { color: #a78bfa; }
+.ttl-ctxIcon { color: #63c9d1; }
 /* v0.10.52: the row's role word is the English word context; the injection's
    own name lives in the content area (.ttl-ctxTitle), so the summary gets the
    whole rest of the line. */
