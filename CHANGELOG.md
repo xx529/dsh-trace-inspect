@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.57] - 2026-11-13
+
+### Changed
+
+- **收起状态的用户输入改为与时间对齐**：turn 卡收起时那两行用户输入不再顶格，而是缩进到时间列（`margin-left: 52px`）；turn 标签列改成固定 30px 宽并居中，`#1` / `#13` / `#100` 多位数时时间与输入文本的起点都保持同一个 x。
+
+### Verification
+
+- 全量 **598 例 / 22 文件** 通过；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 实测（3×、400px 侧栏）：`.ttl-turnTag` x=14 宽 30，`.ttl-turnTime` 与 `.ttl-turnPreview` 同为 x=52；`#1` 与 `#13` 两种标签宽度下起点一致。截图 `docs/assets/v0157-preview-indent.jpg`。
+- 设计稿 `06e` 面板同步（tag 30 / 时间 52 / 预览 52，v0.10.57）。
+
 ## [0.10.56] - 2026-11-13
 
 ### Changed

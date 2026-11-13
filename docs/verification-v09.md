@@ -909,3 +909,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 门禁：`pnpm typecheck` 0；`pnpm test` **598 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
 
 ![注入图标 teal：行图标 / 汇总圆点 / 头部 mix 同步](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0156-context-teal.jpg)
+
+### v0.10.57 补充：收起的用户输入与时间对齐
+
+- 旧：`.ttl-turnPreview` 的 `margin` 是 `3px 14px 0`，两行用户输入与 tag 左边缘齐平（顶格）。
+- 新：tag 列固定 30px（居中，容纳 `#100` 之类），时间列因此稳定在 x=52；预览 `margin-left: 52px`，与时间同一起点。
+- 实测（3×、400px）：`.ttl-turnTag` x=14/w=30，`.ttl-turnTime` 与 `.ttl-turnPreview` 均为 x=52；`#1` 与 `#13` 一致。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **598 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![收起状态：用户输入与时间列对齐](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0157-preview-indent.jpg)
