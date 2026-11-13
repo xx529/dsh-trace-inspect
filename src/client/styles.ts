@@ -2205,14 +2205,16 @@ export const trailCss = `
   line-height: 16px;
 }
 /* The sections are the same bytes the model read, split at the producer's own
-   boundaries; a long snapshot scrolls inside the card instead of growing it. */
+   boundaries. v0.10.47: no inner scroll — like an assistant-output body, the
+   card grows to the full content and the panel scrolls instead, so a long
+   injection is never cut off inside its own card. */
 .ttl-ctxSections {
   display: grid;
   gap: 10px;
-  max-height: 141px;
+  max-height: none;
   margin: 0;
   padding: 0;
-  overflow: auto;
+  overflow: visible;
 }
 .ttl-ctxSection { margin: 0; }
 .ttl-ctxSectionName {

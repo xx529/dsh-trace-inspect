@@ -199,6 +199,16 @@ describe('v0.10.45: 参数 JSON 长值换行', () => {
   })
 })
 
+describe('v0.10.47: 注入正文与输出一样完整展开', () => {
+  it('.ttl-ctxSections grows with its content — no 141px inner scroll', () => {
+    const block = rule('.ttl-ctxSections {')
+    expect(block).toContain('max-height: none;')
+    expect(block).toContain('overflow: visible;')
+    // The old capped card clipped long injections mid-sentence.
+    expect(trailCss).not.toContain('max-height: 141px;')
+  })
+})
+
 describe('v0.10.34: 统计数字与图标同尺度 (SVG text)', () => {
   it('.ttl-mixCount is a 13px SVG box; digits use the 9.5px code font', () => {
     expect(rule('.ttl-mixCount {')).toContain('height: 13px')

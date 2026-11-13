@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.47] - 2026-11-13
+
+### Fixed
+
+- **很长的注入文本在卡片里被截断**：注入展开体原先沿用 DSH 对话区的 141px 内滚动（`snapshot` 分节卡），几 KB 的 `agent-instructions` 只能看到半截、末尾停在句子中间。现在与「输出」行同一套处理：
+  - 分节正文去掉 `max-height: 141px` / 内滚动，卡片随内容增高，由轨迹面板统一滚动（不再有看不见的卡内滚动条）；
+  - 折叠行补「还有 N 字符」预算提示（复用输出行的 `ttl-msgRest`），一眼知道展开后还有多少内容；
+  - 名称列、分节标题、mono 11/16 的字号与配色都不变。
+- 设计稿 `06e` 同步：② 卡与卡片内注释改为「随内容展开、不内滚动」，① 卡补「长正文折叠行给预算提示」。
+
+### Verification
+
+- 新增 3 例：`.ttl-ctxSections` 不再有 141px 上限（`max-height: none` / `overflow: visible`）、长注入折叠行预算数字 = 全文长度 − 首行长度、展开后正文含末尾标记且长度 ≥ 90% 全文。全量 **590 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 实机渲染证据：同 §57 的 DOM + Chrome 链路；1,400+ 字符的 `agent-instructions` 展开后卡片高 900px、末尾 `尾部标记 TAIL` 可见，折叠行显示「还有 1,378 字符」。截图 `docs/assets/v0147-context-long.jpg`。
+
 ## [0.10.46] - 2026-11-13
 
 ### Added

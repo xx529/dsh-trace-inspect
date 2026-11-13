@@ -1563,7 +1563,33 @@ describe('TrailTab', () => {
     expect(body.textContent).toContain('injected reminder body')
   })
 
-  it('a long output collapses to one row: first chars + 「还有 N 字符」, click opens the full text (v0.10.3)', async () => {    const long = `第一段：这是一条比较长的助手消息，用来验证单行输出行。\n${'细节内容 '.repeat(80)}`
+  it('a long injection folds with a char budget and opens the whole text (v0.10.47)', async () => {
+    const long = `要点：\n${'1. **定位**：以 MCP 为主，内置工具是兜底。\n'.repeat(40)}尾部标记 TAIL`
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      ev('user/message', 3, {
+        content: [{ type: 'text', text: long }],
+        source: { kind: 'agent-instructions', form: 'instructions', changes: [{ path: '/Users/lzx/.dsh/AGENTS.md' }] },
+      }),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-context')
+    // The name slot is the producer: an instruction path, not a generic label.
+    expect(screen.getByTestId('ttl-context-producer').textContent).toBe('/Users/lzx/.dsh/AGENTS.md')
+    // Folded line names the hidden budget; summary is the first line only.
+    expect(screen.getByTestId('ttl-context-summary').textContent).toBe('要点：')
+    const rest = screen.getByTestId('ttl-context-rest')
+    expect(Number((rest.textContent ?? '').replace(/[^\d]/g, ''))).toBe(long.length - 3)
+    fireEvent.click(row)
+    const body = await screen.findByTestId('ttl-context-body')
+    // The opened body carries the whole injection, tail included.
+    expect(body.textContent).toContain('尾部标记 TAIL')
+    expect(body.textContent?.length ?? 0).toBeGreaterThan(long.length * 0.9)
+  })
+
+  it('a long output collapses to one row: first chars + 「还有 N 字符」, click opens the full text (v0.10.3)', async () => {
+    const long = `第一段：这是一条比较长的助手消息，用来验证单行输出行。\n${'细节内容 '.repeat(80)}`
     renderTab([
       user(1, 'go'),
       turnStart(2, 1),

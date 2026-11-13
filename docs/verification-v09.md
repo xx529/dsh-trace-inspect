@@ -818,3 +818,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![上下文注入行：展开态（取代先前的快照 + 分节渲染）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0146-context-expanded.jpg)
 
 门禁：`pnpm typecheck` 0；`pnpm test` **588 例 / 22 文件**；`pnpm build` + `scripts/check-lib.mjs` 通过。
+
+### v0.10.47 补充：长注入不再卡内裁切
+
+- 反馈：展开 `agent-instructions` 这类几 KB 的注入时，卡片停在 141px、末尾被切在句子中间（旧样式沿用 DSH 对话区的内滚动）。
+- 改法：`.ttl-ctxSections` 去掉 `max-height: 141px` 与 `overflow: auto`（改 `max-height: none` / `overflow: visible`），卡片随内容增高、面板滚动；折叠行新增「还有 N 字符」（与助手输出行同一 `ttl-msgRest`，N = 全文长度 − 首行摘要长度）。
+- 实测（同一 DOM+Chrome 链路）：1,400+ 字符注入展开后卡片高 **900px**、末尾标记可见；折叠行「还有 1,378 字符」；`sections` 不再产生卡内滚动容器。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **590 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![长注入整段展开：折叠行给「还有 N 字符」，展开后不再卡内裁切](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0147-context-long.jpg)

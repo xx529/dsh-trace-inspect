@@ -731,6 +731,8 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     const open = openContexts.has(key)
     const expandable = item.sections.length > 0 || item.text.trim().length > 0
     const title = item.sections.length > 0 ? item.sections[0].text : item.text
+    /** Chars beyond what the folded line already shows (output-row budget hint). */
+    const rest = Math.max(0, item.text.length - item.summary.length)
     return (
       <div
         className="ttl-msg ttl-ctx"
@@ -754,6 +756,11 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
               tool-name column it sits in. */}
           <span className="ttl-ctxName" data-testid="ttl-context-producer" title={item.label}>{item.label}</span>
           <span className="ttl-msgPreview" data-testid="ttl-context-summary">{item.summary}</span>
+          {/* v0.10.47: same budget hint as an assistant-output row — the folded
+              line names what is hidden, the opened body renders all of it. */}
+          {rest > 0
+            ? <span className="ttl-msgRest" data-testid="ttl-context-rest">{ui.charsLeft(rest)}</span>
+            : null}
           {expandable
             ? (
               <span
