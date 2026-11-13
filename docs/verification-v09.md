@@ -853,3 +853,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 门禁：`pnpm typecheck` 0；`pnpm test` **596 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
 
 ![注入全文：wire 投影修复后分节与 2 KiB 之后的尾部都在](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0150-inject-full.jpg)
+
+### v0.10.51 补充：注入行改回「角色 + 名称」
+
+- 反馈：名称列直接放注入标题，长名字被截成 `agent-inst…` / `runtime-co…`，看不出这是注入。
+- 改法：行首增加角色词（zh「上下文」/ en「Context」，44px），标题列保持按最长标签自适应（≤132px，`time-context` / `runtime-context` 不截断），摘要与「还有 N 字符」不变。
+- 实测（wire 投影后渲染）：`上下文 time-context`、`上下文 runtime-context`、`上下文 skill-catalog`，标题列 106px、无横向溢出。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **596 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![注入行：角色「上下文」+ 注入标题](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0151-context-role.jpg)

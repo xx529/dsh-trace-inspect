@@ -1661,7 +1661,8 @@ describe('TrailTab', () => {
       turnEnd(4, 1),
     ])
     const row = await screen.findByTestId('ttl-item-context')
-    // The name slot is the producer: an instruction path, not a generic label.
+    // The row reads `Context <name>`: role word first, then the producer label.
+    expect(screen.getByTestId('ttl-context-role').textContent).toBe('Context')
     expect(screen.getByTestId('ttl-context-producer').textContent).toBe('/Users/lzx/.dsh/AGENTS.md')
     // Folded line names the hidden budget; summary is the first line only.
     expect(screen.getByTestId('ttl-context-summary').textContent).toBe('要点：')

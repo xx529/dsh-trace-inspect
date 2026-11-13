@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.51] - 2026-11-13
+
+### Changed
+
+- **注入行改为「角色 + 名称」**：`[inbox] 上下文 · runtime-context · 首行摘要`。之前名称列直接放注入标题，长会话里只剩 `agent-inst…` / `runtime-co…` 这样的截断，很难认出是注入；现在先给角色词（zh「上下文」/ en「Context」），标题列继续按最长标签自适应（`time-context`、`runtime-context` 都不截断），摘要与「还有 N 字符」照旧。
+- 设计稿 `06e` 面板与 ① 卡同步为「角色词 + 注入标题」。
+
+### Verification
+
+- 断言补：`ttl-context-role` = `Context`（en 测试环境）、`ttl-context-producer` 仍是生产者名。全量 **596 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 渲染证据（wire 投影后渲染）：三行分别显示 `上下文 time-context`、`上下文 runtime-context`、`上下文 skill-catalog`，名称列 106px 无截断。截图 `docs/assets/v0151-context-role.jpg`。
+
 ## [0.10.50] - 2026-11-13
 
 ### Fixed

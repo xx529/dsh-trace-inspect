@@ -2186,6 +2186,17 @@ export const trailCss = `
    It never draws a status / duration: it is material the model read, not a
    tool call. */
 .ttl-ctxIcon { color: #a78bfa; }
+/* Role word before the injection title: v0.10.51 restored it so every row
+   reads 上下文 · runtime-context instead of a bare, truncated name. */
+.ttl-ctxRole {
+  flex: none;
+  width: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  font-size: 10.5px;
+}
 .ttl-ctxName {
   flex: none;
   /* Same name column as the tool rows, so the summary starts exactly under the

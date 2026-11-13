@@ -766,6 +766,10 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
               (`time-context`, `runtime-context`, a skill name, an instruction
               path) — no generic 「上下文」 prefix, so the column reads like the
               tool-name column it sits in. */}
+          {/* v0.10.51: the row reads `context <name>` — the role word first
+              (上下文 / Context), then the injection's own title, so a lone
+              `runtime-context` is not mistaken for a tool name. */}
+          <span className="ttl-ctxRole" data-testid="ttl-context-role">{t(lang, 'context') as string}</span>
           <span className="ttl-ctxName" data-testid="ttl-context-producer" title={item.label}>{item.label}</span>
           <span className="ttl-msgPreview" data-testid="ttl-context-summary">{item.summary}</span>
           {/* v0.10.47: same budget hint as an assistant-output row — the folded
