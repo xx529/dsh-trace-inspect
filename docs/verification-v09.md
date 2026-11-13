@@ -891,3 +891,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 ![注入正文：分节视图](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0154-context-sections.jpg)
 
 ![注入正文：原文视图（模型收到的 content）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0154-context-raw.jpg)
+
+### v0.10.55 补充：MCP 图标换成官方 mark
+
+- 旧：`.ttl-ink-pink` 的插头字形（自绘，24 网格）。
+- 新：modelcontextprotocol.io 官方 logo 左半部分的 M 环 mark —— 三段圆头描边，官方坐标系 `19 24 158 166`、`stroke-width: 12`，`ToolIcon` 对 `mcp` 使用该 viewBox，等比显示到 13px；墨色仍是 MCP 簇的 pink。
+- 断言：MCP 行行图标 `viewBox` / 3 条 `path` / `stroke-width` / `stroke-linecap`；全量 **598 例 / 22 文件**。
+- 视觉（4×）：`figma`、`playwright` 两个 MCP 行是环状 mark，`bash` 行仍 `>_`。
+
+![MCP 行图标：官方环状 mark（4×）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0155-mcp-mark.jpg)

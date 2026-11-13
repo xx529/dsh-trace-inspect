@@ -1704,6 +1704,23 @@ describe('TrailTab', () => {
     expect(body.textContent?.length ?? 0).toBeGreaterThan(long.length * 0.9)
   })
 
+  it('the MCP cluster draws the official MCP mark (v0.10.55)', async () => {
+    renderTab([
+      user(1, 'shot the frame'),
+      turnStart(2, 1),
+      toolCall(3, 'mcp__figma__get_screenshot', '{}', 'c3'),
+      toolResult(4, 'c3', 'ok'),
+      turnEnd(5, 1),
+    ])
+    const step = await screen.findByTestId('ttl-step')
+    const mark = step.querySelector('.ttl-rowIcon svg')
+    // The brand geometry lives in the wordmark's own coordinate space.
+    expect(mark?.getAttribute('viewBox')).toBe('19 24 158 166')
+    expect(mark?.querySelectorAll('path').length).toBe(3)
+    expect(mark?.querySelector('path')?.getAttribute('stroke-width')).toBe('12')
+    expect(mark?.querySelector('path')?.getAttribute('stroke-linecap')).toBe('round')
+  })
+
   it('a long output collapses to one row: first chars + 「还有 N 字符」, click opens the full text (v0.10.3)', async () => {
     const long = `第一段：这是一条比较长的助手消息，用来验证单行输出行。\n${'细节内容 '.repeat(80)}`
     renderTab([

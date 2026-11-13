@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.55] - 2026-11-13
+
+### Changed
+
+- **MCP 图标换成官方 mark**：行首原来是自绘的「插头」，现在是 modelcontextprotocol.io 官方 logo 的三段圆头描边（M 环）。几何直接取官方 wordmark 的左半部分（坐标系 `19 24 158 166`、`stroke-width: 12`），按原比例缩到 13px，没有重画；`ToolIcon` 按 kind 选 viewBox，其它 24 网格字形不受影响。
+- 墨色仍走 `.ttl-ink-pink`（MCP 簇），turn 头部混排、详情带里的 MCP 图标同步更新。
+
+### Verification
+
+- 新增 1 例：MCP 行的行图标 `viewBox = 19 24 158 166`、3 条 `path`、`stroke-width 12`、`stroke-linecap round`。全量 **598 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 视觉证据（4× 裁切）：`figma`、`playwright` 两个 MCP 行显示官方环状 mark，`bash` 行仍是 `>_` 字形。截图 `docs/assets/v0155-mcp-mark.jpg`。
+- 来源：官方站点 logo（mintcdn `logo/dark.svg`，仅取 mark 的三条路径）；备选镜像 theSVG / LobeHub 的 24 网格版本形状一致。
+
 ## [0.10.54] - 2026-11-13
 
 ### Added
