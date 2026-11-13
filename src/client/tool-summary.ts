@@ -26,7 +26,10 @@
 import type { Lang } from './locales'
 
 /** Ink colour family of a cluster glyph (CSS: `.ttl-ink-*` in styles.ts). */
-export type ToolInk = 'violet' | 'blue' | 'green' | 'amber' | 'pink' | 'teal' | 'gray' | 'red'
+export type ToolInk =
+  | 'violet' | 'blue' | 'green' | 'amber' | 'pink' | 'teal' | 'gray' | 'red'
+  /** Brand inks (v0.10.46): the two subagent provider marks keep their own colour. */
+  | 'claude' | 'codex'
 
 /** Glyph family drawn in front of a tool row (see `ToolIcon`). */
 export type ToolIconKind =
@@ -55,6 +58,10 @@ export type ToolIconKind =
   | 'present'
   /** One child agent: `subagent` / `subagent_fork` / `list_subagent_models`. */
   | 'subagent'
+  /** Claude Code subagent (`subagent_claude_code`): Claude brand mark, not a stroke glyph. */
+  | 'claude'
+  /** Codex subagent (`subagent_codex`): OpenAI brand mark, not a stroke glyph. */
+  | 'codex'
   /** Teammate coordination: `spawn_teammate` / `list_agents` / `send_message` / … */
   | 'team'
   /** Team task board: `team_task_*`. */
@@ -90,6 +97,8 @@ const INK_OF: Record<ToolIconKind, ToolInk> = {
   ask: 'blue',
   present: 'green',
   subagent: 'pink',
+  claude: 'claude',
+  codex: 'codex',
   team: 'pink',
   'team-task': 'pink',
   workflow: 'violet',
@@ -158,6 +167,12 @@ const CLUSTER_BY_NAME: Readonly<Record<string, ToolIconKind>> = {
   subagent: 'subagent',
   subagent_fork: 'subagent',
   list_subagent_models: 'subagent',
+  // v0.10.46: the two provider-specific subagent tools carry their official
+  // brand mark instead of the generic robot. The provider `toolName` is free
+  // text (dsh-tool-subagent config), so these are the names DSH registers for
+  // the bundled anthropic / openai providers.
+  subagent_claude_code: 'claude',
+  subagent_codex: 'codex',
   spawn_teammate: 'team',
   list_agents: 'team',
   send_message: 'team',
@@ -198,6 +213,10 @@ const CLUSTER_RULES: ReadonlyArray<readonly [string, ToolIconKind]> = [
   ['session_', 'session'],
   ['team_task_', 'team-task'],
   ['cordis_', 'plugin'],
+  // v0.10.46: every other provider-named subagent tool (`subagent_acp`, a
+  // custom `toolName`) is still one delegated child agent; the two branded
+  // providers above are resolved by the exact table first.
+  ['subagent_', 'subagent'],
 ]
 
 /**

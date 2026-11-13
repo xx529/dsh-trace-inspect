@@ -261,7 +261,7 @@ describe('foldTurns — pending and status', () => {
     expect(pending[0].status).toBe('pending')
   })
 
-  it('context (system-reminder) messages are counted, not rendered as rows', () => {
+  it('context (system-reminder) messages become context rows, still counted', () => {
     const turns = foldTurns([
       user(1, 'real input'),
       turnStart(2, 1),
@@ -270,7 +270,60 @@ describe('foldTurns — pending and status', () => {
       turnEnd(5, 1),
     ])
     expect(turns[0].inputPreview).toBe('real input')
-    expect(turns[0].items.map((item) => item.kind)).toEqual(['input'])
+    expect(turns[0].items.map((item) => item.kind)).toEqual(['input', 'context', 'context'])
     expect(turns[0].contextCount).toBe(2)
+    const first = turns[0].items[1]
+    expect(first.kind).toBe('context')
+    if (first.kind !== 'context') throw new Error('expected a context item')
+    expect(first.source).toBe('context')
+    expect(first.label).toBe('context')
+    expect(first.form).toBeNull()
+    expect(first.summary).toBe('injected reminder')
+    expect(first.sections).toEqual([])
+    expect(first.text).toBe('injected reminder')
+  })
+
+  it('a snapshot injection keeps its producer label, form and named sections (v0.10.46)', () => {
+    const line = 'Time sampled while preparing turn 1, step 1: 2026-11-13T16:38:48+08:00[Asia/Shanghai]'
+    const text = `${line}\nBrowser time zone for this request: Asia/Shanghai.`
+    const turns = foldTurns([
+      user(1, 'go'),
+      turnStart(2, 1),
+      ev('user/message', 3, {
+        content: [{ type: 'text', text }],
+        source: {
+          kind: 'time-context',
+          form: 'snapshot',
+          sections: [{ name: 'time-context', text }],
+        },
+      }),
+      turnEnd(4, 1),
+    ])
+    const item = turns[0].items[1]
+    expect(item.kind).toBe('context')
+    if (item.kind !== 'context') throw new Error('expected a context item')
+    expect(item.source).toBe('time-context')
+    expect(item.label).toBe('time-context')
+    expect(item.form).toBe('snapshot')
+    // The folded row shows the first line, not the whole model-facing block.
+    expect(item.summary).toBe(line)
+    expect(item.sections).toHaveLength(1)
+    expect(item.sections[0].name).toBe('time-context')
+    expect(item.sections[0].text).toBe(text)
+    expect(item.text).toBe(text)
+  })
+
+  it('a skill invocation names the skill, not the generic kind (v0.10.46)', () => {
+    const turns = foldTurns([
+      user(1, 'go'),
+      turnStart(2, 1),
+      ev('user/message', 3, { content: 'skill body', source: { kind: 'skill-invocation', name: 'figma-workbench' } }),
+      turnEnd(4, 1),
+    ])
+    const item = turns[0].items[1]
+    expect(item.kind).toBe('context')
+    if (item.kind !== 'context') throw new Error('expected a context item')
+    expect(item.source).toBe('skill-invocation')
+    expect(item.label).toBe('figma-workbench')
   })
 })

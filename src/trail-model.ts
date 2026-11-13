@@ -7,7 +7,10 @@
  *   turn boundary   = `turn/start .. turn/end` (the `data.turn` number is the
  *                     turn identity — stable under parallel steps / steering).
  *   input           = first `user/message` with source.kind === 'user'.
- *   context rows    = `steering` / `context` user messages (kept as grey rows).
+ *   context rows    = `steering` / `context` user messages; since v0.10.46 every
+ *                     injected `user/message` is a `context` item carrying its
+ *                     producer (`source.kind`), presentation `form` and, for
+ *                     `snapshot`, the named `sections` the model read.
  *   tool steps      = `tool/call` (+ `tool/result` error rows); every
  *                     `tool/result` is folded onto its step as TrailResult
  *                     content (append merges by seq / surfaceOp replace).
@@ -49,6 +52,31 @@ export type TurnItem =
   | { kind: 'tool'; step: TrailStep }
   | { kind: 'output'; seq: number; text: string; preview: string }
   | { kind: 'compaction'; seq: number; preview: string }
+  | TrailContextItem
+
+/** One injected `user/message`, folded into a renderable row (v0.10.46). */
+export interface TrailContextItem {
+  kind: 'context'
+  seq: number
+  /** `user/message.data.source.kind` — the subsystem that injected (`time-context`, …). */
+  source: string
+  /** Display label of the producer (kind, skill name, instruction paths, recall labels). */
+  label: string
+  /** Producer-declared presentation form; null when none/unknown. */
+  form: string | null
+  /** One-line summary for the folded row (first line of the first snapshot section). */
+  summary: string
+  /** Snapshot sections in producer order; empty for every other form. */
+  sections: TrailContextSection[]
+  /** The model-facing text, verbatim (fallback body when the form is opaque). */
+  text: string
+}
+
+/** One named contribution of a `snapshot` context injection (`source.sections`). */
+export interface TrailContextSection {
+  name: string
+  text: string
+}
 
 /** One image block of a tool result (no URL is fetched; the UI renders a chip). */
 export interface TrailResultImage {
@@ -305,6 +333,121 @@ export function lastTextBlock(blocks: unknown): string {
 
 function objectData(event: SessionEventLike): Record<string, unknown> {
   return event.data !== null && typeof event.data === 'object' ? event.data : {}
+}
+
+/** Forms DSH Chat renders structurally; any other value stays opaque. */
+const CONTEXT_FORMS: ReadonlySet<string> = new Set([
+  'instructions', 'catalog', 'snapshot', 'notice', 'relay', 'recall',
+])
+
+/** Join every text block of a content value verbatim (never compacted). */
+function fullTextOf(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  const parts: string[] = []
+  for (const block of content) {
+    const b = record(block)
+    if (b === null || Array.isArray(block) || b.type !== 'text' || typeof b.text !== 'string' || b.text.length === 0) continue
+    parts.push(b.text)
+  }
+  return parts.join('\n')
+}
+
+/** First non-empty line of a text value (the folded row's one-line account). */
+function firstLineOf(text: string): string {
+  for (const line of text.split('\n')) {
+    const value = line.trim()
+    if (value.length > 0) return value
+  }
+  return ''
+}
+
+/** The `user/message` source record: `data.message.source` first, then `data.source`. */
+function messageSourceOf(data: Record<string, unknown>): Record<string, unknown> | null {
+  const message = record(data.message)
+  const nested = message === null ? null : record(message.source)
+  if (nested !== null && !Array.isArray(nested)) return nested
+  const direct = record(data.source)
+  return direct !== null && !Array.isArray(direct) ? direct : null
+}
+
+/** Read `source.sections` as snapshot contributions; `[]` when unusable. */
+function contextSectionsOf(source: Record<string, unknown>): TrailContextSection[] {
+  const list = source.sections
+  if (!Array.isArray(list)) return []
+  const out: TrailContextSection[] = []
+  for (const entry of list) {
+    const section = record(entry)
+    if (section === null || Array.isArray(entry)) return []
+    if (typeof section.name !== 'string' || section.name.length === 0) return []
+    if (typeof section.text !== 'string') return []
+    out.push({ name: section.name, text: section.text })
+  }
+  return out
+}
+
+/** Read one string array member (`references[].label`, `changes[].path`). */
+function sourceValuesOf(source: Record<string, unknown>, member: string, field: string): string[] {
+  const list = source[member]
+  if (!Array.isArray(list)) return []
+  const out: string[] = []
+  for (const entry of list) {
+    const item = record(entry)
+    if (item === null || Array.isArray(entry)) continue
+    const value = item[field]
+    if (typeof value === 'string' && value.length > 0 && !out.includes(value)) out.push(value)
+  }
+  return out
+}
+
+/**
+ * Producer label, mirroring DSH Chat's `contextProducer`: the durable source
+ * identifies what produced the injection, so a skill's name or an instruction
+ * file's path is more useful than the generic kind.
+ */
+function contextLabelOf(kind: string, source: Record<string, unknown>): string {
+  if (kind === 'skill-invocation' && typeof source.name === 'string' && source.name.length > 0) {
+    return source.name
+  }
+  if (kind === 'agent-instructions') {
+    const paths = sourceValuesOf(source, 'changes', 'path')
+    if (paths.length > 0) return paths.join(', ')
+  }
+  if (kind === 'session-reference') {
+    const labels = sourceValuesOf(source, 'references', 'label')
+    if (labels.length > 0) return labels.join(', ')
+  }
+  return kind
+}
+
+/**
+ * One injected `user/message` as a renderable context row, or null for a real
+ * user message / an unreadable source. Shared by both fold paths so the panel
+ * and the live folder never disagree about what an injection looks like.
+ */
+function contextItemOf(data: Record<string, unknown>, seq: number): TrailContextItem | null {
+  const source = messageSourceOf(data)
+  if (source === null) return null
+  const kind = typeof source.kind === 'string' && source.kind.length > 0 ? source.kind : null
+  if (kind === null || kind === 'user') return null
+  const rawForm = typeof source.form === 'string' ? source.form : null
+  const form = rawForm !== null && CONTEXT_FORMS.has(rawForm) ? rawForm : null
+  const sections = form === 'snapshot' ? contextSectionsOf(source) : []
+  const message = record(data.message)
+  const direct = fullTextOf(data.content)
+  const text = direct.length > 0 ? direct : (message === null ? '' : fullTextOf(message.content))
+  const summary = compact(firstLineOf(sections.length > 0 ? sections[0].text : text))
+  if (summary.length === 0) return null
+  return {
+    kind: 'context',
+    seq,
+    source: kind,
+    label: contextLabelOf(kind, source),
+    form,
+    summary,
+    sections,
+    text,
+  }
 }
 
 /** source.kind: 'user' | 'steering' | 'context' | 'plugin' | ... */
@@ -907,7 +1050,12 @@ export function foldTurns(events: readonly SessionEventLike[]): TrailTurn[] {
             appendItem(current, { kind: 'input', seq, text, preview })
           }
         } else if (current !== null) {
-          current.contexts.push({ seq, text, preview })
+          // v0.10.46: an injection is a first-class row now, not just a count.
+          const context = contextItemOf(data, seq)
+          if (context !== null) {
+            current.contexts.push({ seq, text: context.text, preview: context.summary })
+            appendItem(current, context)
+          }
         }
         break
       }
@@ -1302,8 +1450,12 @@ export class TrailFolder {
             this.markDirty(this.current)
           }
         } else if (this.current !== null) {
-          this.current.contexts.push({ seq, text, preview })
-          this.markDirty(this.current)
+          const context = contextItemOf(data, seq)
+          if (context !== null) {
+            this.current.contexts.push({ seq, text: context.text, preview: context.summary })
+            appendItem(this.current, context)
+            this.markDirty(this.current)
+          }
         }
         break
       }

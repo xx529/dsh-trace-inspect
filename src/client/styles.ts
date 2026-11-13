@@ -510,8 +510,13 @@ export const trailCss = `
   font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, Menlo, monospace);
   font-size: 11.5px;
   line-height: 17px;
-  white-space: pre;
-  overflow: auto;
+  /* v0.10.45: wrap long JSON values (a long cmdString used to be clipped at
+     the panel edge with a silent horizontal scrollbar); indentation survives
+     because rows are block-level with their own padding-left. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  overflow-y: auto;
   max-height: 420px;
   color: var(--dsw-alias-label-primary, #f9fafb);
   tab-size: 2;
@@ -1268,6 +1273,9 @@ export const trailCss = `
 .ttl-ink-teal { color: #63c9d1; }
 .ttl-ink-gray { color: #9ba1a7; }
 .ttl-ink-red { color: #f2726f; }
+/* v0.10.46: brand inks for the two provider subagents (filled marks). */
+.ttl-ink-claude { color: #d97757; }
+.ttl-ink-codex { color: #e6e8ea; }
 .ttl-distSeg.ttl-ink-violet, .ttl-legendDot.ttl-ink-violet { background: #a78bfa; }
 .ttl-distSeg.ttl-ink-blue, .ttl-legendDot.ttl-ink-blue { background: #60a5fa; }
 .ttl-distSeg.ttl-ink-green, .ttl-legendDot.ttl-ink-green { background: #34d399; }
@@ -1276,6 +1284,8 @@ export const trailCss = `
 .ttl-distSeg.ttl-ink-teal, .ttl-legendDot.ttl-ink-teal { background: #63c9d1; }
 .ttl-distSeg.ttl-ink-gray, .ttl-legendDot.ttl-ink-gray { background: #9ba1a7; }
 .ttl-distSeg.ttl-ink-red, .ttl-legendDot.ttl-ink-red { background: #f2726f; }
+.ttl-distSeg.ttl-ink-claude, .ttl-legendDot.ttl-ink-claude { background: #d97757; }
+.ttl-distSeg.ttl-ink-codex, .ttl-legendDot.ttl-ink-codex { background: #e6e8ea; }
 .ttl-stepIcon.ttl-tone-error {
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #f2726f) 16%, var(--dsw-alias-bg-layer-1, #232324));
 }
@@ -2167,6 +2177,59 @@ export const trailCss = `
   cursor: pointer;
 }
 .ttl-msg:hover .ttl-msgJump { display: inline-flex; }
+
+/* ══ v0.10.46: context-injection rows ════════════════════════════════════
+   An injected user/message (time-context, runtime-context, instructions,
+   skill catalog, notice, recall) shares the message row's 32px grid and hover
+   chrome; only the mono name slot and the snapshot body are its own. The name
+   slot carries the injection's own title, aligned with the tool-name column.
+   It never draws a status / duration: it is material the model read, not a
+   tool call. */
+.ttl-ctxIcon { color: #a78bfa; }
+.ttl-ctxName {
+  flex: none;
+  /* Same name column as the tool rows, so the summary starts exactly under the
+     tool descriptions; a long producer title ellipsizes instead of wrapping. */
+  width: var(--ttl-step-name-w, 52px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
+  font-size: 10.5px;
+}
+.ttl-ctxNote {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-quaternary, #7b8086);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+/* The sections are the same bytes the model read, split at the producer's own
+   boundaries; a long snapshot scrolls inside the card instead of growing it. */
+.ttl-ctxSections {
+  display: grid;
+  gap: 10px;
+  max-height: 141px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+.ttl-ctxSection { margin: 0; }
+.ttl-ctxSectionName {
+  margin: 0 0 2px;
+  color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.ttl-ctxSectionText {
+  margin: 0;
+  color: #cfd3d6;
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* ══ v0.9.7: no locate arrows, no ∥N badge, edit/mcp colours split ═════════ */
 .ttl-stepJump, .ttl-locateBtn, .ttl-msgJump, .ttl-itemJump, .ttl-output-jump { display: none !important; }

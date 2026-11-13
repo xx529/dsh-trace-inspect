@@ -217,7 +217,19 @@ function looksLikeFilePath(token: string): boolean {
   // quotes into a bogus one-file list (`"`), so quotes/braces/brackets/commas
   // disqualify a token before the prefix checks.
   if (/["'{}[\],;]/.test(token)) return false
-  if (token.includes('/')) return true
+  // v0.10.45: `docker ps` rows contain things like `0.0.0.0:4320/tcp` and
+  // `4320/tcp`; a bare "contains a slash" rule turned every port into a file
+  // named `tcp`. Host:port, URL, MIME and protocol tokens are not paths.
+  if (token.includes(':') || token.includes('@') || token.includes('->')) return false
+  if (/^(?:application|text|image|audio|video|multipart|font|model)\/[\w.+-]+$/i.test(token)) return false
+  if (/\/(?:tcp|udp|sctp)$/i.test(token)) return false
+  if (token.includes('/')) {
+    const firstSegment = token.split('/')[0] ?? ''
+    // `4320/tcp`, `0.0.0.0/x`: a purely numeric / dotted-numeric first segment
+    // is a host or port, not a directory.
+    if (/^\d+(?:\.\d+)*$/.test(firstSegment)) return false
+    return true
+  }
   if (token.includes('\\')) {
     // A backslash alone is not a separator: accept Windows drives / UNC only.
     return /^[A-Za-z]:[\\/]/.test(token) || token.startsWith('\\\\')
@@ -307,12 +319,14 @@ function fileEntriesOf(text: string): FileEntry[] | null {
       size = `${sizeMatch[1]} ${(sizeMatch[2] ?? 'B').toUpperCase()}`
       body = cleaned.slice(0, sizeMatch.index)
     }
-    let path: string | null = null
-    for (const token of body.split(/\s+/)) {
-      if (token.length === 0) continue
-      if (path === null && looksLikeFilePath(token)) path = token.replace(/[,:]$/, '')
+    const tokens = body.split(/\s+/).filter((token) => token.length > 0)
+    const first = tokens[0]
+    // v0.10.45: only the FIRST token may be the path — a path list is
+    // line-oriented (`/tmp/01.png  74 KB`), while tool tables put unrelated
+    // cells (ports, status, hosts) later in the line.
+    if (first !== undefined && looksLikeFilePath(first)) {
+      entries.push(fileEntryOfPath(first.replace(/[,:]$/, ''), size))
     }
-    if (path !== null) entries.push(fileEntryOfPath(path, size))
   }
   if (entries.length === 0) return null
   if (entries.length / lines.length < 0.6) return null

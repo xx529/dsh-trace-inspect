@@ -779,3 +779,42 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 说明：右侧若仍有细条，可能是宿主/系统的悬浮滚动条（不属于本插件样式）。
 
 ![长回复完整渲染：右边缘不再被渐隐覆盖](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0144-longmsg-nofade.jpg)
+
+## 56. v0.10.45 MCP 结果误判文件列表 + 参数长值换行
+
+| 反馈 | 原因 | 方案 | 实测 |
+| --- | --- | --- | --- |
+| MCP 摘要结果很怪（「结果 4 个文件」tcp / tcp…） | `fileEntriesOf` 的路径判定是「含 `/` 即路径」，且扫描整行 token：`docker ps` 的 `4320/tcp`、`127.0.0.1:3000->4320/tcp` 都成了文件 | 收紧：含 `:`/`@`/`->` 不算路径；`\d+/tcp\|udp\|sctp`、MIME、纯数字/点分数字开头段不算路径；每行只认第一个 token 为路径 | docker 表格：`hasFiles=false`，输出块正常显示 `4320/tcp` |
+| 参数 JSON 长值在右边缘被切 | `.ttl-jsonPretty` 为 `white-space: pre; overflow: auto`（横向滚动，视觉像被裁） | 改 `pre-wrap + overflow-wrap: anywhere`，`overflow-x: hidden`，保留行内缩进 | `cmdString` 完整换行显示；`jsonScrollW == jsonClientW`（492/492） |
+
+- 保留：行首的绝对/相对路径、带扩展名的文件行仍渲染为文件列表（既有用例通过）。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **583 例 / 22 文件**；`pnpm build` 通过。
+- 采集脚本：`scripts/verify/shoot-mcp-summary.mjs`（mock MCP docker 表格，量文件列表误判与 JSON 横向溢出）。
+
+![MCP 摘要：表格按文本显示，参数长值换行](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0145-mcp-summary.jpg)
+
+## 57. v0.10.46 子智能体品牌图标 + 轨迹里的上下文注入
+
+| 需求 | 设计稿（Figma「重设计原型 v0.9」） | 落地 |
+| --- | --- | --- |
+| 两个子智能体用官方 logo | `05e · 子智能体品牌图标：Claude Code / Codex`（`43:2`） | `tool-icon.tsx` 新增 `claude` / `codex` 填充路径；`tool-summary.ts` 精确名映射 + `subagent_` 前缀兜底 + 两个品牌 ink；`styles.ts` `.ttl-ink-claude/#d97757`、`.ttl-ink-codex/#e6e8ea` |
+| 上下文注入进入轨迹 | `06e · 轨迹里的上下文注入行`（`44:335`，含折叠 / 展开 / 4 张规格卡） | `trail-model.ts` 新 `context` item（source / label / form / summary / sections / text，两条 fold 路径共用 `contextItemOf`）；`TrailTab.tsx` 注入行 + 展开体；`styles.ts` `.ttl-ctx*` |
+
+真实日志核对（`session-00c569f2…`，50 轮）：
+
+- `user/message` 的 `data.source = { kind, form?, sections?: [{ name, text }] }`；`source.kind = user` 才是用户气泡，其余都按注入处理。
+- 实测样本：`time-context` 42 条、`runtime-context` 11 条（均 `form: snapshot`）、`skill-catalog` → `catalog`、`agent-instructions` → `instructions`、`tool-jobs` → `notice`；`session-reference` → `recall`（表单枚举与 DSH Chat 的 `KNOWN_FORMS` 一致）。
+- 折叠行的名称列直接显示注入标题（`source.kind` → `time-context` / `runtime-context`；`skill-invocation` 显示技能名、`agent-instructions` 显示指令路径、`session-reference` 显示召回标签），与工具名共用 132px 名称列，摘要因此与工具描述对齐；
+- 折叠行摘要取第一个分节的首行；展开态对 `snapshot` 先渲染「取代先前的快照」，再逐节渲染 `sections`。
+
+证据方法与限制：
+
+- 本次会话的文件沙箱禁止写 `~/.dsh/profiles/trace-verify/cordis.yml`，`dsh --profile trace-verify` 无法在 19487 起第二个实例（`DSH_HOME` 换到 `/tmp` 后，`@deepseek-ai/*` bundle 解析失败），因此**没有**走 `scripts/verify/shoot.mjs` 的真机链路。
+- 替代证据：用一个临时用例渲染真实 `TrailTab`（mock 一轮：time-context → `subagent_claude_code` → `subagent_codex` → `bash` → runtime-context → 输出），把真实 `trailCss` + 渲染后的 DOM 序列化成静态页，再用 Chrome（2×、400px 侧栏、zh-CN）截图。组件、样式、文案都是真实产物，只缺宿主外壳；临时用例截图后已删除，不入库。
+- 断言：`ttl-context-producer` = `time-context`；折叠行摘要 = 首行；展开含「取代先前的快照」与分节正文；无 `form` 时回退原文且不出现快照说明。
+
+![上下文注入行：折叠态（time-context / runtime-context 各一行）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0146-context-rows.jpg)
+
+![上下文注入行：展开态（取代先前的快照 + 分节渲染）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0146-context-expanded.jpg)
+
+门禁：`pnpm typecheck` 0；`pnpm test` **588 例 / 22 文件**；`pnpm build` + `scripts/check-lib.mjs` 通过。

@@ -165,6 +165,18 @@ describe('tool-summary — work clusters (v0.10.19)', () => {
     expect(inkOf('generic')).toBe('gray')
     expect(inkOf('alert')).toBe('red')
   })
+
+  it('the provider subagents carry their own brand mark and ink (v0.10.46)', () => {
+    expect(toolIconKind('subagent_claude_code')).toBe('claude')
+    expect(toolIconKind('subagent_codex')).toBe('codex')
+    expect(inkOf('claude')).toBe('claude')
+    expect(inkOf('codex')).toBe('codex')
+    // Other provider-named subagents are still one child agent (robot glyph).
+    expect(toolIconKind('subagent_acp')).toBe('subagent')
+    expect(toolIconKind('subagent')).toBe('subagent')
+    expect(summarizeToolCall('subagent_claude_code', '{"description":"列出工作区文件"}', '{}').icon).toBe('claude')
+    expect(summarizeToolCall('subagent_codex', '{"description":"列出工作区文件"}', '{}').icon).toBe('codex')
+  })
 })
 
 describe('tool-summary — helpers', () => {

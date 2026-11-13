@@ -1514,8 +1514,56 @@ describe('TrailTab', () => {
     expect(screen.getByTestId('ttl-output-jump')).toBeTruthy()
   })
 
-  it('a long output collapses to one row: first chars + 「还有 N 字符」, click opens the full text (v0.10.3)', async () => {
-    const long = `第一段：这是一条比较长的助手消息，用来验证单行输出行。\n${'细节内容 '.repeat(80)}`
+  it('an injected context message renders as its own row and expands to snapshot sections (v0.10.46)', async () => {
+    const line = 'Time sampled while preparing turn 1, step 1: 2026-11-13T16:38:48+08:00[Asia/Shanghai]'
+    const text = `${line}\nBrowser time zone for this request: Asia/Shanghai.`
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      ev('user/message', 3, {
+        content: [{ type: 'text', text }],
+        source: {
+          kind: 'time-context',
+          form: 'snapshot',
+          sections: [{ name: 'time-context', text }],
+        },
+      }),
+      toolCall(4, 'bash', 'ls'),
+      turnEnd(5, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-context')
+    // Producer + first line on the collapsed row; no status / duration slot.
+    expect(screen.getByTestId('ttl-context-producer').textContent).toBe('time-context')
+    expect(screen.getByTestId('ttl-context-summary').textContent).toBe(line)
+    expect(row.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByTestId('ttl-context-body')).toBeNull()
+    fireEvent.click(row)
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    const body = await screen.findByTestId('ttl-context-body')
+    expect(body.textContent).toContain('Supersedes earlier snapshots')
+    expect(body.textContent).toContain('time-context')
+    expect(body.textContent).toContain('Browser time zone')
+    fireEvent.click(row)
+    expect(screen.queryByTestId('ttl-context-body')).toBeNull()
+  })
+
+  it('a context row falls back to the model-facing text when it declares no form', async () => {
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      ev('user/message', 3, { content: 'injected reminder body', source: { kind: 'context' } }),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-context')
+    expect(screen.getByTestId('ttl-context-producer').textContent).toBe('context')
+    fireEvent.click(row)
+    const body = await screen.findByTestId('ttl-context-body')
+    // No snapshot captions for an opaque form — just the text the model read.
+    expect(body.textContent).not.toContain('Supersedes earlier snapshots')
+    expect(body.textContent).toContain('injected reminder body')
+  })
+
+  it('a long output collapses to one row: first chars + 「还有 N 字符」, click opens the full text (v0.10.3)', async () => {    const long = `第一段：这是一条比较长的助手消息，用来验证单行输出行。\n${'细节内容 '.repeat(80)}`
     renderTab([
       user(1, 'go'),
       turnStart(2, 1),
@@ -1756,6 +1804,30 @@ describe('MCP result file-list heuristic (v0.10.13)', () => {
     expect(screen.queryByTestId('ttl-files')).toBeNull()
     // The value still shows up as the normal 输出 preview.
     expect(await screen.findByTestId('ttl-outBlock')).toBeTruthy()
+  })
+
+  it('a docker ps table is not mistaken for a file list (v0.10.45)', async () => {
+    const text = [
+      'NAMES                                   IMAGE              STATUS   PORTS',
+      'htdot-cloud-production-app-1            263830cbca3f       Up 14 hours (healthy)   127.0.0.1:3000->4320/tcp',
+      'htdot-cloud-production-dingtalk-1       263830cbca3f       Up 14 hours (healthy)   4320/tcp',
+      'htdot-cloud-production-db-1             224550956756       Up 14 hours (healthy)   5432/tcp',
+      'nginx                                   m.daocloud.io/docker.io/library/nginx:stable   Up 3 weeks',
+    ].join('\n')
+    renderTab(mcpTurn(text))
+    await openStepDetail(0)
+    // `4320/tcp` / host:port cells are not paths — the summary must keep the
+    // table as text, not turn every port into a file named tcp.
+    expect(screen.queryByTestId('ttl-files')).toBeNull()
+    const out = await screen.findByTestId('ttl-outBlock')
+    expect(out.textContent).toContain('PORTS')
+    expect(out.textContent).toContain('4320/tcp')
+  })
+
+  it('a MIME list is not a file list either (v0.10.45)', async () => {
+    renderTab(mcpTurn('image/png\ntext/plain\napplication/json'))
+    await openStepDetail(0)
+    expect(screen.queryByTestId('ttl-files')).toBeNull()
   })
 
   it('a genuine path list still renders file rows', async () => {

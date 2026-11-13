@@ -92,6 +92,19 @@ function inputIcon(): React.ReactElement {
   )
 }
 
+/**
+ * Inbox glyph for a context-injection row (v0.10.46): context goes *into* the
+ * model, so the row reads as a tray receiving material rather than a tool run.
+ */
+function contextIcon(): React.ReactElement {
+  return React.createElement(
+    'svg',
+    { viewBox: '0 0 24 24', width: 12, height: 12, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+    React.createElement('polyline', { points: '22 12 16 12 14 15 10 15 8 12 2 12' }),
+    React.createElement('path', { d: 'M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z' }),
+  )
+}
+
 /** One-line character budget of the collapsed assistant-message row. */
 const OUTPUT_PREVIEW_CHARS = 32
 
@@ -167,6 +180,8 @@ interface UiStrings {
   charsLeft: (n: number) => string
   shownAll: (turns: number, steps: number) => string
   shownFiltered: (turns: number, steps: number) => string
+  /** Caption above a `snapshot` injection's sections (v0.10.46). */
+  contextSupersedes: string
 }
 
 const ZH_UI: UiStrings = {
@@ -195,6 +210,7 @@ const ZH_UI: UiStrings = {
   charsLeft: (n) => `还有 ${groupThousands(n)} 字符`,
   shownAll: (turns, steps) => `已显示全部 ${turns} 轮 · ${steps} 步`,
   shownFiltered: (turns, steps) => `已筛选 ${turns} 轮 · ${steps} 步`,
+  contextSupersedes: '取代先前的快照',
 }
 
 const EN_UI: UiStrings = {
@@ -223,6 +239,7 @@ const EN_UI: UiStrings = {
   charsLeft: (n) => `${groupThousands(n)} more chars`,
   shownAll: (turns, steps) => `Showing all ${turns} turns · ${steps} steps`,
   shownFiltered: (turns, steps) => `Filtered to ${turns} turns · ${steps} steps`,
+  contextSupersedes: 'Supersedes earlier snapshots',
 }
 
 function uiStrings(lang: Lang): UiStrings {
@@ -355,6 +372,8 @@ const CLUSTER_LABEL: Record<ToolIconKind, { zh: string; en: string }> = {
   ask: { zh: '询问用户', en: 'ask' },
   present: { zh: '交付物', en: 'present' },
   subagent: { zh: '子代理', en: 'subagent' },
+  claude: { zh: 'Claude Code 子代理', en: 'Claude Code' },
+  codex: { zh: 'Codex 子代理', en: 'Codex' },
   team: { zh: '团队协作', en: 'team' },
   'team-task': { zh: '团队任务板', en: 'team tasks' },
   workflow: { zh: '工作流 / 循环', en: 'workflow' },
@@ -610,6 +629,17 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     })
   }, [])
 
+  /** v0.10.46: open context-injection rows (keyed by event seq). */
+  const [openContexts, setOpenContexts] = React.useState<ReadonlySet<string>>(() => new Set<string>())
+  const toggleContext = React.useCallback((key: string): void => {
+    setOpenContexts((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
   const turnNo = turn.turn ?? index + 1
   const turnTag = `#${turnNo}`
   const turnTagTitle = (t(lang, 'turnPrefix') as (n: number) => string)(turnNo)
@@ -690,9 +720,78 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
     )
   }
 
+  /**
+   * v0.10.46: one injected `user/message` as a row on the same 32px grid as
+   * tools and messages. The collapsed line names the producer (`time-context`,
+   * `runtime-context`, a skill name, an instruction path) and its first line;
+   * opening it renders the producer's own form — snapshot sections when it
+   * declared one, otherwise the model-facing text.
+   */
+  const renderContext = (item: Extract<TurnItem, { kind: 'context' }>, key: string): React.ReactElement => {
+    const open = openContexts.has(key)
+    const expandable = item.sections.length > 0 || item.text.trim().length > 0
+    const title = item.sections.length > 0 ? item.sections[0].text : item.text
+    return (
+      <div
+        className="ttl-msg ttl-ctx"
+        key={key}
+        data-open={open ? 'true' : undefined}
+        data-testid="ttl-context-wrap"
+        data-source={item.source}
+      >
+        <button
+          type="button"
+          className="ttl-msgRow"
+          data-testid="ttl-item-context"
+          aria-expanded={expandable ? open : undefined}
+          title={clipTitle(title)}
+          onClick={() => { if (expandable) toggleContext(key) }}
+        >
+          <span className="ttl-stepIcon ttl-ctxIcon" aria-hidden="true">{contextIcon()}</span>
+          {/* v0.10.46: the row's name slot is the injection's own title
+              (`time-context`, `runtime-context`, a skill name, an instruction
+              path) — no generic 「上下文」 prefix, so the column reads like the
+              tool-name column it sits in. */}
+          <span className="ttl-ctxName" data-testid="ttl-context-producer" title={item.label}>{item.label}</span>
+          <span className="ttl-msgPreview" data-testid="ttl-context-summary">{item.summary}</span>
+          {expandable
+            ? (
+              <span
+                className={`ttl-msgChevron${open ? ' ttl-msgChevronOpen' : ''}`}
+                aria-hidden="true"
+              >{chevronIcon()}</span>
+            )
+            : null}
+        </button>
+        {open && expandable
+          ? (
+            <div className="ttl-msgBody ttl-ctxBody" data-testid="ttl-context-body">
+              {item.sections.length > 0
+                ? (
+                  <>
+                    <p className="ttl-ctxNote">{ui.contextSupersedes}</p>
+                    <dl className="ttl-ctxSections">
+                      {item.sections.map((section, index) => (
+                        <div className="ttl-ctxSection" key={`${section.name}:${index}`}>
+                          <dt className="ttl-ctxSectionName">{section.name}</dt>
+                          <dd className="ttl-ctxSectionText">{section.text}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </>
+                )
+                : <div className="ttl-msgFull">{item.text}</div>}
+            </div>
+          )
+          : null}
+      </div>
+    )
+  }
+
   const renderItem = (item: TurnItem, key: string): React.ReactElement | null => {
     if (item.kind === 'tool') return renderStep(item.step, key)
     if (item.kind === 'input') return null // shown as the body's first row
+    if (item.kind === 'context') return renderContext(item, key)
     if (item.kind === 'output') {
       // Assistant prose is a MESSAGE row on the same 32px grid as tool steps:
       // neutral chip + role label + one-line preview + `还有 N 字符` meta; a

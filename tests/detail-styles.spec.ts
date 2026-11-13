@@ -66,7 +66,7 @@ const PALETTE = new Set([
   '#2a2a2b', '#2c2c2f', '#2f3033', '#34d399', '#353638', '#35363a', '#4176e6', '#4c8dff', '#4ed4a4',
   '#545557', '#55595e', '#5686fe', '#5f6469', '#60a5fa', '#63c9d1', '#6a6e75', '#6f747a', '#7b8086',
   '#7cb2ff', '#8fdcb8', '#9ba1a7', '#9bb8e8', '#a78bfa', '#a9e6b9', '#adb2b8', '#b39cf5', '#b99a6b', '#b9a7ee',
-  '#b9bdc4', '#c4b2ff', '#cfd3d6', '#d7dade', '#dfe2e5', '#e6e8ea', '#f08fb8', '#f0a7a5', '#f0f1f2',
+  '#b9bdc4', '#c4b2ff', '#cfd3d6', '#d7dade', '#d97757', '#dfe2e5', '#e6e8ea', '#f08fb8', '#f0a7a5', '#f0f1f2',
   '#f25a5a', '#f2726f', '#f2b45c', '#f2c98d', '#f3b4cc', '#f472b6', '#f3f4f6', '#f59e0b', '#f6a9a7', '#f9fafb',
 ])
 
@@ -185,6 +185,17 @@ describe('v0.10.10: 工具族不再有灰色字形', () => {
 describe('v0.10.27: 挪出 meta 后统计数字仍与图标居中', () => {
   it('.ttl-mix 自带 13px 行盒（不再依赖 .ttl-turnMeta 继承）', () => {
     expect(rule('.ttl-mix {')).toContain('line-height: 13px;')
+  })
+})
+
+describe('v0.10.45: 参数 JSON 长值换行', () => {
+  it('.ttl-jsonPretty wraps instead of silently scrolling horizontally', () => {
+    const rule = '.ttl-jsonPretty {'
+    expect(trailCss).toContain(rule)
+    const block = trailCss.slice(trailCss.indexOf(rule), trailCss.indexOf('}', trailCss.indexOf(rule)))
+    expect(block).toContain('white-space: pre-wrap')
+    expect(block).toContain('overflow-wrap: anywhere')
+    expect(block).toContain('overflow-x: hidden')
   })
 })
 

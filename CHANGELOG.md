@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.10.46] - 2026-11-13
+
+### Added
+
+- **子智能体品牌图标**：`subagent_claude_code` / `subagent_codex` 不再共用机器人图标，分别用官方 Claude starburst（`#d97757`）与 OpenAI blossom（`#e6e8ea`）。两者是**填充路径**（同一 24 网格），颜色仍由 `.ttl-ink-*` 决定，18px chip、行高、✓ 状态与耗时都不变；其余 `subagent_*`（如自定义 `toolName`）按新增前缀规则继续画机器人。turn 头部的簇混排也按品牌色出小图标。
+- **轨迹里显示上下文注入**：`user/message` 的注入（`time-context` / `runtime-context` / `agent-instructions` / `skill-catalog` / `tool-jobs` / `session-reference`）从「只计数」变成一等轨迹行：
+  - 折叠行 = 18px inbox 图标（violet ink）+ **名称列直接是注入标题**（`time-context` / `runtime-context` / 技能名 / 指令路径 / 召回标签，与工具名同列宽 132px）+ 首行摘要 + 折叠箭头，与消息行同一 32px 网格；不再有固定的「上下文」角色词与生产者胶囊；
+  - 展开按 DSH 声明的 `form` 渲染：`snapshot` 先一句「取代先前的快照」再按 `source.sections` 分节渲染「节名 + 正文」（mono 11/16，卡内 141px 滚动）；`form` 未知或读不出时回退模型可见原文；
+  - 不占「N 步」，不进簇混排 / 失败计数 / 工具筛选命中；工具筛选或搜索激活时隐藏（与消息行、压缩行同一规则）。
+  - 设计稿：Figma「重设计原型 v0.9」新增 `05e · 子智能体品牌图标` 与 `06e · 轨迹里的上下文注入行` 两帧。
+
+### Verification
+
+- 新增/改写 10 例：`fold-turns`（context 行、snapshot sections、skill 标签 3 例）、`trail-tab`（注入行折叠/展开到分节、无 form 回退 2 例）、`tool-summary`（品牌图标 + 前缀兜底 1 例），调色板冻结用例纳入 `#d97757`。全量 **588 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` 通过、`scripts/check-lib.mjs` 通过。
+- 实机渲染证据：用真实组件 + 真实 `trailCss` 序列化 DOM 后用 Chrome 2× 截图（本会话沙箱禁止写 `~/.dsh/profiles/trace-verify/cordis.yml`，起不了第二个 DSH 实例；方法见 `docs/verification-v09.md` §57）。截图 `docs/assets/v0146-context-rows.jpg`、`docs/assets/v0146-context-expanded.jpg`；0 条 console error。
+
+## [0.10.45] - 2026-11-10
+
+### Fixed
+
+- **MCP 结果被误判成文件列表**：`docker ps` 这类文本结果里 `4320/tcp`、`127.0.0.1:3000->4320/tcp` 被「含斜杠即路径」的旧规则当成文件，摘要里出现「结果 4 个文件 · tcp / tcp / tcp…」。现在路径判定收紧：
+  - 含 `:` / `@` / `->` 的 token 不算路径（host:port、URL、端口映射）；
+  - `\d+/tcp|udp|sctp` 与 MIME（`image/png` 等）不算路径；纯数字/点分数字开头段不算目录；
+  - 一条行里**只认第一个 token** 为路径（路径列表是行首格式，表格单元格不再误伤）。
+  这类表格结果回到普通「输出」文本块显示。
+- **参数 JSON 长值被右边缘截断**：`.ttl-jsonPretty` 原为 `white-space: pre; overflow: auto`，长 `cmdString` 只出横向滚动条、视觉上像被裁。改为 `pre-wrap + overflow-wrap: anywhere`（行内缩进保留），参数值完整换行显示。
+
+### Verification
+
+- 新增 3 例回归：docker ps 表格不出 `ttl-files` 且输出保留 `4320/tcp`；MIME 列表不算文件；`.ttl-jsonPretty` 为 `pre-wrap` 且无横向滚动。测试 **583 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` 通过。
+- 实机（`trace-verify`，19487，dock 560，mock `mcp__cloud-server-ssh__execute-command` + docker 表格）：摘要 = MCP 调用块 → 参数（`cmdString` 完整换行）→ 输出（表格文本），`hasFiles=false`，`jsonScrollW == jsonClientW`（492/492）；0 条 console error。截图 `docs/assets/v0145-mcp-summary.jpg`，脚本 `scripts/verify/shoot-mcp-summary.mjs`。
+
 ## [0.10.44] - 2026-11-10
 
 ### Fixed
