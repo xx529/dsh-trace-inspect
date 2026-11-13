@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.54] - 2026-11-13
+
+### Added
+
+- **注入正文支持「分节 / 原文」切换**：`snapshot` 注入（`time-context` / `runtime-context` 等）展开后右上角有两个小按钮。
+  - **分节**（默认）：按 `source.sections` 渲染「取代先前的快照 + 节名 + 正文」，与 DSH 对话区的结构化视图一致；
+  - **原文**：逐字显示模型收到的 `content`（含 `<system-reminder>` 包裹、引导句与 supersedes 那句），不做任何改写；
+  - 没有 `sections` 的注入（`instructions` / `notice` / `recall`）不显示切换，直接按 form 渲染或回退原文；切换状态按事件 seq 记忆，折叠再展开不会丢。
+
+### Verification
+
+- 新增 1 例：默认 `分节`（`aria-pressed`、caption 存在）、点 `原文` 后出现 `ttl-context-raw` 且含 `<system-reminder>`、caption 消失、点回 `分节` 恢复。全量 **597 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 渲染证据（wire 投影后渲染）：分节态 = 「取代先前的快照 + working-directory:current + sandbox:policy」；原文态 = `<system-reminder> … </system-reminder>` 全文。截图 `docs/assets/v0154-context-sections.jpg`、`docs/assets/v0154-context-raw.jpg`。
+- 设计稿 `06e`（v0.10.54）补了切换控件与 ② 卡说明。
+
 ## [0.10.53] - 2026-11-13
 
 ### Changed

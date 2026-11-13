@@ -880,3 +880,14 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 门禁：`pnpm typecheck` 0；`pnpm test` **596 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
 
 ![注入行两列：context + 与工具描述对齐的注入名](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0153-context-name.jpg)
+
+### v0.10.54 补充：注入正文「分节 / 原文」切换
+
+- 背景：`snapshot` 注入的正文有两种真实形态——`source.sections` 的结构化分节，以及模型实际收到的 `content`（带 `<system-reminder>` 包裹与引导句）。之前只渲染前者，读者无法对照原文。
+- 改法：展开体右上角加两个小按钮。默认「分节」＝「取代先前的快照 + 节名 + 正文」；「原文」＝逐字 `item.text`（`pre-wrap`，不做 Markdown、不改写）。没有 `sections` 的注入不显示切换。视图状态按事件 seq 记忆，折叠再展开保持。
+- 实测（wire 投影后渲染）：分节态 = `取代先前的快照` + `working-directory:current` + `sandbox:policy`；原文态 = `<system-reminder> … </system-reminder>` 全文。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **597 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![注入正文：分节视图](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0154-context-sections.jpg)
+
+![注入正文：原文视图（模型收到的 content）](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0154-context-raw.jpg)

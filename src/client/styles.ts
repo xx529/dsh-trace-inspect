@@ -2209,6 +2209,29 @@ export const trailCss = `
   font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
   font-size: 11px;
 }
+/* v0.10.54: two-way body switch (sections / verbatim content). */
+.ttl-ctxModes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  margin: -2px 0 8px;
+}
+.ttl-ctxMode {
+  padding: 2px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 15px;
+  cursor: pointer;
+}
+.ttl-ctxMode:hover { background: rgba(255, 255, 255, 0.06); }
+.ttl-ctxMode[data-active="true"] {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--dsw-alias-label-primary, #f3f4f6);
+}
 .ttl-ctxNote {
   margin: 0 0 8px;
   color: var(--dsw-alias-label-quaternary, #7b8086);

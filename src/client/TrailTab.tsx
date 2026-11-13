@@ -186,6 +186,11 @@ interface UiStrings {
   injectLabel: string
   /** Row role word of an injection; the product wants the English `context` (v0.10.52). */
   contextRole: string
+  /** Snapshot body mode: structured sections (default) vs the verbatim content (v0.10.54). */
+  contextSectionsMode: string
+  contextRawMode: string
+  /** Accessible name of that two-way switch. */
+  contextViewLabel: string
 }
 
 const ZH_UI: UiStrings = {
@@ -217,6 +222,9 @@ const ZH_UI: UiStrings = {
   contextSupersedes: '取代先前的快照',
   injectLabel: '注入',
   contextRole: 'context',
+  contextSectionsMode: '分节',
+  contextRawMode: '原文',
+  contextViewLabel: '正文视图',
 }
 
 const EN_UI: UiStrings = {
@@ -248,6 +256,9 @@ const EN_UI: UiStrings = {
   contextSupersedes: 'Supersedes earlier snapshots',
   injectLabel: 'Injections',
   contextRole: 'context',
+  contextSectionsMode: '分节',
+  contextRawMode: '原文',
+  contextViewLabel: '正文视图',
 }
 
 function uiStrings(lang: Lang): UiStrings {
@@ -647,6 +658,16 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
 
   /** v0.10.46: open context-injection rows (keyed by event seq). */
   const [openContexts, setOpenContexts] = React.useState<ReadonlySet<string>>(() => new Set<string>())
+  /** v0.10.54: rows showing the verbatim content instead of the snapshot sections. */
+  const [rawContexts, setRawContexts] = React.useState<ReadonlySet<number>>(() => new Set<number>())
+  const setContextView = React.useCallback((seq: number, raw: boolean): void => {
+    setRawContexts((current) => {
+      const next = new Set(current)
+      if (raw) next.add(seq)
+      else next.delete(seq)
+      return next
+    })
+  }, [])
   const toggleContext = React.useCallback((key: string): void => {
     setOpenContexts((current) => {
       const next = new Set(current)
@@ -745,6 +766,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
    */
   const renderContext = (item: Extract<TurnItem, { kind: 'context' }>, key: string): React.ReactElement => {
     const open = openContexts.has(key)
+    const rawView = rawContexts.has(item.seq)
     const expandable = item.sections.length > 0 || item.text.trim().length > 0
     const title = item.sections.length > 0 ? item.sections[0].text : item.text
     return (
@@ -788,28 +810,56 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
               {item.sections.length > 0
                 ? (
                   <>
-                    <p className="ttl-ctxNote">{ui.contextSupersedes}</p>
-                    <div className="ttl-ctxSections">
-                      {item.sections.map((section, index) => (
-                        <div className="ttl-ctxSection" key={`${section.name}:${index}`}>
-                          {section.name === item.label
-                            ? null
-                            : <div className="ttl-ctxSectionName">{section.name}</div>}
-                          <div className="ttl-ctxSectionText">
-                            {/* v0.10.49: injected prose goes through the same
-                                Markdown pipeline as a tool result or assistant
-                                message; only machine-shaped text stays raw. */}
-                            {looksLikeMarkdown(section.text)
-                              ? (
-                                <div className="ttl-ctxMd">
-                                  <MarkdownResult text={section.text} labels={markdownLabels(lang)} />
-                                </div>
-                              )
-                              : section.text}
-                          </div>
+                    {item.text.trim().length > 0
+                      ? (
+                        <div className="ttl-ctxModes" role="group" aria-label={ui.contextViewLabel}>
+                          <button
+                            type="button"
+                            className="ttl-ctxMode"
+                            data-active={rawView ? 'false' : 'true'}
+                            aria-pressed={!rawView}
+                            data-testid="ttl-context-mode-sections"
+                            onClick={() => { setContextView(item.seq, false) }}
+                          >{ui.contextSectionsMode}</button>
+                          <button
+                            type="button"
+                            className="ttl-ctxMode"
+                            data-active={rawView ? 'true' : 'false'}
+                            aria-pressed={rawView}
+                            data-testid="ttl-context-mode-raw"
+                            onClick={() => { setContextView(item.seq, true) }}
+                          >{ui.contextRawMode}</button>
                         </div>
-                      ))}
-                    </div>
+                      )
+                      : null}
+                    {rawView
+                      ? <div className="ttl-msgFull" data-testid="ttl-context-raw">{item.text}</div>
+                      : <p className="ttl-ctxNote">{ui.contextSupersedes}</p>}
+                    {rawView
+                      ? null
+                      : (
+                        <div className="ttl-ctxSections">
+                          {item.sections.map((section, index) => (
+                            <div className="ttl-ctxSection" key={`${section.name}:${index}`}>
+                              {section.name === item.label
+                                ? null
+                                : <div className="ttl-ctxSectionName">{section.name}</div>}
+                              <div className="ttl-ctxSectionText">
+                                {/* v0.10.49: injected prose goes through the same
+                                    Markdown pipeline as a tool result or assistant
+                                    message; only machine-shaped text stays raw. */}
+                                {looksLikeMarkdown(section.text)
+                                  ? (
+                                    <div className="ttl-ctxMd">
+                                      <MarkdownResult text={section.text} labels={markdownLabels(lang)} />
+                                    </div>
+                                  )
+                                  : section.text}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                   </>
                 )
                 : looksLikeMarkdown(item.text)

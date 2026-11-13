@@ -1547,6 +1547,39 @@ describe('TrailTab', () => {
     expect(screen.queryByTestId('ttl-context-body')).toBeNull()
   })
 
+  it('a snapshot injection switches between sections and the verbatim content (v0.10.54)', async () => {
+    const text = '<system-reminder>Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: "/tmp".</system-reminder>'
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      ev('user/message', 3, {
+        content: [{ type: 'text', text }],
+        source: {
+          kind: 'runtime-context',
+          form: 'snapshot',
+          sections: [{ name: 'working-directory:current', text: 'Current working directory: "/tmp".' }],
+        },
+      }),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-context')
+    fireEvent.click(row)
+    const body = await screen.findByTestId('ttl-context-body')
+    // Default: structured sections with the supersedes caption.
+    expect(within(body).getByTestId('ttl-context-mode-sections').getAttribute('aria-pressed')).toBe('true')
+    expect(body.textContent).toContain('Supersedes earlier snapshots')
+    expect(screen.queryByTestId('ttl-context-raw')).toBeNull()
+    // Raw: the verbatim content, wrapper included, no caption.
+    fireEvent.click(within(body).getByTestId('ttl-context-mode-raw'))
+    const raw = await screen.findByTestId('ttl-context-raw')
+    expect(raw.textContent).toContain('<system-reminder>')
+    expect(body.textContent).not.toContain('Supersedes earlier snapshots')
+    // Back to sections.
+    fireEvent.click(within(body).getByTestId('ttl-context-mode-sections'))
+    expect(screen.queryByTestId('ttl-context-raw')).toBeNull()
+    expect(body.textContent).toContain('Supersedes earlier snapshots')
+  })
+
   it('a context row falls back to the model-facing text when it declares no form', async () => {
     renderTab([
       user(1, 'go'),
