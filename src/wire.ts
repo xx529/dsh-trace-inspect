@@ -11,8 +11,11 @@
  *     identity ride on them).
  *   - `surfaceOp` / `sourceEventSeqs` are passed through verbatim on EVERY
  *     event type (the fold replays append/replace bookkeeping from them).
- *   - text fields are clipped to TEXT_CAP; tool arguments to ARGS_CAP and each
- *     tool-result text block to RESULT_CAP.
+ *   - text fields are clipped to TEXT_CAP; injected context messages (a
+ *     `user/message` whose source is not `user`) to CONTEXT_CAP; tool
+ *     arguments to ARGS_CAP and each tool-result text block to RESULT_CAP.
+ *   - an injected message's `source` keeps the fields the panel renders:
+ *     `form`, `sections`, `name`, `changes[].path`, `references[].label`.
  *   - `tool/call` carries the (clipped) full arguments plus argsBytes /
  *     argsTruncated, so the detail panel can render them without another trip.
  *   - `tool/result` message content is projected onto ordered blocks: text
@@ -24,6 +27,16 @@ import type { SessionEventLike } from './context-types'
 
 /** Max characters carried per text field (input / output / summary). */
 export const TEXT_CAP = 2048
+
+/**
+ * Max characters carried for one injected context message (v0.10.50).
+ *
+ * A context injection is material the model itself read (a skill catalog, an
+ * instruction file, a runtime snapshot), so clipping it at TEXT_CAP truncated
+ * the row mid-sentence and hid everything after 2 KiB. It is still bounded —
+ * the page budget (`PAGE_BUDGET_BYTES`) protects the wire.
+ */
+export const CONTEXT_CAP = 64 * 1024
 
 /** Max characters of tool-call arguments (the detail panel shows them in full). */
 export const ARGS_CAP = 32768
@@ -159,7 +172,57 @@ function projectSourceFields(source: Record<string, unknown>): Record<string, un
   const out: Record<string, unknown> = {}
   if (typeof source.kind === 'string') out.kind = source.kind
   if (typeof source.callId === 'string' && source.callId.length > 0) out.callId = source.callId
+  // v0.10.50: the injected-context presentation the panel folds on. Without
+  // these the client saw `kind` only, so every injection fell back to its
+  // clipped raw text instead of its declared form.
+  if (typeof source.form === 'string' && source.form.length > 0) out.form = source.form
+  if (typeof source.name === 'string' && source.name.length > 0) out.name = source.name
+  const sections = projectSections(source.sections)
+  if (sections !== undefined) out.sections = sections
+  const changes = projectMembers(source.changes, 'path', MEMBER_CAP)
+  if (changes !== undefined) out.changes = changes
+  const references = projectMembers(source.references, 'label', MEMBER_CAP)
+  if (references !== undefined) out.references = references
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+/** Max characters of one `changes[].path` / `references[].label` string. */
+const MEMBER_CAP = 4096
+
+/** `source.sections` → `[{name, text}]`, clipped per section; undefined when empty. */
+function projectSections(value: unknown): Array<{ name: string; text: string }> | undefined {
+  if (!Array.isArray(value)) return undefined
+  const out: Array<{ name: string; text: string }> = []
+  for (const entry of value) {
+    const section = record(entry)
+    if (section === undefined) continue
+    if (typeof section.name !== 'string' || section.name.length === 0) continue
+    if (typeof section.text !== 'string') continue
+    out.push({ name: section.name, text: clipText(section.text, CONTEXT_CAP) })
+  }
+  return out.length > 0 ? out : undefined
+}
+
+/** One string field of every object in `source[member]`; undefined when empty. */
+function projectMembers(value: unknown, field: string, cap: number): Array<Record<string, string>> | undefined {
+  if (!Array.isArray(value)) return undefined
+  const out: Array<Record<string, string>> = []
+  for (const entry of value) {
+    const item = record(entry)
+    if (item === undefined) continue
+    const fieldValue = item[field]
+    if (typeof fieldValue !== 'string' || fieldValue.length === 0) continue
+    out.push({ [field]: clipText(fieldValue, cap) })
+  }
+  return out.length > 0 ? out : undefined
+}
+
+/** `data.message.source.kind` (or `data.source.kind`), when present. */
+function sourceKindOf(data: Record<string, unknown>): string | undefined {
+  const message = record(data.message)
+  const nested = message === undefined ? undefined : record(message.source)
+  const source = nested ?? record(data.source)
+  return source === undefined ? undefined : (typeof source.kind === 'string' ? source.kind : undefined)
 }
 
 /** The two frozen surface forms: the `'append'` tag, or `{op,startSeq?,endSeq?}`. */
@@ -219,13 +282,17 @@ export function projectEvent(event: SessionEventLike): SessionEventLike {
 
     case 'user/message': {
       const out: Record<string, unknown> = {}
-      const content = projectContent(data.content, TEXT_CAP)
+      // Injected context is model-read material, not a chat bubble: it keeps
+      // its whole text (bounded by CONTEXT_CAP, not TEXT_CAP).
+      const kind = sourceKindOf(data)
+      const cap = kind !== undefined && kind !== 'user' ? CONTEXT_CAP : TEXT_CAP
+      const content = projectContent(data.content, cap)
       if (content !== undefined) out.content = content
       const message = record(data.message)
       if (message !== undefined) {
         const m: Record<string, unknown> = {}
         if (typeof message.content === 'string' && message.content.length > 0) {
-          m.content = clipText(message.content, TEXT_CAP)
+          m.content = clipText(message.content, cap)
         }
         const source = record(message.source)
         if (source !== undefined) {

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.50] - 2026-11-13
+
+### Fixed
+
+- **注入内容仍然看不全——真正原因在 wire 投影**：`/trace-inspect/api/events` 对 `user/message` 一律按 `TEXT_CAP = 2048` 截断，且 `source` 只保留 `kind`。于是注入正文到 2 KiB 就被截成省略号，`form` / `sections` 也根本没到前端——snapshot 只能退化成原文、分节渲染在真机上从未生效。
+  - 注入消息（`source.kind !== 'user'`）改用 `CONTEXT_CAP = 64 KiB`，正文不再中途截断（`PAGE_BUDGET_BYTES` 仍兜底）；
+  - `source` 现在转发 `form` / `sections` / `name` / `changes[].path` / `references[].label`（分节文本同样 64 KiB 上限），snapshot 真正按分节渲染，技能 / 指令 / 召回也能显示生产者名而不是 `kind`。
+- 名称列宽度同时计入注入标题：会话里只有 `bash` 时列宽不再掉到 52px（`time-context` 曾被截成 `time-co…`）。
+
+### Verification
+
+- 新增 4 例：注入不被 `TEXT_CAP` 截断、`source.form/sections/name/changes/references` 透传、真实用户气泡仍按 2048 截断、wire 投影 → 渲染端到端（分节存在 + 2 KiB 之后的尾部可见 + 名称列 ≥ 80px）。全量 **596 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 渲染证据：mock 事件先过 `projectEvent()` 再渲染——`time-context` 显示「取代先前的快照」+ 分节，`skill-catalog` 正文一直到 `尾部标记 TAIL`。截图 `docs/assets/v0150-inject-full.jpg`。
+
 ## [0.10.49] - 2026-11-13
 
 ### Changed

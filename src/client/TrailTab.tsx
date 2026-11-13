@@ -1494,15 +1494,21 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   }, [])
 
   /**
-   * Width of the tool-name column, sized to the longest visible label so names
-   * like `open-computer-use` render in full instead of `open-...`. MCP labels
-   * are the server name (no JSON parsing here); everything else is the wire
-   * tool name. Capped so the description keeps enough room.
+   * Width of the name column, sized to the longest visible label so names like
+   * `open-computer-use` render in full instead of `open-...`. Tool rows use the
+   * wire tool name (MCP rows their server), and v0.10.50 also measures the
+   * injection titles — with only `bash` in a session the column used to shrink
+   * to 52px and render `time-context` as `time-co…`. Capped so the description
+   * keeps enough room.
    */
   const stepNameWidth = React.useMemo(() => {
     let max = 0
     for (const turn of turns) {
       for (const item of turn.items) {
+        if (item.kind === 'context') {
+          if (item.label.length > max) max = item.label.length
+          continue
+        }
         if (item.kind !== 'tool') continue
         const mcp = splitMcpName(item.step.name)
         const label = mcp !== null ? mcp.server : item.step.name

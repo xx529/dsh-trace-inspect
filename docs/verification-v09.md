@@ -843,3 +843,13 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 新行为：分节正文与整段正文都先过 `looksLikeMarkdown()`，命中则交给 `MarkdownResult`（与「输出」行、工具结果同一个组件、同一套 host `MarkdownText`，禁用原始 HTML）；无 Markdown 信号的机器文本仍走等宽原文。新增 `.ttl-ctxMd` 恢复面板字体与 12/18 行高，避免继承分节体的 mono / `pre-wrap`。
 - 断言：`instructions` 注入展开后 `ttl-md` 存在、`fake-md` 收到原文（由渲染器消费 `**…**`）；无 Markdown 信号的注入 `ttl-md` 不存在。
 - 门禁：`pnpm typecheck` 0；`pnpm test` **592 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+### v0.10.50 补充：注入只看到 2 KiB 的根因
+
+- 现象：展开注入后正文停在 ~2,050 字符、以 `…` 结尾（用户截图：`skill-catalog` 还有 2,032 字符）。
+- 根因不在渲染，在 `src/wire.ts` 的投影：`user/message` 的 `content` 一律 `clipText(..., TEXT_CAP=2048)`，且 `source` 只转发 `kind` / `callId`——真实会话里 `form`、`sections` 从未到达客户端，snapshot 只能走原文回退。
+- 修复：注入消息（`source.kind !== 'user'`）改用 `CONTEXT_CAP = 64 KiB`；`source` 增发 `form` / `sections` / `name` / `changes[].path` / `references[].label`（分节文本 64 KiB 上限），页面预算 `PAGE_BUDGET_BYTES` 兜底。另外名称列宽度改为同时量注入标题（只有 `bash` 时不再挤成 `time-co…`）。
+- 端到端实测（mock → `projectEvent()` → 渲染）：`time-context` 出现「取代先前的快照」+ 分节；`skill-catalog` 全文渲染到 `尾部标记 TAIL`；名称列 86px。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **596 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![注入全文：wire 投影修复后分节与 2 KiB 之后的尾部都在](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0150-inject-full.jpg)

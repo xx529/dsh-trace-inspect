@@ -24,6 +24,7 @@ import { TrailTab, type FetchToolDetail } from '../src/client/TrailTab'
 import { MAX_PULL_PAGES, type ToolDetailItem, type ToolDetailResult } from '../src/client/useTrail'
 import { setPrimitivesForTest, type PrimitivesModule } from '../src/client/ui-primitives'
 import type { SessionEventLike } from '../src/trail-model'
+import { projectEvent } from '../src/wire'
 
 afterEach(() => {
   cleanup()
@@ -1598,6 +1599,34 @@ describe('TrailTab', () => {
     // Clicking again returns to every row.
     fireEvent.click(chip)
     expect(await screen.findByTestId('ttl-step')).toBeTruthy()
+  })
+
+  it('an injection keeps its full text and form through the wire projection (v0.10.50)', async () => {
+    // The real client only ever sees projectEvent() output: the injection used
+    // to arrive clipped at TEXT_CAP and with `source` reduced to {kind}, which
+    // made every row a truncated raw-text block. Feed the projected event.
+    const long = `要点：\n${'x'.repeat(3000)}\n尾部标记 TAIL`
+    const injected = ev('user/message', 3, {
+      content: [{ type: 'text', text: long }],
+      source: { kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text: long }] },
+    })
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      projectEvent(injected as unknown as SessionEventLike) as unknown as Ev,
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-context')
+    fireEvent.click(row)
+    const body = await screen.findByTestId('ttl-context-body')
+    // The name column measures injection titles too, not only tool names.
+    const rootStyle = screen.getByTestId('ttl-root').getAttribute('style') ?? ''
+    const width = Number(/--ttl-step-name-w: (\d+)px/.exec(rootStyle)?.[1] ?? 0)
+    expect(width).toBeGreaterThanOrEqual(80)
+    // The declared form survived the wire, so the snapshot body renders.
+    expect(body.textContent).toContain('Supersedes earlier snapshots')
+    // Nothing was clipped: the tail past TEXT_CAP is present.
+    expect(body.textContent).toContain('尾部标记 TAIL')
   })
 
   it('renders injection prose through Markdown instead of raw markers (v0.10.49)', async () => {

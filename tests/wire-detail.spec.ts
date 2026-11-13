@@ -19,6 +19,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ARGS_CAP,
+  CONTEXT_CAP,
   MAX_BODY_BYTES,
   PAGE_BUDGET_BYTES,
   PAGE_SIZE,
@@ -51,6 +52,7 @@ function project(event: SessionEventLike): WireEvent {
 describe('frozen constants (§2)', () => {
   it('exports the contracted caps', () => {
     expect(TEXT_CAP).toBe(2048)
+    expect(CONTEXT_CAP).toBe(65536)
     expect(ARGS_CAP).toBe(32768)
     expect(RESULT_CAP).toBe(32768)
     expect(PAGE_SIZE).toBe(2000)
@@ -325,6 +327,55 @@ describe('surface bookkeeping passthrough (AC3)', () => {
       surfaceOp: { op: 'replace', startSeq: 5, endSeq: 5 },
       sourceEventSeqs: [5],
     })
+  })
+})
+
+describe('v0.10.50: injected context keeps its full text and its source', () => {
+  it('does not clip an injected message at TEXT_CAP', () => {
+    const long = 'x'.repeat(TEXT_CAP + 2000)
+    const out = project(ev({
+      type: 'user/message',
+      seq: 1,
+      data: { content: [{ type: 'text', text: long }], source: { kind: 'time-context' } },
+    }))
+    const content = dataOf(out).content as Array<{ type: string; text: string }>
+    expect(content[0].text.length).toBe(long.length)
+    expect(content[0].text.endsWith('…')).toBe(false)
+  })
+
+  it('forwards form, sections and the producer fields the panel folds on', () => {
+    const out = project(ev({
+      type: 'user/message',
+      seq: 2,
+      data: {
+        content: [{ type: 'text', text: 'Time sampled …' }],
+        source: {
+          kind: 'time-context',
+          form: 'snapshot',
+          sections: [{ name: 'time-context', text: 'Time sampled …', extra: 'dropped' }],
+          name: 'figma-workbench',
+          changes: [{ path: '/Users/me/AGENTS.md', op: 'added' }],
+          references: [{ label: '设计会话', sessionId: 's-1' }],
+        },
+      },
+    }))
+    expect(dataOf(out).source).toEqual({
+      kind: 'time-context',
+      form: 'snapshot',
+      name: 'figma-workbench',
+      sections: [{ name: 'time-context', text: 'Time sampled …' }],
+      changes: [{ path: '/Users/me/AGENTS.md' }],
+      references: [{ label: '设计会话' }],
+    })
+  })
+
+  it('still clips a real user bubble at TEXT_CAP', () => {
+    const out = project(ev({
+      type: 'user/message',
+      seq: 3,
+      data: { content: 'u'.repeat(TEXT_CAP + 1), message: { source: { kind: 'user' } } },
+    }))
+    expect((dataOf(out).content as string).length).toBe(TEXT_CAP + 1)
   })
 })
 
