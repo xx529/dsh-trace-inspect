@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.49] - 2026-11-13
+
+### Changed
+
+- **注入正文改用 Markdown 渲染**：展开注入行时，正文（`snapshot` 的每个分节，以及 `instructions` / `notice` / `recall` 的整段文本）先做 Markdown 结构判定，命中就走与「输出」和工具结果**同一条 `MarkdownResult` 管线**——加粗、列表、标题、表格、代码块都按 Markdown 显示，不再把 `**…**` 原样铺成等宽文本；没有 Markdown 信号的机器文本仍回退等宽原文。
+- 排版：Markdown 正文不再继承分节体的 mono / `pre-wrap`（新增 `.ttl-ctxMd` 恢复面板字体与 12/18 行高）；分节名仍是等宽小标题。64 KiB 以上仍有「显示全部」入口（沿用 MarkdownResult 的上限）。
+
+### Verification
+
+- 新增 1 例 + 强化 1 例：`instructions` 注入展开后挂载 `ttl-md`（走 Markdown 组件，`**定位**` 由渲染器消费）；无 Markdown 信号的注入仍走原文渲染（`ttl-md` 不存在）。全量 **592 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 设计稿 `06e` ② 卡与面板注释同步为「正文按 Markdown 渲染」。
+
 ## [0.10.48] - 2026-11-13
 
 ### Added

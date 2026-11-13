@@ -1561,6 +1561,8 @@ describe('TrailTab', () => {
     // No snapshot captions for an opaque form — just the text the model read.
     expect(body.textContent).not.toContain('Supersedes earlier snapshots')
     expect(body.textContent).toContain('injected reminder body')
+    // Machine/plain text keeps the raw renderer (no Markdown block).
+    expect(within(body).queryByTestId('ttl-md')).toBeNull()
   })
 
   it('injections are counted in the summary chips and the turn-head mix (v0.10.48)', async () => {
@@ -1596,6 +1598,26 @@ describe('TrailTab', () => {
     // Clicking again returns to every row.
     fireEvent.click(chip)
     expect(await screen.findByTestId('ttl-step')).toBeTruthy()
+  })
+
+  it('renders injection prose through Markdown instead of raw markers (v0.10.49)', async () => {
+    setPrimitivesForTest(fakePrimitives())
+    const md = '# 搜索规范\n\n1. **定位**：以 MCP 为主\n- 列表项'
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      ev('user/message', 3, {
+        content: [{ type: 'text', text: md }],
+        source: { kind: 'agent-instructions', form: 'instructions', changes: [{ path: '/tmp/AGENTS.md' }] },
+      }),
+      turnEnd(4, 1),
+    ])
+    const row = await screen.findByTestId('ttl-item-context')
+    fireEvent.click(row)
+    const body = await screen.findByTestId('ttl-context-body')
+    // The prose goes through the Markdown renderer, not a raw text node.
+    expect(within(body).getByTestId('ttl-md')).toBeTruthy()
+    expect(within(body).getByTestId('fake-md').textContent).toContain('**定位**')
   })
 
   it('a long injection folds with a char budget and opens the whole text (v0.10.47)', async () => {

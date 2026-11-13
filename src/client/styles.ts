@@ -2223,6 +2223,13 @@ export const trailCss = `
   font-size: 10.5px;
   font-weight: 600;
 }
+/* v0.10.49: a rendered-Markdown injection body must not inherit the section's
+   mono font / pre-wrap; the Markdown block brings its own typography. */
+.ttl-ctxMd {
+  font-family: var(--dsw-font-family, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif);
+  white-space: normal;
+}
+.ttl-ctxMd .ttl-md { font-size: 12px; line-height: 18px; }
 .ttl-ctxSectionText {
   margin: 0;
   color: #cfd3d6;

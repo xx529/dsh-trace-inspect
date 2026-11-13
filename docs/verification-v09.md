@@ -836,3 +836,10 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 门禁：`pnpm typecheck` 0；`pnpm test` **591 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
 
 ![注入计入上方统计：汇总行「注入 2」+ turn 头部 inbox 计数](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0148-inject-stats.jpg)
+
+### v0.10.49 补充：注入正文按 Markdown 渲染
+
+- 旧行为：展开注入行后，正文按等宽原文整段铺开，`**定位**`、`1.` 之类的 Markdown 标记原样可见。
+- 新行为：分节正文与整段正文都先过 `looksLikeMarkdown()`，命中则交给 `MarkdownResult`（与「输出」行、工具结果同一个组件、同一套 host `MarkdownText`，禁用原始 HTML）；无 Markdown 信号的机器文本仍走等宽原文。新增 `.ttl-ctxMd` 恢复面板字体与 12/18 行高，避免继承分节体的 mono / `pre-wrap`。
+- 断言：`instructions` 注入展开后 `ttl-md` 存在、`fake-md` 收到原文（由渲染器消费 `**…**`）；无 Markdown 信号的注入 `ttl-md` 不存在。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **592 例 / 22 文件**；`pnpm build` + `check:lib` 通过。

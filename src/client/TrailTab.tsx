@@ -793,13 +793,30 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                       {item.sections.map((section, index) => (
                         <div className="ttl-ctxSection" key={`${section.name}:${index}`}>
                           <dt className="ttl-ctxSectionName">{section.name}</dt>
-                          <dd className="ttl-ctxSectionText">{section.text}</dd>
+                          <dd className="ttl-ctxSectionText">
+                            {/* v0.10.49: injected prose goes through the same
+                                Markdown pipeline as a tool result or assistant
+                                message; only machine-shaped text stays raw. */}
+                            {looksLikeMarkdown(section.text)
+                              ? (
+                                <div className="ttl-ctxMd">
+                                  <MarkdownResult text={section.text} labels={markdownLabels(lang)} />
+                                </div>
+                              )
+                              : section.text}
+                          </dd>
                         </div>
                       ))}
                     </dl>
                   </>
                 )
-                : <div className="ttl-msgFull">{item.text}</div>}
+                : looksLikeMarkdown(item.text)
+                  ? (
+                    <div className="ttl-ctxMd" data-testid="ttl-context-md">
+                      <MarkdownResult text={item.text} labels={markdownLabels(lang)} />
+                    </div>
+                  )
+                  : <div className="ttl-msgFull">{item.text}</div>}
             </div>
           )
           : null}
