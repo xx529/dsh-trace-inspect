@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.48] - 2026-11-13
+
+### Added
+
+- **注入计入上方统计**：汇总行新增可点击的「注入 N」chip（violet 圆点），统计整段会话的注入条数；点击后轮次列表与展开体只保留注入行，再点一次回到全部。
+- **turn 头部计入注入**：簇混排新增 inbox 字形 + 数量（violet），与工具簇同一套「图标 + 数字」计数、按数量排序，展开体里每一行都能在头部 1:1 对上。
+- 「N 步」/ 失败数 / 工具族分布仍只统计工具调用：注入是第二个维度，不改变步数语义。
+- 设计稿 `06e`（`44:335`）的 ④ 卡、面板脚注与版本号同步到 v0.10.48。
+
+### Verification
+
+- 新增 1 例：汇总行 `注入 2`、turn 头部 mix `context:2`、点击 chip 后只显示 2 条注入行（`ttl-step` 为 0）、再点恢复。全量 **591 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 渲染证据（同 §57 的 DOM + Chrome 链路）：mock 1 轮 3 工具 + 2 注入 → chips `全部3 / 注入2 / bash1 / 其他2`，mix `context2 claude1 codex1 terminal1`。截图 `docs/assets/v0148-inject-stats.jpg`。
+
 ## [0.10.47] - 2026-11-13
 
 ### Fixed

@@ -182,6 +182,8 @@ interface UiStrings {
   shownFiltered: (turns: number, steps: number) => string
   /** Caption above a `snapshot` injection's sections (v0.10.46). */
   contextSupersedes: string
+  /** Legend / chip label of the injection category (v0.10.48). */
+  injectLabel: string
 }
 
 const ZH_UI: UiStrings = {
@@ -211,6 +213,7 @@ const ZH_UI: UiStrings = {
   shownAll: (turns, steps) => `已显示全部 ${turns} 轮 · ${steps} 步`,
   shownFiltered: (turns, steps) => `已筛选 ${turns} 轮 · ${steps} 步`,
   contextSupersedes: '取代先前的快照',
+  injectLabel: '注入',
 }
 
 const EN_UI: UiStrings = {
@@ -240,6 +243,7 @@ const EN_UI: UiStrings = {
   shownAll: (turns, steps) => `Showing all ${turns} turns · ${steps} steps`,
   shownFiltered: (turns, steps) => `Filtered to ${turns} turns · ${steps} steps`,
   contextSupersedes: 'Supersedes earlier snapshots',
+  injectLabel: 'Injections',
 }
 
 function uiStrings(lang: Lang): UiStrings {
@@ -561,6 +565,8 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
   const matches = (step: TrailStep): boolean => stepMatches(step, filter, query)
 
   const items = turn.items.filter((item) => {
+    // v0.10.48: the 「注入」 chip narrows the turn body to its injections.
+    if (filter === 'inject') return item.kind === 'context'
     if (item.kind === 'tool') return matches(item.step)
     if (item.kind === 'input') return false
     return !isToolFilter && !searchActive
@@ -607,8 +613,14 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
    * row wraps when a narrow dock cannot fit them on one line).
    */
   const clusterMix = React.useMemo(() => {
-    const counts = new Map<ToolIconKind, number>()
+    const counts = new Map<ToolIconKind | 'context', number>()
     for (const item of items) {
+      // v0.10.48: injections are counted beside the tool clusters, with the same
+      // inbox glyph their rows draw — the head then accounts for every row.
+      if (item.kind === 'context') {
+        counts.set('context', (counts.get('context') ?? 0) + 1)
+        continue
+      }
       if (item.kind !== 'tool') continue
       if (stepFailed(item.step)) continue
       const kind = toolIconKind(item.step.name)
@@ -920,11 +932,11 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                 {clusterMix.map((entry) => (
                   <i
                     key={entry.kind}
-                    className={`ttl-mixItem ttl-ink-${inkOf(entry.kind)}`}
+                    className={`ttl-mixItem ttl-ink-${entry.kind === 'context' ? 'violet' : inkOf(entry.kind)}`}
                     data-cluster={entry.kind}
-                    title={`${clusterLabel(entry.kind, lang)} ${entry.count}`}
+                    title={`${entry.kind === 'context' ? ui.injectLabel : clusterLabel(entry.kind, lang)} ${entry.count}`}
                   >
-                    <ToolIcon kind={entry.kind} />
+                    {entry.kind === 'context' ? contextIcon() : <ToolIcon kind={entry.kind} />}
                     <MixCount count={entry.count} />
                   </i>
                 ))}
@@ -1069,7 +1081,9 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   /** The row to focus again once the dialog closes (契约: 焦点回到触发行). */
 
   // ── Derived: filtered turns ────────────────────────────────────────────
-  const isToolFilter = filter !== 'all' && filter !== 'failed'
+  // `inject` is its own row filter, not a tool-family filter: it keeps the
+  // context items visible instead of hiding them with the message rows.
+  const isToolFilter = filter !== 'all' && filter !== 'failed' && filter !== 'inject'
   const searchActive = query.trim().length > 0
 
   const visibleTurns = React.useMemo(() => {
@@ -1077,12 +1091,22 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     // so it stays that way unless a search narrows the list.
     if (filter === 'all' && !searchActive) return turns
     if (filter === 'failed' && !searchActive) return turns
+    if (filter === 'inject') {
+      return turns.filter((turn) => turn.items.some((item) => item.kind === 'context'))
+    }
     return turns.filter((turn) => stepsOf(turn).some((step) => stepMatches(step, filter, query)))
   }, [turns, filter, query, searchActive])
 
   /** Steps actually shown under the current filters (the list footer count). */
   const shownStepCount = React.useMemo(() => {
     if (filter === 'all' && !searchActive) return stats.total
+    if (filter === 'inject') {
+      let count = 0
+      for (const turn of visibleTurns) {
+        for (const item of turn.items) if (item.kind === 'context') count += 1
+      }
+      return count
+    }
     let count = 0
     for (const turn of visibleTurns) {
       for (const step of stepsOf(turn)) if (stepMatches(step, filter, query)) count += 1
@@ -1123,6 +1147,20 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     }
     return { families, total, durationMs }
   }, [stats, turns])
+
+  /**
+   * v0.10.48: injected `user/message` rows are counted as their own category in
+   * the summary chips. The step total stays tool-call based (the turn cards'
+   * 「N 步」 and the footer keep that meaning), so the injection chip adds the
+   * second dimension instead of inflating the tool counts.
+   */
+  const injectionCount = React.useMemo(() => {
+    let count = 0
+    for (const turn of turns) {
+      for (const item of turn.items) if (item.kind === 'context') count += 1
+    }
+    return count
+  }, [turns])
 
   // ── Follow-latest auto-scroll (rAF-coalesced; no forced reflow per burst) ─
   /** Drop the temporary bottom padding (never called while it would clamp). */
@@ -1600,6 +1638,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
         <div className="ttl-summaryFilters" role="group" data-testid="ttl-chips">
           {chipButton('all', t(lang, 'filterAll') as string, stats.total)}
           {stats.failed > 0 ? chipButton('failed', t(lang, 'filterFailed') as string, stats.failed, 'red') : null}
+          {injectionCount > 0 ? chipButton('inject', ui.injectLabel, injectionCount, 'violet') : null}
           {overview.families.map((entry) => familyChip(entry.family, entry.count))}
         </div>
       </div>

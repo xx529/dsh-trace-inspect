@@ -1563,6 +1563,41 @@ describe('TrailTab', () => {
     expect(body.textContent).toContain('injected reminder body')
   })
 
+  it('injections are counted in the summary chips and the turn-head mix (v0.10.48)', async () => {
+    renderTab([
+      user(1, 'go'),
+      turnStart(2, 1),
+      ev('user/message', 3, {
+        content: [{ type: 'text', text: 'injected a' }],
+        source: { kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text: 'injected a' }] },
+      }),
+      toolCall(4, 'bash', 'ls'),
+      toolResult(5, 'c4', 'ok'),
+      ev('user/message', 6, {
+        content: [{ type: 'text', text: 'injected b' }],
+        source: { kind: 'runtime-context', form: 'snapshot', sections: [{ name: 'runtime', text: 'injected b' }] },
+      }),
+      turnEnd(7, 1),
+    ])
+    // The summary row owns the injection count beside the tool families.
+    const chip = await screen.findByTestId('ttl-chip-inject')
+    expect(chip.textContent).toContain('Injections')
+    expect(chip.textContent).toContain('2')
+    // 全部 / tools keep counting tool steps; injections are the second dimension.
+    expect(screen.getByTestId('ttl-chip-all').textContent).toContain('1')
+    // The turn head accounts for the injection rows too, same inbox glyph.
+    const mix = document.querySelectorAll('[data-cluster="context"]')
+    expect(mix.length).toBe(1)
+    expect(mix[0].textContent).toContain('2')
+    // Clicking the chip narrows the body to the injection rows.
+    fireEvent.click(chip)
+    expect(screen.getAllByTestId('ttl-item-context').length).toBe(2)
+    expect(screen.queryByTestId('ttl-step')).toBeNull()
+    // Clicking again returns to every row.
+    fireEvent.click(chip)
+    expect(await screen.findByTestId('ttl-step')).toBeTruthy()
+  })
+
   it('a long injection folds with a char budget and opens the whole text (v0.10.47)', async () => {
     const long = `要点：\n${'1. **定位**：以 MCP 为主，内置工具是兜底。\n'.repeat(40)}尾部标记 TAIL`
     renderTab([

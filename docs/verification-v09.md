@@ -827,3 +827,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 门禁：`pnpm typecheck` 0；`pnpm test` **590 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
 
 ![长注入整段展开：折叠行给「还有 N 字符」，展开后不再卡内裁切](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0147-context-long.jpg)
+
+### v0.10.48 补充：注入计入上方统计
+
+- 汇总行：`全部 / 失败 / 注入 / 各工具族`，注入 chip 的圆点用 violet，计数为整段会话的注入条数；点击后 `visibleTurns` 只留含注入的轮次，展开体只渲染 `context` 行（`isToolFilter` 对 `inject` 为 false，避免被「非工具行隐藏」规则吞掉），再点恢复。
+- turn 头部 mix：`clusterMix` 把 `context` 当作一个簇，渲染 inbox 字形 + 数量，与工具簇同样按数量排序；点开某轮后头部数字与展开行 1:1。
+- 实测（DOM + Chrome）：`全部 3 / 注入 2 / bash 1 / 其他 2`；mix `context:2 claude:1 codex:1 terminal:1`；点击注入 chip 后展开体仅 2 条注入行、`ttl-step` 为 0。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **591 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![注入计入上方统计：汇总行「注入 2」+ turn 头部 inbox 计数](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0148-inject-stats.jpg)
