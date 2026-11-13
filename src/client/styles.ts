@@ -2186,26 +2186,18 @@ export const trailCss = `
    It never draws a status / duration: it is material the model read, not a
    tool call. */
 .ttl-ctxIcon { color: #a78bfa; }
-/* Role word before the injection title: v0.10.51 restored it so every row
-   reads 上下文 · runtime-context instead of a bare, truncated name. */
+/* v0.10.52: the row's role word is the English word context; the injection's
+   own name lives in the content area (.ttl-ctxTitle), so the summary gets the
+   whole rest of the line. */
 .ttl-ctxRole {
   flex: none;
-  width: 44px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
   font-size: 10.5px;
 }
-.ttl-ctxName {
-  flex: none;
-  /* Same name column as the tool rows, so the summary starts exactly under the
-     tool descriptions; a long producer title ellipsizes instead of wrapping. */
-  width: var(--ttl-step-name-w, 52px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-secondary, #cfd3d6);
+.ttl-ctxTitle {
+  margin: 0 0 6px;
+  color: var(--dsw-alias-label-tertiary, #9ba1a7);
   font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
   font-size: 10.5px;
 }

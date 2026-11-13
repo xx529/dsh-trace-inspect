@@ -1533,16 +1533,16 @@ describe('TrailTab', () => {
       turnEnd(5, 1),
     ])
     const row = await screen.findByTestId('ttl-item-context')
-    // Producer + first line on the collapsed row; no status / duration slot.
-    expect(screen.getByTestId('ttl-context-producer').textContent).toBe('time-context')
+    // v0.10.52: the row says `context` + first line; the name heads the body.
+    expect(screen.getByTestId('ttl-context-role').textContent).toBe('context')
     expect(screen.getByTestId('ttl-context-summary').textContent).toBe(line)
     expect(row.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByTestId('ttl-context-body')).toBeNull()
     fireEvent.click(row)
     expect(row.getAttribute('aria-expanded')).toBe('true')
     const body = await screen.findByTestId('ttl-context-body')
+    expect(within(body).getByTestId('ttl-context-title').textContent).toBe('time-context')
     expect(body.textContent).toContain('Supersedes earlier snapshots')
-    expect(body.textContent).toContain('time-context')
     expect(body.textContent).toContain('Browser time zone')
     fireEvent.click(row)
     expect(screen.queryByTestId('ttl-context-body')).toBeNull()
@@ -1556,9 +1556,10 @@ describe('TrailTab', () => {
       turnEnd(4, 1),
     ])
     const row = await screen.findByTestId('ttl-item-context')
-    expect(screen.getByTestId('ttl-context-producer').textContent).toBe('context')
+    expect(screen.getByTestId('ttl-context-role').textContent).toBe('context')
     fireEvent.click(row)
     const body = await screen.findByTestId('ttl-context-body')
+    expect(within(body).getByTestId('ttl-context-title').textContent).toBe('context')
     // No snapshot captions for an opaque form — just the text the model read.
     expect(body.textContent).not.toContain('Supersedes earlier snapshots')
     expect(body.textContent).toContain('injected reminder body')
@@ -1661,15 +1662,15 @@ describe('TrailTab', () => {
       turnEnd(4, 1),
     ])
     const row = await screen.findByTestId('ttl-item-context')
-    // The row reads `Context <name>`: role word first, then the producer label.
-    expect(screen.getByTestId('ttl-context-role').textContent).toBe('Context')
-    expect(screen.getByTestId('ttl-context-producer').textContent).toBe('/Users/lzx/.dsh/AGENTS.md')
+    // The row says `context`; the producer label heads the opened content.
+    expect(screen.getByTestId('ttl-context-role').textContent).toBe('context')
     // Folded line names the hidden budget; summary is the first line only.
     expect(screen.getByTestId('ttl-context-summary').textContent).toBe('要点：')
     const rest = screen.getByTestId('ttl-context-rest')
     expect(Number((rest.textContent ?? '').replace(/[^\d]/g, ''))).toBe(long.length - 3)
     fireEvent.click(row)
     const body = await screen.findByTestId('ttl-context-body')
+    expect(within(body).getByTestId('ttl-context-title').textContent).toBe('/Users/lzx/.dsh/AGENTS.md')
     // The opened body carries the whole injection, tail included.
     expect(body.textContent).toContain('尾部标记 TAIL')
     expect(body.textContent?.length ?? 0).toBeGreaterThan(long.length * 0.9)

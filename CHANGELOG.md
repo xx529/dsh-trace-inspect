@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.52] - 2026-11-13
+
+### Changed
+
+- **注入行改成 `context` + 摘要，注入名进内容区**：折叠行现在固定显示英文角色词 `context`（中英界面一致），后面直接是首行摘要，不再挤名称列；`time-context` / `runtime-context` 这类注入名移到展开后的**内容区顶部**（mono 10.5），在读者真正看内容的地方标注它是什么。
+- 内容区里 `snapshot` 的分节名若与注入名相同（`time-context` 的典型情况）不再重复显示；其它分节名照旧。
+- 标题列不再参与行内布局，摘要因此拿回整行剩余宽度；「还有 N 字符」不变。
+- 设计稿 `06e` 面板与 ① 卡同步为 `context` + 内容区标题。
+
+### Verification
+
+- 更新 3 例断言：折叠行角色 = `context`、摘要 = 首行、展开后 `ttl-context-title` = 注入名（`time-context` / 指令路径 / `context`），分节名重复时不重复渲染。全量 **596 例 / 22 文件**；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- 渲染证据（wire 投影后渲染）：`context  Time sampled while preparing …`，展开体首行 `time-context`、随后「取代先前的快照」+ 正文。截图 `docs/assets/v0152-context-word.jpg`。
+
 ## [0.10.51] - 2026-11-13
 
 ### Changed

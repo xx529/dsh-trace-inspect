@@ -862,3 +862,12 @@ node scripts/verify/shoot-extra.mjs --port 19487
 - 门禁：`pnpm typecheck` 0；`pnpm test` **596 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
 
 ![注入行：角色「上下文」+ 注入标题](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0151-context-role.jpg)
+
+### v0.10.52 补充：`context` 角色词 + 名称进内容区
+
+- 反馈：「上下文」改成英文 `context`；`time-context` 这种名字放到展示实际内容的地方。
+- 改法：折叠行 = `[inbox] context · 首行摘要 · 还有 N 字符`；展开体第一行 = 注入名（mono 10.5，`ttl-context-title`），随后才是「取代先前的快照」与正文。`snapshot` 分节名与注入名相同时不重复渲染。行内标题列移除后摘要拿回整行剩余宽度。
+- 实测（wire 投影后渲染）：`context  Time sampled while preparing …`；展开体首行 `time-context`，第二行「取代先前的快照」，正文完整。
+- 门禁：`pnpm typecheck` 0；`pnpm test` **596 例 / 22 文件**；`pnpm build` + `check:lib` 通过。
+
+![注入行：英文 context + 内容区顶部的注入名](/Users/lzx/Documents/GitHub/dsh-trace-inspect/docs/assets/v0152-context-word.jpg)

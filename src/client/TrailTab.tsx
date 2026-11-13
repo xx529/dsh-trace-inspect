@@ -184,6 +184,8 @@ interface UiStrings {
   contextSupersedes: string
   /** Legend / chip label of the injection category (v0.10.48). */
   injectLabel: string
+  /** Row role word of an injection; the product wants the English `context` (v0.10.52). */
+  contextRole: string
 }
 
 const ZH_UI: UiStrings = {
@@ -214,6 +216,7 @@ const ZH_UI: UiStrings = {
   shownFiltered: (turns, steps) => `已筛选 ${turns} 轮 · ${steps} 步`,
   contextSupersedes: '取代先前的快照',
   injectLabel: '注入',
+  contextRole: 'context',
 }
 
 const EN_UI: UiStrings = {
@@ -244,6 +247,7 @@ const EN_UI: UiStrings = {
   shownFiltered: (turns, steps) => `Filtered to ${turns} turns · ${steps} steps`,
   contextSupersedes: 'Supersedes earlier snapshots',
   injectLabel: 'Injections',
+  contextRole: 'context',
 }
 
 function uiStrings(lang: Lang): UiStrings {
@@ -766,11 +770,10 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
               (`time-context`, `runtime-context`, a skill name, an instruction
               path) — no generic 「上下文」 prefix, so the column reads like the
               tool-name column it sits in. */}
-          {/* v0.10.51: the row reads `context <name>` — the role word first
-              (上下文 / Context), then the injection's own title, so a lone
-              `runtime-context` is not mistaken for a tool name. */}
-          <span className="ttl-ctxRole" data-testid="ttl-context-role">{t(lang, 'context') as string}</span>
-          <span className="ttl-ctxName" data-testid="ttl-context-producer" title={item.label}>{item.label}</span>
+          {/* v0.10.52: the row says `context` + the content's first line; the
+              injection's own name (`time-context`, …) heads the content area
+              below, where it actually labels what the reader is looking at. */}
+          <span className="ttl-ctxRole" data-testid="ttl-context-role">{ui.contextRole}</span>
           <span className="ttl-msgPreview" data-testid="ttl-context-summary">{item.summary}</span>
           {/* v0.10.47: same budget hint as an assistant-output row — the folded
               line names what is hidden, the opened body renders all of it. */}
@@ -789,15 +792,18 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
         {open && expandable
           ? (
             <div className="ttl-msgBody ttl-ctxBody" data-testid="ttl-context-body">
+              <div className="ttl-ctxTitle" data-testid="ttl-context-title">{item.label}</div>
               {item.sections.length > 0
                 ? (
                   <>
                     <p className="ttl-ctxNote">{ui.contextSupersedes}</p>
-                    <dl className="ttl-ctxSections">
+                    <div className="ttl-ctxSections">
                       {item.sections.map((section, index) => (
                         <div className="ttl-ctxSection" key={`${section.name}:${index}`}>
-                          <dt className="ttl-ctxSectionName">{section.name}</dt>
-                          <dd className="ttl-ctxSectionText">
+                          {section.name === item.label
+                            ? null
+                            : <div className="ttl-ctxSectionName">{section.name}</div>}
+                          <div className="ttl-ctxSectionText">
                             {/* v0.10.49: injected prose goes through the same
                                 Markdown pipeline as a tool result or assistant
                                 message; only machine-shaped text stays raw. */}
@@ -808,10 +814,10 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                                 </div>
                               )
                               : section.text}
-                          </dd>
+                          </div>
                         </div>
                       ))}
-                    </dl>
+                    </div>
                   </>
                 )
                 : looksLikeMarkdown(item.text)
