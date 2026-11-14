@@ -1,3 +1,5 @@
 - insert:
     - id: trace-inspect
       name: dsh-trace-inspect
+    - id: trace-inspect-desc
+      name: dsh-trace-inspect/desc-inject

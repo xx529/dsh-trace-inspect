@@ -2310,4 +2310,59 @@ export const trailCss = `
 /* ══ v0.10.10: figma plugin + todo get real colours (no grey glyphs) ══════ */
 .ttl-tone-figma { color: #c4b2ff; }
 .ttl-distSeg.ttl-tone-figma, .ttl-legendDot.ttl-tone-figma { background: #c4b2ff; }
+
+/* ══ v0.11.0: opt-in tool-description switch (conversation hero) ═════════ */
+.ttl-descSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary, #9ba1a7);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.ttl-descSwitch input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2, #2a2a2b);
+  border: 1px solid var(--dsw-alias-line-secondary, rgba(255, 255, 255, 0.12));
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  flex: none;
+}
+
+.ttl-descSwitch input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary, #adb2b8);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.ttl-descSwitch input:checked {
+  background: var(--dsw-alias-state-business-primary, #4176e6);
+  border-color: transparent;
+}
+
+.ttl-descSwitch input:checked::after {
+  transform: translateX(12px);
+  background: #f0f1f2;
+}
+
+.ttl-descSwitch input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 `

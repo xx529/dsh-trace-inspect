@@ -13,6 +13,7 @@ import { trailCss } from './styles'
 import { TrailTab } from './TrailTab'
 import { detectLang, setHostLocale, t } from './locales'
 import { AUTO_OPEN_SETTING_KEY, installFirstTurnAutoOpen } from './auto-open'
+import { registerDescriptionSwitch } from './desc-inject'
 
 /** The slice of DSH's client `locale` service this plugin consumes. */
 interface LocaleFace {
@@ -137,6 +138,10 @@ export function apply(ctx: {
   ctx.effect(() => () => style.remove())
 
   followHostLocale(ctx)
+
+  // Opt-in per-conversation `description` parameter switch on the New Session
+  // hero. Independent of better-sidebar, so it registers before that guard.
+  registerDescriptionSwitch(ctx)
 
   const betterSidebar = ctx.get('betterSidebar')
   if (

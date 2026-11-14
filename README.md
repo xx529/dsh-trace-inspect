@@ -180,6 +180,18 @@
 
 > 💡 与 [dsh-conversation-outline](https://github.com/YesSanSan/dsh-conversation-outline) 互补：它用 LLM 为每轮生成一句话标题做「对话大纲」；本插件零 AI、按轮次折叠「轨迹」。两者注册不同的 tab，可在 better-sidebar 的 **+ 菜单**中同时使用。
 
+## 工具审计（可选，默认关闭）
+
+新建会话首屏有一个「工具审计」开关，按对话生效，默认关闭：
+
+- 开启后，注入类工具（默认 `mcp__*`）的模型可见 schema 会多一个必填 `description` 参数；模型调用时用它写一句「这次调用做什么」（15–30 词，英文说明与 bash 的 description 参数一致），作为审计信息在轮次轨迹行直接显示。
+- 该参数在工具本体执行前被剥离，MCP 服务端不会收到；会话日志（`tool/call.arguments`）保留原始调用，所以轨迹能显示、工具不受影响。
+- **开始对话后不可修改**（首个 `turn/start` 即封存）。选择按会话持久化在 `$DSH_HOME/dsh-trace-inspect/tool-description/<sessionId>.json`，重启后一致。
+- 子 agent 继承父会话的选择；从未选择过的会话使用 bundle 补丁里的 `enabledByDefault`（默认 `false`，没有全局开关）。
+- 中途新增的工具 / MCP 会在 `tools/change` 时同步对账并自动注入。
+
+命令：`/desc-inject on|off|status`。实现是 `dsh-trace-inspect/desc-inject` Host 子插件（bundle 补丁行 `trace-inspect-desc`），用按 agent 的 scoped 影子定义，不改写全局工具定义、不引入运行时依赖。
+
 ## 安装
 
 **前置**：DSH 插件宿主 + [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)。本插件把 better-sidebar 声明为**可选 peer**——未安装时插件照常加载、只是不注册 tab（inert，无副作用）。

@@ -38,6 +38,17 @@ await build({
   platform: 'node',
 })
 
+// Opt-in tool-description sub-plugin: a second, dependency-free Host entry
+// (`./desc-inject`). It only touches plain registered definition objects, so it
+// loads under every install layout (profile package, link, file overlay).
+await build({
+  ...shared,
+  entryPoints: [resolve(root, 'src/desc-inject/index.ts')],
+  outfile: resolve(outdir, 'desc-inject.js'),
+  format: 'esm',
+  platform: 'node',
+})
+
 // ── Client half: __ModuleLoader__ lazy-CJS bundle ────────────────────────
 const banner = `window.__ModuleLoader__.load({
   id: 'dsh-trace-inspect',
@@ -69,7 +80,7 @@ await build({
   footer: { js: footer },
 })
 
-console.log('build ok → lib/index.js + lib/client.js')
+console.log('build ok → lib/index.js + lib/desc-inject.js + lib/client.js')
 
 // ── Post-build contract check (the client loader depends on these) ───────
 const client = readFileSync(resolve(outdir, 'client.js'), 'utf8')
@@ -89,6 +100,8 @@ if (!client.includes('exports.apply') && !client.includes('apply:')) failures.pu
 const host = readFileSync(resolve(outdir, 'index.js'), 'utf8')
 if (!host.includes('webServer') || !host.includes('sessionQuery')) failures.push('host inject missing')
 if (!host.includes('/trace-inspect/api/events')) failures.push('host route missing')
+const descInject = readFileSync(resolve(outdir, 'desc-inject.js'), 'utf8')
+if (!descInject.includes('trace-inspect-desc')) failures.push('desc-inject plugin name missing')
 if (failures.length > 0) {
   console.error('bundle contract check FAILED:\n  - ' + failures.join('\n  - '))
   process.exit(1)

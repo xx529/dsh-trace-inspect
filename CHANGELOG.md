@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.11.1] - 2026-11-14
+
+### Changed
+
+- **注入参数的说明文案改为英文**：`description` 参数的说明改为与 `bash` 同风格的英文（`Clear, concise description of what this call does, in active voice, 15-30 words (shown in the UI). Name the action and its target.`）；不再要求模型写 why。开关 tooltip、README 与 CHANGELOG 的措辞同步。
+
+### Verification
+
+- 全量 **621 例 / 25 文件** 通过；`pnpm typecheck` 0、`pnpm build` + 契约检查通过；`lib/desc-inject.js` 已含新文案。
+
+## [0.11.0] - 2026-11-14
+
+### Added
+
+- **首屏「工具审计」开关（默认关闭、按对话生效）**：新建会话的首屏（`conversation.hero.options`）多一个开关。开启后，注入类工具（默认 `mcp__*`）的模型可见 schema 会多一个必填 `description` 参数，模型调用时用它写「这次调用做什么」（15–30 词，注入参数的说明文案与 bash 的 description 参数保持同一风格）；参数在工具本体执行前被剥离，服务端不会收到。开关走 Host 命令 `/desc-inject on|off|status`，客户端用 `remote.commands.execute` 调用。
+- **不可中途修改**：首次 `turn/start` 后封存，Host 拒绝任何修改；首屏开关也随之消失。状态按会话持久化到 `$DSH_HOME/dsh-trace-inspect/tool-description/<sessionId>.json`，重启后一致。
+- **子 agent 继承父会话的选择**；`enabledByDefault` 仅作为「从未选择过的会话」的默认值写在 profile 补丁里，没有全局开关。
+- **中途新增工具/MCP 自动注入**：`tools/change` 同步对账，新出现的注入类工具在该步装配前完成装饰，不需要重启或重开会话。
+
+### Changed
+
+- 宿主新增第二个入口 `dsh-trace-inspect/desc-inject`（bundle 补丁里新增一行 `trace-inspect-desc`）。实现使用按 agent 的 scoped 影子定义：全局定义不被改写，影子复制 schema + 包装 `execute`（先剥离再委托），因此不引入任何运行时依赖，`link:` / 文件补丁 / 正常安装三种布局都能加载。
+
+### Verification
+
+- 全量 **621 例 / 25 文件** 通过（新增 `desc-inject.spec.ts`、`desc-inject-plugin.spec.ts`、`desc-inject-switch.spec.tsx`）；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+- headless + mock provider 端到端：开启时 `request/header` 与模型请求里的 `mcp__probe__probe.parameters` 含 `description` 且 `required` 已加，`tool/call.arguments` 保留描述，探针服务只收到 `{"text":"hello-inject"}`；关闭时 schema 保持 `['text']`（零侵入）。
+- 会话格式：`--session-id` 恢复同一会话成功（`tool/call` 与 `assistant/message` 参数一致）。
+- 视觉验证（web 实例，1440×900 @2x）：首屏右侧出现「工具审计」开关，关闭为灰、开启为蓝；点击后 Host 写入 `$DSH_HOME/dsh-trace-inspect/tool-description/<sessionId>.json`（`{"enabled":true}`），证明 Client → `remote.commands.execute` → `/desc-inject` 链路在真实页面可用。截图 `docs/assets/v0110-hero-switch-off.png`、`docs/assets/v0110-hero-switch-on.png`。
+
 ## [0.10.57] - 2026-11-13
 
 ### Changed
