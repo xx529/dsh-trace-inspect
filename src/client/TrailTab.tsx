@@ -471,7 +471,19 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
   const iconKind: ToolIconKind = errored ? 'alert' : summary.icon
   // v0.10.19: ink follows the work cluster, not the coarse statistics family.
   const ink = inkOf(iconKind)
-  const desc = step.kind === 'error' ? step.error : summary.detail
+  const mcp = splitMcpName(step.name)
+  /** A4: the tool is the row's name; the server moves into the description
+   *  column as a pink prefix (see the step-row contract in styles.ts). */
+  const name = mcp !== null ? mcp.tool : summary.label
+  const desc = step.kind === 'error'
+    ? step.error
+    : mcp === null
+      ? summary.detail
+      : (summary.detail === mcp.tool
+          ? ''
+          : summary.detail.startsWith(`${mcp.tool} · `)
+            ? summary.detail.slice(mcp.tool.length + 3)
+            : summary.detail)
   const status = errored ? '✗' : '✓'
   const duration = stepDuration(step)
   const detailId = `ttl-detail-${step.kind}-${step.seq}`
@@ -510,8 +522,18 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
         <span className={`ttl-stepIcon ttl-ink-${ink}`} aria-hidden="true">
           <ToolIcon kind={iconKind} />
         </span>
-        <span className="ttl-stepName">{summary.label}</span>
-        <span className="ttl-stepDesc">{desc}</span>
+        <span className="ttl-stepName">{name}</span>
+        <span className="ttl-stepDesc">
+          {mcp !== null
+            ? (
+              <>
+                <span className="ttl-stepServer">{mcp.server}</span>{' '}
+                {desc.length > 0 ? <span className="ttl-stepServerDot" aria-hidden="true">·</span> : null}
+              </>
+            )
+            : null}
+          {desc}
+        </span>
         <span className="ttl-stepStatus" aria-hidden="true">{status}</span>
         {duration.length > 0 ? <span className="ttl-stepDur">{duration}</span> : null}
       </button>
@@ -1548,8 +1570,9 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   /**
    * Width of the name column, sized to the longest visible label so names like
    * `open-computer-use` render in full instead of `open-...`. Tool rows use the
-   * wire tool name (MCP rows their server), and v0.10.50 also measures the
-   * injection titles — with only `bash` in a session the column used to shrink
+   * wire tool name (MCP rows their tool; the server is a desc prefix), and
+   * v0.10.50 also measures the injection titles — with only `bash` in a
+   * session the column used to shrink
    * to 52px and render `time-context` as `time-co…`. Capped so the description
    * keeps enough room.
    */
@@ -1563,11 +1586,14 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
         }
         if (item.kind !== 'tool') continue
         const mcp = splitMcpName(item.step.name)
-        const label = mcp !== null ? mcp.server : item.step.name
+        // A4: the name slot now holds the TOOL; the server is a desc prefix.
+        const label = mcp !== null ? mcp.tool : item.step.name
         if (label.length > max) max = label.length
       }
     }
-    return Math.min(132, Math.max(52, Math.round(max * 6.5) + 8))
+    // 132 → 150: long MCP tool names (browser_take_screenshot) need the room;
+    // the server prefix still keeps ~60px of the description column.
+    return Math.min(150, Math.max(52, Math.round(max * 6.5) + 8))
   }, [turns])
 
   if (!visible) return null

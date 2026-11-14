@@ -1216,6 +1216,20 @@ export const trailCss = `
   color: #dfe2e5;
   font-size: 12px;
 }
+/* A4: MCP rows put the tool in the name slot and the server at the start of
+   the description column. The explicit colour survives the error rule, which
+   only recolours the parent .ttl-stepDesc. */
+.ttl-stepServer {
+  margin-right: 4px;
+  color: #f08fb8;
+  font-family: var(--ds-font-family-code, "SF Mono", "JetBrains Mono", Menlo, monospace);
+  font-size: 10px;
+}
+.ttl-stepServerDot {
+  margin-right: 6px;
+  color: var(--dsw-alias-label-quaternary, #7b8086);
+  font-size: 10px;
+}
 .ttl-stepStatus { flex: none; display: inline-flex; width: 10px; height: 10px; color: var(--dsw-alias-label-quaternary, #7b8086); }
 .ttl-stepDur {
   flex: none;

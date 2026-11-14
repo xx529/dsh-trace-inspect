@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.11.2] - 2026-11-15
+
+### Changed
+
+- **MCP 行改为 A4「工具列 + 内容列服务前缀」**：MCP 调用的名称槽从 server 改为 tool（`mcp__playwright__browser_navigate` → `browser_navigate`），server 以 10px 粉色（`#f08fb8`）前缀进入说明列，后面接 `·` 与说明；tool 与 `bash` / `read` 同在工具列，说明与普通行同在内容列。名称列上限 132 → 150px，长 tool 名（`browser_take_screenshot`）不再截断；失败行只染 tool / 说明，server 保留来源色。详情头部仍是 server / tool 面包屑。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **622 例 / 25 文件**全通过（新增 `trail-tab` A4 行结构用例）。
+- `pnpm build` 通过，`lib/client.js` 已含 `.ttl-stepServer` 与新的名称 / 说明拆分；`check:lib` 需在 `lib` 提交后通过。
+
 ## [0.11.1] - 2026-11-14
 
 ### Changed

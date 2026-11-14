@@ -657,6 +657,27 @@ describe('TrailTab', () => {
     expect(mcpChip.className).toContain('ttl-ink-pink')
   })
 
+  it('MCP rows put the tool in the name slot and the server as a prefix (A4)', async () => {
+    renderTab([
+      user(1, 'baidu'),
+      turnStart(2, 1),
+      toolCall(3, 'mcp__playwright__browser_navigate', '{"url":"https://www.baidu.com"}', 'c3'),
+      turnEnd(4, 1),
+    ])
+    const [turn] = await readyTurns(1)
+    // The latest (only) turn is expanded by default; clicking would collapse it.
+    await waitFor(() => { expect(turn.querySelectorAll('.ttl-step').length).toBe(1) })
+    const row = turn.querySelectorAll('.ttl-step')[0] as HTMLElement
+    expect(row.querySelector('.ttl-stepName')?.textContent).toBe('browser_navigate')
+    expect(row.querySelector('.ttl-stepServer')?.textContent).toBe('playwright')
+    expect(row.querySelector('.ttl-stepServerDot')?.textContent).toBe('·')
+    const desc = row.querySelector('.ttl-stepDesc')?.textContent ?? ''
+    expect(desc).toContain('playwright')
+    expect(desc).toContain('https://www.baidu.com')
+    // The tool is no longer repeated inside the description.
+    expect(desc).not.toContain('browser_navigate ·')
+  })
+
   it('the failure badge follows the cluster chips in the left group (v0.10.33)', async () => {
     renderTab([
       user(1, 'fail'),
