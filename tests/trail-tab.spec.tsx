@@ -2133,3 +2133,124 @@ describe('TrailTab — segmented history (v0.12.0)', () => {
     expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1', '#2'])
   })
 })
+
+// ── v0.12.1 — the trail follows the session's own history window ─────────
+
+describe('TrailTab — session window source (v0.12.1)', () => {
+  const turnAt = (turn: number, base: number): Ev[] => [
+    user(base, `q${turn}`),
+    turnStart(base + 1, turn),
+    assistant(base + 2, `a${turn}`),
+    turnEnd(base + 3, turn),
+  ]
+  const entry = (event: Ev): { type: 'event'; event: Ev } => ({ type: 'event', event })
+
+  /** A fake session window feed + session face sharing one entry list. */
+  const makeWindow = (initial: Ev[], hasMore: boolean) => {
+    const feedListeners = new Set<() => void>()
+    const sessionListeners = new Set<() => void>()
+    const state = {
+      entries: initial.map(entry),
+      hasMore,
+      revision: 0,
+      change: { kind: 'replace', entries: initial.map(entry) },
+    }
+    const sessionState = { hasMore, loadingOlder: false, openState: 'open' }
+    const feed = {
+      subscribe: (listener: () => void) => { feedListeners.add(listener); return () => { feedListeners.delete(listener) } },
+      getSnapshot: () => state,
+    }
+    const session = {
+      subscribe: (listener: () => void) => { sessionListeners.add(listener); return () => { sessionListeners.delete(listener) } },
+      getSnapshot: () => sessionState,
+      loadOlder: async (): Promise<void> => {},
+    }
+    const apply = (
+      next: { entries: Ev[]; hasMore: boolean },
+      change: { kind: string; entries?: unknown[] },
+    ): void => {
+      state.entries = next.entries.map(entry)
+      state.hasMore = next.hasMore
+      state.revision += 1
+      state.change = { kind: change.kind, entries: change.entries?.map((item) => entry(item as Ev)) as never }
+      sessionState.hasMore = next.hasMore
+      for (const listener of feedListeners) listener()
+      for (const listener of sessionListeners) listener()
+    }
+    const sessions = { binding: () => ({ session, eventSource: feed }) }
+    return { feed, session, apply, sessions }
+  }
+
+  it('folds the session window instead of calling the events route', async () => {
+    const window = makeWindow([...turnAt(1, 1), ...turnAt(2, 5)], true)
+    const fetchEvents = vi.fn(async (): Promise<{ events: SessionEventLike[] }> => ({ events: [] }))
+    render(
+      <TrailTab
+        ctx={{ get: (name: string) => (name === 'sessions' ? window.sessions : undefined) }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'trace-inspect' }}
+        fetchEventsOverride={fetchEvents}
+      />,
+    )
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(2) })
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1', '#2'])
+    // The session window itself is partial: counts say so, and the control is there.
+    expect(screen.getByTestId('ttl-count').textContent).toBe('Latest 2 turns · 0 steps')
+    expect(screen.getByTestId('ttl-load-older')).toBeTruthy()
+    // No route traffic at all — the entries are the ones already in memory.
+    expect(fetchEvents).not.toHaveBeenCalled()
+  })
+
+  it('pages earlier through the session loader and follows its prepend', async () => {
+    const window = makeWindow([...turnAt(3, 9), ...turnAt(4, 13)], true)
+    const older = [...turnAt(1, 1), ...turnAt(2, 5)]
+    const loadOlder = vi.fn(async () => {
+      window.apply(
+        { entries: [...older, ...turnAt(3, 9), ...turnAt(4, 13)], hasMore: false },
+        { kind: 'prepend', entries: older },
+      )
+    })
+    window.session.loadOlder = loadOlder
+    render(
+      <TrailTab
+        ctx={{ get: (name: string) => (name === 'sessions' ? window.sessions : undefined) }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'trace-inspect' }}
+        fetchEventsOverride={vi.fn(async () => ({ events: [] }))}
+      />,
+    )
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(2) })
+    fireEvent.click(screen.getByTestId('ttl-load-older'))
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(4) })
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1', '#2', '#3', '#4'])
+    expect(screen.queryByTestId('ttl-load-older')).toBeNull()
+    expect(screen.getByTestId('ttl-list-foot').textContent).toBe('Showing all 4 turns · 0 steps')
+  })
+
+  it('appends live entries of the window without re-folding from the route', async () => {
+    const first = turnAt(1, 1)
+    const second = turnAt(2, 5)
+    const window = makeWindow(first, false)
+    render(
+      <TrailTab
+        ctx={{ get: (name: string) => (name === 'sessions' ? window.sessions : undefined) }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'trace-inspect' }}
+        fetchEventsOverride={vi.fn(async () => ({ events: [] }))}
+      />,
+    )
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(1) })
+    act(() => {
+      window.apply(
+        { entries: [...first, ...second], hasMore: false },
+        { kind: 'append', entries: second },
+      )
+    })
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(2) })
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1', '#2'])
+  })
+})

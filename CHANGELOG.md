@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.12.1] - 2026-11-16
+
+### Fixed
+
+- **长会话仍然全量加载：轨迹改为直接消费会话自己的历史窗口**。0.12.0 用「20 轮一段」的自有路由分页，但 DSH 会话窗口是按**消息**分段的（0.2.2 的 `HISTORY_PAGE_OPTIONS = { maxMessages: 500, turnWindow: { minMessages: 50, minTurns: 2 } }`）：一个 14 轮 / 174 条消息的会话，对话区只取最近 8 轮 / 55 条消息，而轨迹按 20 轮取到全部 14 轮，看起来仍是全量。现在 `useTrail` 优先叠在客户端会话窗口上：
+  - 数据源改为 `sessions.binding(sessionId).eventSource`（对话视图消费的同一份 entries，已在内存里，**零额外网络**）；
+  - 「加载更早」直接调用**会话自己的** `session.loadOlder()`，不再走插件路由——两个视图的分页完全同步（聊天区翻页时轨迹也会跟着长出来）；
+  - `hasOlder` / `loadingOlder` 取自会话快照；首载只折当前窗口（真实会话：343 事件 / 8 轮，而不是 1,247 事件 / 14 轮）；
+  - 窗口 append 仍走 `TrailFolder.push` 增量折叠（80ms 合并发布），replace / prepend 才重折一次；
+  - 0.12.0 的自有路由分段（`direction:'before'`）保留为**回退**：宿主没有 `eventSource`（旧 DSH / 非标准绑定）时仍按 20 轮分段。
+- 窗口来源下 `loadingOlder` 的状态镜像：会话自己触发的翻页也会同步到按钮 busy 态。
+
+### Verification
+
+- 全量 **639 例 / 25 文件**通过（新增 3 例：窗口首载不调用路由、`loadOlder()` 前插后按序展开、窗口 append 增量追加）；`pnpm typecheck` 0。
+- 真实会话（1,247 事件 / 14 轮）：按 DSH 窗口算法首窗 = **343 事件 / 8 轮 / hasMore**，轨迹首载同 8 轮；一次 `loadOlder` 增 386 事件 / 3 轮；窗口折叠与整条日志折叠**逐轮一致**（turn / anchorSeq / 步数 / 输入预览全等）。
+- `pnpm build` + `pnpm check:lib` 通过（`lib/` 与本条目同提交）。
+
 ## [0.12.0] - 2026-11-15
 
 ### Added

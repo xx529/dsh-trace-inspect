@@ -47,7 +47,7 @@
   The footer marks `full`/`truncated` with the seq; results rewritten by a compaction plugin show the **replacement summary** and a `Replaced by compaction (seq #N)` note; when the 32 KiB cap clipped content, the band auto-fetches the **full payload** (`POST /trace-inspect/api/tool-detail`) and `⤢` opens the zoomed reading view.
 - **Parallel calls at a glance (new in v0.8.0)** — tool calls issued together in one assistant step collapse into a `∥ Parallel ×N` group (hairline rail + indent), and the collapsed turn header carries a `∥N` batch badge. Grouping uses only the journaled `turn`/`step` identity: legacy logs without it, error rows and orphan results stay ungrouped.
 - **Auto-open on the first turn (new in v0.10.39)** — when a new conversation sends its first message, the right sidebar expands on its own with 「轮次轨迹」 already showing. It fires once per conversation (a conversation with history, or one you already closed the tab in, is never popped again), stays out of the way below 768px, and ships a plugin-owned "Open on the first turn" switch in the side-card settings (on by default).
-- **Segmented history (new in v0.12.0)** — opening an existing session loads only the newest 20 turns; the "Load earlier history" control at the top of the list pages back another 20 turns at a time, using the same backwards axis as DSH's own conversation window (`SessionPageRequest.beforeSeq` / `hasMore` / `loadOlder`). Segments are anchored on `turn/start` and reach back to the prompt that opened the turn, so a mid-turn steering message never splits a turn. Long sessions no longer pull, fold and render the whole log: scrolling to the top auto-loads the next segment, the viewport is restored after the prepend, and the counts read "Latest N turns" with the loaded range in the footer.
+- **Segmented history (since v0.12.0; v0.12.1 reuses the session window directly)** — the trail no longer defines its own segments: it folds the **session history window the conversation view is already using** (`sessions.binding().eventSource`, already in memory, zero extra network), so the first load shows exactly the turns the chat pane shows. "Load earlier history" calls the session's own `session.loadOlder()`, keeping both views in lockstep. Counts read "Latest N turns" with the loaded range in the footer; scrolling to the top auto-loads and the viewport is restored after the prepend. Hosts without `eventSource` fall back to the plugin route's 20-turns-per-segment paging (`direction:'before'`, `turn/start`-aligned).
 - **Structured jump-back** — click a turn row or the trailing `↗` button on a tool row (the row itself now expands) to auto-load history and scroll to the matching row in the chat view / trajectory view. On 0.2.0 navigation goes through the client `uiConversation` conversation view registry (`anchorSeq` node matching + `loadOlder` paging); on 0.1.x it falls back to the legacy session snapshot — no dependence on DOM text or hashed class names.
 - **Zero AI dependency** — pure event folding, no LLM calls: zero tokens, instant open, no failure states.
 - **Read-only & non-invasive** — never touches the DSH core: one read-only host route + one client tab; registers cleanly and unloads without residue.
@@ -122,7 +122,9 @@ client (browser) inject: ['sessions','uiConversation','betterSidebar'] (the latt
   → jump-back: on 0.2.0 the ctx.uiConversation conversation view registry (chat/trajectory
     targets); on 0.1.x the legacy session snapshot's chat.nodes / views fields
   → subscription-driven refresh (session.subscribe + the 0.2.0 eventSource; no polling)
-    + first load = tail segment; loadOlder() prepends with the window's first seq as beforeSeq
+    + primary: folds the session window entries (eventSource) and calls the session's own
+      loadOlder(); append is incremental, replace/prepend re-folds once
+    + fallback: without an eventSource, the own route's tail + beforeSeq segments (20 turns)
     + incremental folding (TrailFolder: only re-folds open turns)
     + seq-keyed rows (append without remount) + per-turn React.memo + three-level folding + tool filter chips
   → step details (v0.4.0): tool/call linked to tool/result by callId/seq, honouring
@@ -132,7 +134,7 @@ client (browser) inject: ['sessions','uiConversation','betterSidebar'] (the latt
 
 ## Performance design (introduced in v0.2.1, extended with segments in v0.12.0)
 
-- **The first load is the tail segment (v0.12.0)**: the same idea as DSH's conversation window (50 messages per page + `loadOlder()`) — opening a session requests only the newest `PAGE_TURNS = 20` turns; older turns come from the "Load earlier history" control or by scrolling to the top. A prepend re-folds only the loaded window once, so network, folding and DOM all scale with the loaded turns rather than the whole log.
+- **First load = the session window (v0.12.1)**: the DSH client already maintains the conversation view's history window (0.2.2: at least 50 messages / 2 turns, at most 500, cut on a turn boundary) and exposes `loadOlder()`. The trail folds that same window, so first-load size and paging cadence match the chat view exactly — with no extra requests. Only hosts without an `eventSource` fall back to the plugin route's 20-turn segments.
 - **No more deep-cloning the whole log on the host**: the old `listEvents` probe and `readSession` read each `structuredClone` every event (~3 full deep clones per request for live sessions). Live sessions now borrow the store's frozen event snapshot directly (`snapshotEvents()` on 0.2.0 / the `events` property on 0.1.x — the cached, immutable array is reused): O(1) probe, O(delta) incremental reads, fully synchronous, zero copies.
 - **Paged + trimmed responses**: at most `PAGE_SIZE` events and at most `PAGE_BUDGET_BYTES` (2 MiB) of JSON per page (`hasMore` pulls the rest; first paint renders progressively); events project only the fields folding and details need (text capped at `TEXT_CAP` = 2 KiB, tool arguments at `ARGS_CAP` = 32 KiB, tool-result content at 32 KiB; image blocks keep only `{attachmentId,mediaType,bytes,width,height,name}` — never inline base64).
 - **Incremental client folding**: `TrailFolder.push()` consumes each event exactly once; `snapshot()` reuses the TrailTurn objects of already-sealed turns (stable identity → `React.memo` re-renders only open turns), turning each refresh from O(n) full refolds into O(delta); duplicate/re-sent pages are dropped by the seq watermark.
@@ -152,7 +154,7 @@ client (browser) inject: ['sessions','uiConversation','betterSidebar'] (the latt
 | Platform (fallback-compatible) | DSH 0.1.2-rc.1 / 0.1.1-rc.x (stable line) |
 | Dependencies | dsh-better-sidebar (optional peer, `>=0.17.0`; inert when absent), react (injected by the DSH client seed) |
 | Build | TypeScript + esbuild, no runtime npm dependencies |
-| Tests | vitest, 636 cases / 25 files (fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + two independent adversarial suites) |
+| Tests | vitest, 639 cases / 25 files (fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + two independent adversarial suites) |
 
 ## Development
 

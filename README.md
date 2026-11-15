@@ -173,7 +173,7 @@
   详情带底部标注「完整/已截断」与 seq；被压缩插件替换过的结果会显示**替换后的摘要**并标注 `已被压缩替换（seq #N）`；内容被 32 KiB 上限截断时自动按需拉取**完整内容**（`POST /trace-inspect/api/tool-detail`），并可用 `⤢` / `…` 在单值查看器中打开完整值。
 - **并行调用一目了然（v0.8.0 新增）** —— 同一助手步骤内并行下发的多个 tool 调用折叠成一个「∥ 并行 ×N」组（组内发丝级竖线 + 缩进），折叠态轮次表头也显示 `∥N` 组数；判定只采用事件自带的 `turn`/`step`，旧日志缺该字段、错误行与孤儿结果行都不分组。
 - **首轮自动打开（v0.10.39 新增）** —— 新对话发出第一条消息时，右侧栏自动展开并切到「轮次轨迹」，不用再点 `+` 去找 tab；每个会话只自动打开一次，已有历史的会话、以及你手动关过的会话都不会再被弹开，窄屏（< 768px）不触发，并在侧边卡片设置里提供「首轮自动打开」开关（默认开）。
-- **分段加载历史（v0.12.0 新增）** —— 打开已有会话时只取「最近 20 轮」尾段，顶部「加载更早的历史」再按 20 轮一段向前取；与 DSH 会话窗口同一套分段机制（`SessionPageRequest.beforeSeq` / `hasMore` / `loadOlder`），分段边界按 `turn/start` 对齐并回溯到打开该轮的用户输入，中途 steering 消息不会把一轮切成两半。长会话不再全量拉取 + 全量折叠 + 全量渲染；滚动到列表顶部自动续载，插入后恢复原视口位置，计数改为「最近 N 轮」并在页脚标明已加载范围。
+- **分段加载历史（v0.12.0 起；v0.12.1 改为直接复用会话窗口）** —— 轨迹不再自己定义分段，而是直接消费对话视图正在用的那份**会话历史窗口**（`sessions.binding().eventSource`，已在内存里，零额外网络），首载轮数 = 对话区当前显示的轮数；顶部「加载更早的历史」直接调用会话自己的 `session.loadOlder()`，所以聊天区翻页时轨迹同步长出来。计数显示「最近 N 轮」并在页脚标明已加载范围，滚动到顶自动续载、插入后恢复视口。无 `eventSource` 的旧宿主回退到插件自有路由的「20 轮一段」分页（`direction:'before'` + `turn/start` 对齐）。
 - **一键跳回原位** —— 点击轮次行 / 行尾 `↗` 按钮（工具行本身改为展开详情），自动加载历史并滚动到聊天视图 / 轨迹视图的对应行；0.2.0 走 client `uiConversation` 会话视图注册表（`anchorSeq` 节点匹配 + `loadOlder` 翻页），0.1.x 回退旧 session 快照，不依赖 DOM 文本与哈希类名。
 - **零 AI 依赖** —— 纯事件折叠，不调用 LLM：零 token、秒开、无失败态。
 - **只读零侵入** —— 不改动 DSH 核心：host 一个只读路由 + client 一个 tab，注册即用、卸载干净。
@@ -259,7 +259,9 @@ client（浏览器）  inject: ['sessions','uiConversation','betterSidebar']（�
   → 跳回：0.2.0 走 ctx.uiConversation 会话视图注册表（chat/trajectory target）；
     0.1.x 回退 session snapshot 的 chat.nodes / views 字段
   → 会话订阅驱动刷新（session.subscribe + 0.2.0 eventSource，无定时轮询）
-  → 首载只取尾段；loadOlder() 用窗口首 seq 作 beforeSeq 前插一段（重折一次已加载窗口）
+  → 首选：直接折会话窗口 entries（eventSource，与对话同一分段）；loadOlder() 调会话自己的
+    session.loadOlder()；append 增量折叠，replace/prepend 重折一次
+  → 回退：无 eventSource 时走自有路由的尾段 + beforeSeq 分段（20 轮/段）
   → 增量折叠（TrailFolder：只重折打开中的轮次）+ seq-keyed 行（追加不重挂）
     + 按轮次 React.memo + 三级折叠 + 工具筛选 chips
   → 步骤详情（v0.4.0）：按 callId/seq 关联 tool/call 与 tool/result，遵守
@@ -269,7 +271,7 @@ client（浏览器）  inject: ['sessions','uiConversation','betterSidebar']（�
 
 ## 性能设计（v0.2.1 引入，v0.12.0 增补分段加载）
 
-- **首载只取尾段（v0.12.0）**：会话窗口（DSH 自身 50 条消息一页 + `loadOlder()`）的同一思路——打开会话只请求最近 `PAGE_TURNS=20` 轮，更早的轮次由「加载更早的历史」或滚动到顶按需获取；一次前插只重折已加载窗口，网络、折叠与 DOM 都随「已加载轮数」而不是会话总长增长。
+- **首载 = 会话窗口（v0.12.1）**：DSH 客户端本来就维护着对话视图的历史窗口（0.2.2：≥50 条消息 / ≥2 轮，最多 500 条，尾部对齐到轮边界）并暴露 `loadOlder()`；轨迹直接折这份窗口，所以首载量、翻页节奏都与对话视图完全一致，**没有额外请求**。只有没有 `eventSource` 的旧宿主才回退到插件路由的 20 轮分段。
 - **host 不再对整份日志做深拷贝**：旧的 `listEvents` 探测与 `readSession` 读取会对每个事件 `structuredClone`（活跃会话约 3 次全量深拷贝/请求）。现在活跃会话直接借用 store 的冻结事件快照（0.2.0 的 `snapshotEvents()` / 0.1.x 的 `events` 属性，复用不变数组），探测 O(1)、取增量 O(delta)，全程同步零拷贝。
 - **响应逐页 + 裁剪**：每页最多 `PAGE_SIZE` 事件且总字节不超过 `PAGE_BUDGET_BYTES`（2 MiB，`hasMore` 续拉，首载渐进渲染）；事件只投影折叠与详情所需字段（文本截断到 `TEXT_CAP=2 KiB`、tool 参数到 `ARGS_CAP=32 KiB`、tool 结果 content 到 32 KiB，图片只留 `{attachmentId,mediaType,bytes,width,height,name}` 不内联 base64）。
 - **client 增量折叠**：`TrailFolder.push()` 每事件只消费一次，`snapshot()` 复用已封口轮次的 TrailTurn 对象（身份稳定 → `React.memo` 只重渲染打开中的轮次），每轮刷新从 O(n) 全量重折降为 O(delta)；重复/重发的分页被 seq 水位线丢弃。
@@ -289,7 +291,7 @@ client（浏览器）  inject: ['sessions','uiConversation','betterSidebar']（�
 | 平台（回退兼容） | DSH 0.1.2-rc.1 / 0.1.1-rc.x（stable 线） |
 | 依赖 | dsh-better-sidebar（可选 peer，`>=0.17.0`；未装则 inert）、react（DSH client 种子注入） |
 | 构建 | TypeScript + esbuild，无运行时 npm 依赖 |
-| 测试 | vitest 636 用例 / 25 文件（fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + 两组独立对抗验收） |
+| 测试 | vitest 639 用例 / 25 文件（fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + 两组独立对抗验收） |
 
 ## 开发
 
