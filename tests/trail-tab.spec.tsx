@@ -1169,9 +1169,9 @@ describe('TrailTab', () => {
     // with pages pending, the scheduled continuation must drain the rest.
     const total = MAX_PULL_PAGES + 2
     let calls = 0
-    const fetchEventsOverride = async (_sid: string, afterSeq: number) => {
+    const fetchEventsOverride = async (_sid: string, request: { afterSeq?: number }) => {
       calls += 1
-      const seq = afterSeq + 1
+      const seq = (request.afterSeq ?? 0) + 1
       const hasMore = seq < total
       return { events: [user(seq, `msg ${seq}`)], hasMore }
     }
@@ -2032,5 +2032,104 @@ describe('tab visibility (React #300 regression)', () => {
     expect(screen.queryByTestId('ttl-root')).toBeNull()
     rerender(<TrailTab {...props} visible />)
     expect(screen.getByTestId('ttl-root')).toBeTruthy()
+  })
+})
+
+// ── v0.12.0 — segmented history (tail first, "load earlier" pages) ───────
+
+describe('TrailTab — segmented history (v0.12.0)', () => {
+  /** One complete turn at a given seq base. */
+  const turnAt = (turn: number, base: number): Ev[] => [
+    user(base, `q${turn}`),
+    turnStart(base + 1, turn),
+    assistant(base + 2, `a${turn}`),
+    turnEnd(base + 3, turn),
+  ]
+
+  it('opens on the newest segment, then pages earlier segments through the control', async () => {
+    const tail = [...turnAt(3, 9), ...turnAt(4, 13)]
+    const older = [...turnAt(1, 1), ...turnAt(2, 5)]
+    const requests: Array<{ direction?: string; beforeSeq?: number; afterSeq?: number }> = []
+    const fetchEventsOverride = async (
+      _sid: string,
+      request: { direction?: 'before'; beforeSeq?: number; afterSeq?: number },
+    ): Promise<{ events: SessionEventLike[]; hasMore?: boolean; hasOlder?: boolean }> => {
+      requests.push(request)
+      if (request.direction === 'before') {
+        return request.beforeSeq === undefined
+          ? { events: tail as SessionEventLike[], hasOlder: true }
+          : { events: older as SessionEventLike[], hasOlder: false }
+      }
+      return { events: [] }
+    }
+    render(
+      <TrailTab
+        ctx={{ get: () => undefined }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'trace-inspect' }}
+        fetchEventsOverride={fetchEventsOverride}
+      />,
+    )
+
+    // Tail segment only: two cards, and the counts SAY they are partial.
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(2) })
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#3', '#4'])
+    expect(screen.getByTestId('ttl-count').textContent).toBe('Latest 2 turns · 0 steps')
+    expect(screen.getByTestId('ttl-list-foot').textContent).toBe('Loaded the latest 2 turns · 0 steps')
+
+    fireEvent.click(screen.getByTestId('ttl-load-older'))
+
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(4) })
+    // Prepended in order, and the control retires once the log is exhausted.
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1', '#2', '#3', '#4'])
+    expect(screen.queryByTestId('ttl-load-older')).toBeNull()
+    expect(screen.getByTestId('ttl-list-foot').textContent).toBe('Showing all 4 turns · 0 steps')
+    expect(requests[0]).toEqual({ direction: 'before', maxTurns: 20 })
+    expect(requests[1]).toEqual({ direction: 'before', beforeSeq: 9, maxTurns: 20 })
+  })
+
+  it('shows no load-earlier control when the whole log fits one segment', async () => {
+    renderTab(twoTurns() as SessionEventLike[])
+    await readyTurns(2)
+    expect(screen.queryByTestId('ttl-load-older')).toBeNull()
+    expect(screen.getByTestId('ttl-list-foot').textContent).toBe('Showing all 2 turns · 3 steps')
+  })
+
+  it('keeps appending the live tail after a segmented open', async () => {
+    const tail = turnAt(1, 1)
+    const live = turnAt(2, 5)
+    const requests: Array<{ direction?: string; afterSeq?: number }> = []
+    let notify: (() => void) | null = null
+    const sessions = {
+      binding: () => ({
+        session: {
+          subscribe: (listener: () => void) => { notify = listener; return () => { notify = null } },
+          getSnapshot: () => ({ running: true }),
+        },
+      }),
+    }
+    const fetchEventsOverride = async (
+      _sid: string,
+      request: { direction?: 'before'; afterSeq?: number },
+    ): Promise<{ events: SessionEventLike[]; hasOlder?: boolean }> => {
+      requests.push(request)
+      if (request.direction === 'before') return { events: tail as SessionEventLike[], hasOlder: false }
+      return { events: (request.afterSeq ?? 0) <= 4 ? live as SessionEventLike[] : [] }
+    }
+    render(
+      <TrailTab
+        ctx={{ get: (name: string) => (name === 'sessions' ? sessions : undefined) }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'trace-inspect' }}
+        fetchEventsOverride={fetchEventsOverride}
+      />,
+    )
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(1) })
+    act(() => { notify?.() })
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(2) }, { timeout: 3000 })
+    expect(requests.some((request) => request.afterSeq === 4)).toBe(true)
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1', '#2'])
   })
 })

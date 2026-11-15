@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.12.0] - 2026-11-15
+
+### Added
+
+- **分段加载历史（首载只取最近 20 轮，更早按需向前加载）**：打开已有会话时不再把整条日志拉全、折叠全、渲染全。默认分段大小 `PAGE_TURNS = 20` 轮，列表顶部有「加载更早的历史」；滚动到列表顶部（48px 阈值，与官方轨迹面板一致）也会自动续载一段，插入后用滚动锚定把视口还原到原来的内容位置。计数改为「最近 N 轮 · M 步」，页脚显示「已加载最近 …」，搜索无结果且仍有更早历史时提示「搜索只覆盖已加载的最近 N 轮」。
+- **宿主回向分页**：`POST /trace-inspect/api/events` 新增 `{ direction: 'before', maxTurns?, beforeSeq? }` → `{ events, hasOlder }`。分段边界按 `turn/start` 锚定并回溯到打开该轮的用户输入（`user/message` 且 `source.kind === 'user'`），所以分段不会把一轮的输入与步骤切开，中途 steering 消息也不会造成半轮；无 `turn/start` 的旧日志回退到用户消息边界。回向页同样受 2 MiB 页级预算约束，超出时从最旧的轮次开始丢，最新一轮始终下发（避免加载循环卡死）；`hasOlder` 只在确实还有更早一轮时为 true。
+
+### Changed
+
+- **机制对齐 DSH 会话窗口**：DSH 自身的会话历史是「尾部窗口 + `SessionPageRequest.beforeSeq` / `hasMore` + `loadOlder()`」，官方轨迹面板在此之上再加一层 50 节点的本地渲染窗口。本插件把同一套分段机制落在自己的只读路由上（保留 wire 字段裁剪），轮次而不是消息是分段单位。宿主侧回向扫描只回看 `maxTurns + 1` 个 `turn/start`，活跃会话的成本是 O(分段)，与 `afterSeq` 前向页的 O(delta) 一致。
+- **客户端 `useTrail`**：首载请求尾段；`hasOlder` / `loadingOlder` / `loadOlder()` 仿 `Session.loadOlder()`（`hasOlder` + busy 闩锁、失败保留可重试）。前插时重折一次已加载窗口（O(已加载)），实时增量仍走 `TrailFolder.push` O(delta)；首载进行中到来的订阅刷新会被暂存，避免与尾段加载竞速、从 seq 0 把整条日志抽干。不含 `hasOlder` 的旧传输（旧宿主 / 测试桩）自动回退为原来的「从 0 抽干」行为。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **636 例 / 25 文件**全通过（新增 host 回向分页 8 例、面板分段加载 3 例）。
+- 新增用例覆盖：尾段 → `beforeSeq` 向前 → `hasOlder` 归零；budget 截断只丢最旧轮次；steering 消息不切轮；无 `turn/start` 的用户消息边界回退；live store 走回向分页且不触碰 `sessionQuery`；面板「加载更早」前插顺序、计数口径、按钮退场、尾段后仍能追加实时轮次。
+- **真实会话回放**（`task-gantt` 会话：18,532 事件 / 152 轮；用 `lib/index.js` 直接驱动路由）：回向分成 11 段，每段均从 `turn/start` 起、每段 ≤ 20 轮，段与段 seq 连续（无缺口/无重叠）；把 11 段拼起来折叠的结果与整条日志一次性 `foldTurns` 逐轮一致（152 轮 / 2,712 步，anchorSeq 与步数全等）。首段响应 **299 KiB**，全量投影为 **10.9 MiB**（约 1/37），且只有用户一路向前翻时才逐段付费。
+- `pnpm build` + `pnpm check:lib` 通过（`lib/` 与本条目同提交）。
+
 ## [0.11.3] - 2026-11-15
 
 ### Fixed
@@ -14,6 +33,7 @@
 
 - 全新会话实测：挂载 + 开启后会话事件只有 `session`/`permission/preset`/`sandbox/mode`/`approval/policy`，**没有任何 command 事件**；状态文件正常写入，开关状态正确。
 - 新增 4 条路由用例（GET 状态、POST 生效、封存 409、非 loopback 403）；全量 **625 例 / 25 文件** 通过；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+
 
 ## [0.11.2] - 2026-11-15
 

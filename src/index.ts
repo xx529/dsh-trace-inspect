@@ -11,6 +11,24 @@
  *     → 405 non-POST
  *     → 413 oversized request body
  *
+ * v0.12.0 adds the backwards axis the session window has always had
+ * (`SessionPageRequest.beforeSeq` / `hasMore` / `loadOlder`):
+ *
+ *   POST /trace-inspect/api/events  { sessionId, direction: 'before', maxTurns?,
+ *                                     beforeSeq? }
+ *     → 200 { events, hasOlder }  (up to maxTurns COMPLETE turns, ascending
+ *                                  seq; newest page when `beforeSeq` is
+ *                                  absent, the page ending just before
+ *                                  `beforeSeq` otherwise; also bounded by
+ *                                  PAGE_BUDGET_BYTES, newest turn first)
+ *
+ * Segment boundaries follow `turn/start` and reach back to the human prompt
+ * that opened the turn (`user/message` with `source.kind === 'user'`), so a
+ * page never splits a turn from its input or from a mid-turn steering
+ * message. Logs without turn events fall back to prompt boundaries.
+ * `hasOlder` is exact: true only when another complete turn precedes the
+ * page.
+ *
  * v0.5.0 adds two more routes behind the same fence and error vocabulary:
  *
  *   GET  /trace-inspect/api/attachment?sessionId=&attachmentId=
@@ -54,6 +72,7 @@ import type {
   LiveSessionLike,
   SessionEventLike,
 } from './context-types'
+import { MAX_PAGE_TURNS, PAGE_TURNS } from './paging'
 import { PAGE_BUDGET_BYTES, PAGE_SIZE, projectEvent } from './wire'
 import { BODY_TOO_LARGE, header, isTrustedApiRequest, readJsonBody, sendJson } from './host-http'
 export { isLoopbackHostname, isTrustedApiRequest } from './host-http'
@@ -102,6 +121,147 @@ function upperBound(events: ReadonlyArray<{ seq?: number }>, afterSeq: number): 
     else hi = mid
   }
   return lo
+}
+
+/** `beforeSeq` of a backwards page: absent / malformed means "the newest page". */
+function beforeSeqOf(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined
+  const n = Number(value)
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined
+}
+
+/** Requested segment size in turns, clamped to the supported range. */
+function pageTurnsOf(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return PAGE_TURNS
+  const turns = Math.floor(n)
+  return turns >= 1 ? Math.min(turns, MAX_PAGE_TURNS) : PAGE_TURNS
+}
+
+/**
+ * Whether one event opens a turn's segment: the `user/message` a person wrote.
+ * `source.kind` lives on `data.message.source` in the session log and on
+ * `data.source` in the wire form — both are accepted (same precedence the
+ * client fold uses).
+ */
+function isPromptEvent(event: SessionEventLike): boolean {
+  if (event.type !== 'user/message') return false
+  const data = recordOf(event.data)
+  if (data === undefined) return false
+  const message = recordOf(data.message)
+  const source = message !== undefined && message.source !== undefined
+    ? recordOf(message.source)
+    : recordOf(data.source)
+  return source !== undefined && source.kind === 'user'
+}
+
+/**
+ * Segment start for one `turn/start`: the human prompt that opened the turn.
+ *
+ * A turn is `prompt → turn/start → … → turn/end`, and a steering message can
+ * arrive mid-turn — so anchoring on prompts ALONE would cut an open turn in
+ * half. The prompt belongs to the FOLLOWING turn/start: walking back from it
+ * through anything that is not another turn boundary, the first human prompt
+ * found is the segment's first event. A turn opened without a prompt (goal
+ * continuation, scheduled work) simply starts at its `turn/start`.
+ */
+function promptStartFor(events: ReadonlyArray<SessionEventLike>, at: number): number {
+  for (let index = at - 1; index >= 0; index -= 1) {
+    const type = events[index].type
+    if (type === 'turn/end' || type === 'turn/start') return at
+    if (isPromptEvent(events[index])) return index
+  }
+  return at
+}
+
+/**
+ * Segment starts of a user-mode log (no `turn/start` at all): every human
+ * prompt opens a turn, so the prompt indexes themselves are the boundaries.
+ */
+function promptStartsFromEnd(
+  events: ReadonlyArray<SessionEventLike>,
+  end: number,
+  maxTurns: number,
+): { starts: number[]; capped: boolean } {
+  const prompts: number[] = []
+  for (let index = end - 1; index >= 0 && prompts.length <= maxTurns; index -= 1) {
+    if (isPromptEvent(events[index])) prompts.push(index)
+  }
+  prompts.reverse()
+  const capped = prompts.length > maxTurns
+  const starts = capped
+    ? prompts.slice(1)
+    : (prompts.length > 0 ? [0, ...prompts.filter((index) => index !== 0)] : [0])
+  return { starts, capped }
+}
+
+/**
+ * Serve one backwards history segment: up to `maxTurns` complete turns ending
+ * before `beforeSeq` (exclusive; the log's tail when absent).
+ *
+ * Segments are anchored on `turn/start` and reach back to the prompt that
+ * opened the turn, so a page never splits a turn from its input nor from a
+ * mid-turn steering message. The backward scan stops after `maxTurns + 1`
+ * turn starts, so the hot live path costs O(segment), not O(log).
+ *
+ * The byte budget trims the segment from its OLDEST turn; the newest turn is
+ * always delivered (mirrors `respondPage`'s "one event always delivered" rule,
+ * otherwise an oversized turn would stall the client's load-older loop).
+ * `hasOlder` is exact: true only when another complete turn precedes the page.
+ */
+function respondBackwardPage(
+  res: HttpResponseLike,
+  events: ReadonlyArray<SessionEventLike>,
+  beforeSeq: number | undefined,
+  maxTurns: number,
+  project: boolean,
+): void {
+  const end = beforeSeq === undefined ? events.length : upperBound(events, beforeSeq - 1)
+  const turnStarts: number[] = []
+  for (let index = end - 1; index >= 0 && turnStarts.length <= maxTurns; index -= 1) {
+    if (events[index].type === 'turn/start') turnStarts.push(index)
+  }
+  let starts: number[]
+  if (turnStarts.length > 0) {
+    turnStarts.reverse()
+    const capped = turnStarts.length > maxTurns
+    const kept = capped ? turnStarts.slice(1) : turnStarts
+    starts = kept.map((at) => promptStartFor(events, at))
+    // The scan reached the beginning of the log: the first page carries the
+    // preamble/seed events that precede the first prompt (the fold ignores
+    // them, but they must not be stranded behind `hasOlder`).
+    if (!capped) starts = [0, ...starts.filter((start) => start !== 0)]
+  } else {
+    starts = promptStartsFromEnd(events, end, maxTurns).starts
+  }
+
+  const groups: Array<{ start: number; end: number }> = []
+  for (let index = 0; index < starts.length; index += 1) {
+    const start = starts[index]
+    const groupEnd = index + 1 < starts.length ? starts[index + 1] : end
+    if (groupEnd > start) groups.push({ start, end: groupEnd })
+  }
+
+  let bytes = 0
+  let firstKept = groups.length
+  const kept: SessionEventLike[][] = []
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    const group = groups[index]
+    const projected: SessionEventLike[] = []
+    let size = 0
+    for (let at = group.start; at < group.end; at += 1) {
+      const event = project ? projectEvent(events[at]) : events[at]
+      projected.push(event)
+      size += Buffer.byteLength(JSON.stringify(event))
+    }
+    if (kept.length > 0 && bytes + size > PAGE_BUDGET_BYTES) break
+    kept.unshift(projected)
+    bytes += size
+    firstKept = index
+  }
+  const page = kept.flat()
+  const cut = firstKept < groups.length ? groups[firstKept].start : end
+  sendJson(res, 200, { events: page, hasOlder: page.length > 0 && cut > 0 })
 }
 
 /**
@@ -219,12 +379,19 @@ export function apply(ctx: HostCtx): void {
         return
       }
       const afterSeq = afterSeqOf(body.afterSeq)
+      // v0.12.0: `direction: 'before'` flips the route onto the session
+      // window's backwards axis (tail page → older pages via beforeSeq).
+      const backwards = body.direction === 'before'
+      const beforeSeq = backwards ? beforeSeqOf(body.beforeSeq) : undefined
+      const maxTurns = pageTurnsOf(body.maxTurns)
 
       try {
         // Live fast path: synchronous, O(1) probe, O(delta) projection.
         const live = liveSessionOf(ctx, sessionId)
         if (live !== undefined) {
-          respondPage(res, liveEventsOf(live) ?? [], afterSeq, true)
+          const liveEvents = liveEventsOf(live) ?? []
+          if (backwards) respondBackwardPage(res, liveEvents, beforeSeq, maxTurns, true)
+          else respondPage(res, liveEvents, afterSeq, true)
           return
         }
 
@@ -271,7 +438,8 @@ export function apply(ctx: HostCtx): void {
           cacheStore(sessionId, lastSeq, base, bytes, probedAt)
         }
         // base is already projected (idempotently); serve without re-projecting.
-        respondPage(res, base, afterSeq, false)
+        if (backwards) respondBackwardPage(res, base, beforeSeq, maxTurns, false)
+        else respondPage(res, base, afterSeq, false)
       } catch {
         sendJson(res, 404, { error: 'session-not-found' })
       }

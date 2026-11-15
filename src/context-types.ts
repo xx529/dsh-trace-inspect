@@ -81,6 +81,15 @@ export interface HttpResponseLike {
 export interface TrailEventsRequest {
   sessionId?: unknown
   afterSeq?: unknown
+  /**
+   * v0.12.0 backwards axis: `'before'` serves a turn-aligned segment ending
+   * before `beforeSeq` (the newest segment when it is absent) instead of the
+   * forward `afterSeq` page.
+   */
+  direction?: unknown
+  beforeSeq?: unknown
+  /** Segment size in turns for a `'before'` request (host clamps 1..200). */
+  maxTurns?: unknown
 }
 
 /** The wire response of POST /trace-inspect/api/events. */
@@ -88,4 +97,6 @@ export interface TrailEventsResponse {
   events: SessionEventLike[]
   /** More pages remain; the client re-pulls with the last delivered seq. */
   hasMore: boolean
+  /** Backwards pages: an earlier prompt-anchored segment still exists. */
+  hasOlder?: boolean
 }

@@ -985,6 +985,41 @@ export const trailCss = `
   color: var(--dsw-alias-label-quaternary, #6f747a);
   font-size: 10.5px;
 }
+/* v0.12.0 — segmented history: the earlier-segment control sits above the
+   loaded turns, exactly where the official trajectory ledger puts its
+   "load earlier history" row. */
+.ttl-older {
+  padding: 10px 14px 4px;
+  text-align: center;
+}
+.ttl-olderBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border: 1px solid var(--dsw-alias-border-l4, rgba(255, 255, 255, 0.16));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  cursor: pointer;
+  font: var(--dsw-font-xxs-12, inherit);
+  font-size: 11px;
+  line-height: 16px;
+}
+.ttl-olderBtn:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  border-color: var(--dsw-alias-label-caption, #9ba1a7);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.05));
+}
+.ttl-olderBtn:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary, #4c8dff);
+  outline-offset: 1px;
+}
+.ttl-olderBtn:disabled {
+  color: var(--dsw-alias-label-dimmed, #7b8086);
+  cursor: progress;
+}
+.ttl-olderIcon { display: inline-flex; }
 .ttl-turn {
   position: relative;
   display: block;
@@ -1459,6 +1494,7 @@ export const trailCss = `
 .ttl-emptyInline { padding: 8px 14px; color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 10.5px; }
 .ttl-emptyFiltered { padding: 8px 14px; }
 .ttl-emptyFilteredText { color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 10.5px; }
+.ttl-emptyFilteredNote { margin-top: 6px; color: var(--dsw-alias-label-quaternary, #5f6469); font-size: 10px; }
 .ttl-clear-filter {
   margin-left: 8px;
   padding: 2px 8px;

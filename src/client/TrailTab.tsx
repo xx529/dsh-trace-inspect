@@ -46,8 +46,10 @@ import {
   fetchToolDetail,
   fetchTrailEvents,
   useTrail,
+  type FetchEventsResult,
   type SessionsServiceLike,
   type ToolDetailResult,
+  type TrailPageRequest,
 } from './useTrail'
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
 import { inkOf, splitMcpName, summarizeToolCall, toolIconKind, type ToolIconKind, type ToolInk } from './tool-summary'
@@ -67,8 +69,8 @@ export interface TrailTabProps {
   scope: { sessionId: string; cwd?: string }
   visible: boolean
   tab: { id: string }
-  /** test seam: override the events transport. */
-  fetchEventsOverride?: (sessionId: string, afterSeq: number) => Promise<{ events: SessionEventLike[]; hasMore?: boolean }>
+  /** test seam: override the events transport (forward + backwards pages). */
+  fetchEventsOverride?: (sessionId: string, request: TrailPageRequest) => Promise<FetchEventsResult>
   /** test seam: override the on-demand full-detail transport. */
   fetchToolDetailOverride?: FetchToolDetail
 }
@@ -143,6 +145,12 @@ function familyOfFilter(filter: StepFilter): ToolFamily | null {
 /** Max step/items rows mounted per expanded turn (bounds the DOM). */
 const STEP_CAP = 250
 
+/**
+ * Scroll distance from the top that triggers the earlier-segment load
+ * (v0.12.0), mirroring DSH's own trajectory pane (48px).
+ */
+const OLDER_LOAD_THRESHOLD_PX = 48
+
 /** Full tooltip text cap (server already trims to TEXT_CAP; belt and braces). */
 const TITLE_CAP = 512
 
@@ -180,6 +188,18 @@ interface UiStrings {
   charsLeft: (n: number) => string
   shownAll: (turns: number, steps: number) => string
   shownFiltered: (turns: number, steps: number) => string
+  /**
+   * Footer line while an earlier segment exists (v0.12.0): the counts describe
+   * the LOADED window, never a silent total.
+   */
+  shownRecent: (turns: number, steps: number) => string
+  /** Header / summary count while an earlier segment exists (v0.12.0). */
+  partialCount: (turns: number, steps: number) => string
+  /** Load-earlier control (idle / busy). */
+  loadEarlier: string
+  loadingEarlier: string
+  /** Search-scope note while an earlier segment is not loaded yet. */
+  searchLoadedOnly: (turns: number) => string
   /** Caption above a `snapshot` injection's sections (v0.10.46). */
   contextSupersedes: string
   /** Legend / chip label of the injection category (v0.10.48). */
@@ -219,6 +239,11 @@ const ZH_UI: UiStrings = {
   charsLeft: (n) => `还有 ${groupThousands(n)} 字符`,
   shownAll: (turns, steps) => `已显示全部 ${turns} 轮 · ${steps} 步`,
   shownFiltered: (turns, steps) => `已筛选 ${turns} 轮 · ${steps} 步`,
+  shownRecent: (turns, steps) => `已加载最近 ${turns} 轮 · ${steps} 步`,
+  partialCount: (turns, steps) => `最近 ${turns} 轮 · ${steps} 步`,
+  loadEarlier: '加载更早的历史',
+  loadingEarlier: '正在加载更早历史…',
+  searchLoadedOnly: (turns) => `搜索只覆盖已加载的最近 ${turns} 轮`,
   contextSupersedes: '取代先前的快照',
   injectLabel: '注入',
   contextRole: 'context',
@@ -253,6 +278,11 @@ const EN_UI: UiStrings = {
   charsLeft: (n) => `${groupThousands(n)} more chars`,
   shownAll: (turns, steps) => `Showing all ${turns} turns · ${steps} steps`,
   shownFiltered: (turns, steps) => `Filtered to ${turns} turns · ${steps} steps`,
+  shownRecent: (turns, steps) => `Loaded the latest ${turns} turns · ${steps} steps`,
+  partialCount: (turns, steps) => `Latest ${turns} turns · ${steps} steps`,
+  loadEarlier: 'Load earlier history',
+  loadingEarlier: 'Loading earlier history…',
+  searchLoadedOnly: (turns) => `Search covers only the latest ${turns} loaded turns`,
   contextSupersedes: 'Supersedes earlier snapshots',
   injectLabel: 'Injections',
   contextRole: 'context',
@@ -1137,11 +1167,16 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   const fetchEvents = React.useMemo(
     () => props.fetchEventsOverride !== undefined
       ? props.fetchEventsOverride
-      : (sid: string, afterSeq: number) => fetchTrailEvents(sid, afterSeq),
+      : (sid: string, request: TrailPageRequest) => fetchTrailEvents(sid, request),
     [props.fetchEventsOverride],
   )
 
-  const { turns, stats, status, error, refresh } = useTrail(sessionId, visible, fetchEvents, sessionsService)
+  const { turns, stats, status, error, refresh, hasOlder, loadingOlder, loadOlder } = useTrail(
+    sessionId,
+    visible,
+    fetchEvents,
+    sessionsService,
+  )
 
   const [filter, setFilter] = React.useState<StepFilter>('all')
   const [query, setQuery] = React.useState('')
@@ -1296,6 +1331,32 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     }
   })
 
+  /**
+   * v0.12.0 — "load earlier" anchoring. The list opens scrolled to the bottom
+   * (and every live append keeps it there), so prepending a segment above the
+   * viewport would shift the rows the user is reading down by exactly the
+   * inserted height. The geometry is remembered before the request and
+   * restored before paint once the prepend has rendered.
+   */
+  const olderAnchorRef = React.useRef<{ height: number; top: number } | null>(null)
+  const requestOlder = React.useCallback((): void => {
+    if (!hasOlder || loadingOlder) return
+    const el = listRef.current
+    const anchor = el === null ? null : { height: el.scrollHeight, top: el.scrollTop }
+    if (!loadOlder()) return
+    olderAnchorRef.current = anchor
+  }, [hasOlder, loadingOlder, loadOlder])
+
+  React.useLayoutEffect(() => {
+    const anchor = olderAnchorRef.current
+    if (anchor === null || loadingOlder) return
+    olderAnchorRef.current = null
+    const el = listRef.current
+    if (el === null) return
+    const grown = el.scrollHeight - anchor.height
+    if (grown > 0) el.scrollTop = anchor.top + grown
+  }, [turns, loadingOlder])
+
   const onScroll = React.useCallback((): void => {
     const el = listRef.current
     if (el === null) return
@@ -1305,7 +1366,14 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     }
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32
     setFollowPaused(!nearBottom)
-  }, [releaseScrollHold])
+    // Reaching the top pulls one earlier segment, exactly like the session
+    // window's loadOlder(). A window that fits the viewport has nothing to
+    // scroll, so it must not cascade through the whole history on open (the
+    // explicit button stays available).
+    if (hasOlder && !loadingOlder && !nearBottom && el.scrollTop <= OLDER_LOAD_THRESHOLD_PX) {
+      requestOlder()
+    }
+  }, [releaseScrollHold, hasOlder, loadingOlder, requestOlder])
 
   React.useEffect(() => {
     if (!followLatest || followPaused) return undefined
@@ -1624,7 +1692,9 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       <span className="ttl-brandIcon" aria-hidden="true">{brandIcon()}</span>
       <h2 className="ttl-title">{t(lang, 'tabTitle') as string}</h2>
       <span className="ttl-count" data-testid="ttl-count">
-        {`${(t(lang, 'turnsCount') as (n: number) => string)(turns.length)} · ${ui.stepCount(stats.total)}`}
+        {hasOlder
+          ? ui.partialCount(turns.length, stats.total)
+          : `${(t(lang, 'turnsCount') as (n: number) => string)(turns.length)} · ${ui.stepCount(stats.total)}`}
       </span>
       <span className="ttl-headerSpacer" />
       <button
@@ -1715,7 +1785,9 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       <div className="ttl-summary">
         <div className="ttl-summaryTop">
           <span className="ttl-summaryStat">
-            {`${ui.stepCount(stats.total)} · ${(t(lang, 'turnsCount') as (n: number) => string)(turns.length)}`}
+            {hasOlder
+              ? ui.partialCount(turns.length, stats.total)
+              : `${ui.stepCount(stats.total)} · ${(t(lang, 'turnsCount') as (n: number) => string)(turns.length)}`}
           </span>
           <span className="ttl-summarySpacer" />
           {stats.failed > 0 ? <span className="ttl-summaryFail">{ui.failCount(stats.failed)}</span> : null}
@@ -1808,11 +1880,33 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
         <button type="button" className="ttl-chip" data-testid="ttl-clear-filter" onClick={clearFilters}>
           {t(lang, 'clearFilter') as string}
         </button>
+        {hasOlder && searchActive
+          ? <p className="ttl-emptyFilteredNote">{ui.searchLoadedOnly(turns.length)}</p>
+          : null}
       </div>
     )
   } else {
     body = (
       <div className="ttl-list" ref={listRef} onScroll={onScroll} data-testid="ttl-list">
+        {hasOlder || loadingOlder
+          ? (
+            <div className="ttl-older" data-testid="ttl-older">
+              <button
+                type="button"
+                className="ttl-olderBtn"
+                data-testid="ttl-load-older"
+                disabled={loadingOlder}
+                aria-label={loadingOlder ? ui.loadingEarlier : ui.loadEarlier}
+                onClick={requestOlder}
+              >
+                {loadingOlder
+                  ? <span className="ttl-spin" aria-hidden="true">{spinnerIcon()}</span>
+                  : <span className="ttl-olderIcon" aria-hidden="true">{olderIcon()}</span>}
+                <span>{loadingOlder ? ui.loadingEarlier : ui.loadEarlier}</span>
+              </button>
+            </div>
+          )
+          : null}
         {visibleTurns.map((turn, index) => (
           <TurnRow
             key={turnByIdentity(turn)}
@@ -1838,7 +1932,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
         ))}
         <div className="ttl-listFoot" data-testid="ttl-list-foot">
           {filter === 'all' && !searchActive
-            ? ui.shownAll(turns.length, stats.total)
+            ? (hasOlder ? ui.shownRecent(turns.length, stats.total) : ui.shownAll(turns.length, stats.total))
             : ui.shownFiltered(visibleTurns.length, shownStepCount)}
         </div>
       </div>
@@ -1938,6 +2032,15 @@ function chevronIcon(): React.ReactElement {
   return (
     <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
       <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Arrow-up glyph for the "load earlier history" control (v0.12.0). */
+function olderIcon(): React.ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+      <path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

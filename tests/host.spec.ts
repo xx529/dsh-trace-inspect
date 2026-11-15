@@ -469,3 +469,180 @@ describe('cache eviction', () => {
     expect((ctx.sessionQuery.readSession as ReturnType<typeof vi.fn>).mock.calls.length).toBe(66)
   })
 })
+
+// ── v0.12.0: backwards (segmented) history ───────────────────────────────
+
+describe('backwards history (v0.12.0)', () => {
+  /** One complete turn: prompt → turn/start → assistant text → turn/end. */
+  const promptTurn = (turn: number, base: number): SessionEventLike[] => [
+    { type: 'user/message', seq: base, data: { content: `q${turn}`, message: { source: { kind: 'user' } } } },
+    { type: 'turn/start', seq: base + 1, data: { turn } },
+    { type: 'assistant/message', seq: base + 2, data: { message: { content: [{ type: 'text', text: `a${turn}` }] } } },
+    { type: 'turn/end', seq: base + 3, data: { turn } },
+  ]
+  const threeTurns = (): SessionEventLike[] => [
+    ...promptTurn(1, 1),
+    ...promptTurn(2, 5),
+    ...promptTurn(3, 9),
+  ]
+
+  /** Host context whose persisted log is exactly `events`. */
+  const logCtx = (sessionId: string, events: SessionEventLike[]): HostCtx & { captured: Handler[] } => {
+    const ctx = fakeCtx({
+      sessionQuery: {
+        readSession: vi.fn(async () => ({ events })),
+        listEvents: vi.fn(async () => events.map((event) => ({ seq: event.seq }))),
+      },
+    })
+    return ctx
+  }
+
+  const page = async (
+    ctx: HostCtx & { captured: Handler[] },
+    body: Record<string, unknown>,
+  ): Promise<{ status: number; events: SessionEventLike[]; hasOlder: boolean; hasMore: boolean }> => {
+    const res = fakeRes()
+    await ctx.captured[0]!(fakeReq({ body: JSON.stringify(body) }), res)
+    const parsed = JSON.parse(res.body || '{}') as { events?: SessionEventLike[]; hasOlder?: boolean; hasMore?: boolean }
+    return {
+      status: res.status,
+      events: parsed.events ?? [],
+      hasOlder: parsed.hasOlder === true,
+      hasMore: parsed.hasMore === true,
+    }
+  }
+
+  it('serves the newest segment first, then pages back to the beginning', async () => {
+    const sessionId = 'back-three-turns'
+    const ctx = logCtx(sessionId, threeTurns())
+    apply(ctx)
+
+    // Tail segment: the newest `maxTurns` turns, prompt-aligned.
+    const tail = await page(ctx, { sessionId, direction: 'before', maxTurns: 2 })
+    expect(tail.status).toBe(200)
+    expect(tail.events.map((event) => event.seq)).toEqual([5, 6, 7, 8, 9, 10, 11, 12])
+    expect(tail.events[0]?.type).toBe('user/message')
+    expect(tail.hasOlder).toBe(true)
+    expect(tail.hasMore).toBe(false)
+
+    // Older segment: `beforeSeq` = the tail's first seq.
+    const older = await page(ctx, { sessionId, direction: 'before', beforeSeq: 5, maxTurns: 2 })
+    expect(older.events.map((event) => event.seq)).toEqual([1, 2, 3, 4])
+    expect(older.hasOlder).toBe(false)
+  })
+
+  it('returns the whole log when it fits one segment', async () => {
+    const sessionId = 'back-fits'
+    const ctx = logCtx(sessionId, threeTurns())
+    apply(ctx)
+    const tail = await page(ctx, { sessionId, direction: 'before' })
+    expect(tail.events.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    expect(tail.hasOlder).toBe(false)
+  })
+
+  it('an empty / before-the-start request yields no events and no older claim', async () => {
+    const sessionId = 'back-empty'
+    const ctx = logCtx(sessionId, threeTurns())
+    apply(ctx)
+    const empty = await page(ctx, { sessionId, direction: 'before', beforeSeq: 0 })
+    expect(empty.events).toEqual([])
+    expect(empty.hasOlder).toBe(false)
+  })
+
+  it('falls back to user-message boundaries on logs without turn events', async () => {
+    const sessionId = 'back-user-mode'
+    const ctx = logCtx(sessionId, [
+      { type: 'user/message', seq: 1, data: { content: 'a', message: { source: { kind: 'user' } } } },
+      { type: 'assistant/message', seq: 2, data: { message: { content: 'A' } } },
+      { type: 'user/message', seq: 3, data: { content: 'b', message: { source: { kind: 'user' } } } },
+      { type: 'assistant/message', seq: 4, data: { message: { content: 'B' } } },
+      { type: 'user/message', seq: 5, data: { content: 'c', message: { source: { kind: 'user' } } } },
+      { type: 'assistant/message', seq: 6, data: { message: { content: 'C' } } },
+    ])
+    apply(ctx)
+    const tail = await page(ctx, { sessionId, direction: 'before', maxTurns: 2 })
+    expect(tail.events.map((event) => event.seq)).toEqual([3, 4, 5, 6])
+    expect(tail.hasOlder).toBe(true)
+    const older = await page(ctx, { sessionId, direction: 'before', beforeSeq: 3 })
+    expect(older.events.map((event) => event.seq)).toEqual([1, 2])
+    expect(older.hasOlder).toBe(false)
+  })
+
+  it('trims the OLDEST turns when a segment exceeds the page byte budget', async () => {
+    const sessionId = 'back-budget'
+    // Each turn carries a ~1.5 MiB surfaceOp pass-through (projectEvent keeps
+    // it verbatim), so two turns cannot fit one 2 MiB page.
+    const big = (turn: number, base: number): SessionEventLike[] => {
+      const [prompt, start, assistant, end] = promptTurn(turn, base) as SessionEventLike[]
+      return [
+        prompt!,
+        start!,
+        {
+          ...assistant!,
+          surfaceOp: { op: 'replace', startSeq: base, endSeq: base, pad: 'z'.repeat(1_500_000) },
+        } as unknown as SessionEventLike,
+        end!,
+      ]
+    }
+    const ctx = logCtx(sessionId, [...big(1, 1), ...big(2, 5)])
+    apply(ctx)
+    const tail = await page(ctx, { sessionId, direction: 'before', maxTurns: 2 })
+    // The newest turn is always delivered; the older one waits for the next call.
+    expect(tail.events.map((event) => event.seq)).toEqual([5, 6, 7, 8])
+    expect(tail.hasOlder).toBe(true)
+    const older = await page(ctx, { sessionId, direction: 'before', beforeSeq: 5, maxTurns: 2 })
+    expect(older.events.map((event) => event.seq)).toEqual([1, 2, 3, 4])
+    expect(older.hasOlder).toBe(false)
+  })
+
+  it('never splits a turn at a mid-turn steering message', async () => {
+    const sessionId = 'back-steering'
+    const ctx = logCtx(sessionId, [
+      // Turn 1: prompt, then a STEERING user message while the turn runs.
+      { type: 'user/message', seq: 1, data: { content: 'q1', message: { source: { kind: 'user' } } } },
+      { type: 'turn/start', seq: 2, data: { turn: 1 } },
+      { type: 'user/message', seq: 3, data: { content: 'steer', message: { source: { kind: 'user' } } } },
+      { type: 'assistant/message', seq: 4, data: { message: { content: [{ type: 'text', text: 'a1' }] } } },
+      { type: 'turn/end', seq: 5, data: { turn: 1 } },
+      // Turn 2: prompt + turn.
+      { type: 'user/message', seq: 6, data: { content: 'q2', message: { source: { kind: 'user' } } } },
+      { type: 'turn/start', seq: 7, data: { turn: 2 } },
+      { type: 'assistant/message', seq: 8, data: { message: { content: [{ type: 'text', text: 'a2' }] } } },
+      { type: 'turn/end', seq: 9, data: { turn: 2 } },
+    ])
+    apply(ctx)
+
+    // One turn per segment: the segment starts at turn 2's PROMPT, not at the
+    // steering message, and the older segment still carries the steering copy.
+    const tail = await page(ctx, { sessionId, direction: 'before', maxTurns: 1 })
+    expect(tail.events.map((event) => event.seq)).toEqual([6, 7, 8, 9])
+    expect(tail.hasOlder).toBe(true)
+    const older = await page(ctx, { sessionId, direction: 'before', beforeSeq: 6, maxTurns: 1 })
+    expect(older.events.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5])
+    expect(older.hasOlder).toBe(false)
+  })
+
+  it('serves backwards segments from the live store without touching sessionQuery', async () => {
+    const liveEvents = threeTurns()
+    const ctx = fakeCtx()
+    ;(ctx as HostCtx & { sessions?: unknown }).sessions = {
+      get: (id: string) => (id === 'back-live' ? { snapshotEvents: () => liveEvents } : undefined),
+    }
+    apply(ctx)
+    const tail = await page(ctx, { sessionId: 'back-live', direction: 'before', maxTurns: 1 })
+    expect(tail.events.map((event) => event.seq)).toEqual([9, 10, 11, 12])
+    expect(tail.hasOlder).toBe(true)
+    expect(ctx.sessionQuery.readSession).not.toHaveBeenCalled()
+    expect(ctx.sessionQuery.listEvents).not.toHaveBeenCalled()
+  })
+
+  it('keeps the forward page unchanged when direction is absent', async () => {
+    const sessionId = 'back-forward-compat'
+    const ctx = logCtx(sessionId, threeTurns())
+    apply(ctx)
+    const forward = await page(ctx, { sessionId, afterSeq: 8 })
+    expect(forward.events.map((event) => event.seq)).toEqual([9, 10, 11, 12])
+    expect(forward.hasMore).toBe(false)
+    expect(forward.hasOlder).toBe(false)
+  })
+})
