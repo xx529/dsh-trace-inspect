@@ -1,27 +1,26 @@
 /**
  * desc-inject-switch.spec.tsx — the New Session hero switch's user-visible
- * behaviour against a fake command runner: it appears only when the Host says
- * the conversation is still open, reflects the stored choice, and writes the
- * opposite choice back through `/desc-inject`.
+ * behaviour against a fake audit route: it appears only while the conversation
+ * is open, reflects the stored choice, and writes the opposite choice back.
  */
 import * as React from 'react'
 import { fireEvent, render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { DescriptionSwitch } from '../src/client/desc-inject'
 
-type Status = 'on' | 'off' | 'on (sealed)'
+interface Status { enabled: boolean; sealed: boolean }
 
 function runner(status: Status) {
-  return vi.fn(async (line: string) => ({
-    ok: true,
-    value: { result: { kind: 'success', text: line.endsWith('status') ? status : line.endsWith('on') ? 'on' : 'off' } },
-  }))
+  return {
+    read: vi.fn(async () => status),
+    write: vi.fn(async (enabled: boolean) => ({ enabled, sealed: false })),
+  }
 }
 
 describe('DescriptionSwitch', () => {
   it('renders the stored off choice and enables it on click', async () => {
-    const executeCommand = runner('off')
-    const { container } = render(<DescriptionSwitch sessionId="s" executeCommand={executeCommand} />)
+    const api = runner({ enabled: false, sealed: false })
+    const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} />)
 
     const input = await waitFor(() => {
       const found = container.querySelector('input')
@@ -31,12 +30,13 @@ describe('DescriptionSwitch', () => {
     expect(input.checked).toBe(false)
 
     fireEvent.click(input)
-    await waitFor(() => expect(executeCommand).toHaveBeenCalledWith('/desc-inject on'))
+    await waitFor(() => expect(api.write).toHaveBeenCalledWith(true))
     await waitFor(() => expect((container.querySelector('input') as HTMLInputElement).checked).toBe(true))
   })
 
   it('reflects a stored on choice', async () => {
-    const { container } = render(<DescriptionSwitch sessionId="s" executeCommand={runner('on')} />)
+    const api = runner({ enabled: true, sealed: false })
+    const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} />)
     const input = await waitFor(() => {
       const found = container.querySelector('input')
       expect(found).not.toBeNull()
@@ -46,7 +46,8 @@ describe('DescriptionSwitch', () => {
   })
 
   it('renders nothing once the conversation sealed its choice', async () => {
-    const { container } = render(<DescriptionSwitch sessionId="s" executeCommand={runner('on (sealed)')} />)
+    const api = runner({ enabled: true, sealed: true })
+    const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} />)
     await waitFor(() => expect(container.querySelector('input')).toBeNull())
   })
 })

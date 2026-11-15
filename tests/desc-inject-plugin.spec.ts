@@ -72,6 +72,7 @@ interface Harness {
   create(agentValue: FakeAgent): void
   changeTools(definitions: FakeDefinition[]): void
   run(agentValue: FakeAgent, input: string): { kind: string; text: string }
+  call(method: string, url: string, body?: unknown, headers?: Record<string, string>): Promise<{ status: number; body: Record<string, unknown> }>
   definitions: FakeDefinition[]
 }
 
@@ -80,6 +81,7 @@ function harness(config: { enabledByDefault?: boolean; prefixes?: string[] } = {
   const agents = new Map<string, FakeAgent>()
   const definitions: FakeDefinition[] = []
   let command: { handler: (input: { agent: FakeAgent; rawInput: string }) => { kind: string; text: string } } | undefined
+  let route: { path: string; handler: (req: never, res: never) => Promise<void> } | undefined
 
   const ctx = {
     tools: { definitions: () => definitions },
@@ -90,11 +92,20 @@ function harness(config: { enabledByDefault?: boolean; prefixes?: string[] } = {
       list.push(listener)
       listeners.set(event, list)
     },
-    inject: (_names: readonly string[], callback: (scope: { commands: { register: (value: never) => void } }) => void) => {
+    inject: (_names: readonly string[], callback: (scope: {
+      commands: { register: (value: never) => void }
+      webServer: { register: (value: never) => void }
+    }) => void) => {
       callback({
         commands: {
           register: (value: never) => {
             command = value as never
+            return () => {}
+          },
+        },
+        webServer: {
+          register: (value: never) => {
+            route = value as never
             return () => {}
           },
         },
@@ -117,6 +128,25 @@ function harness(config: { enabledByDefault?: boolean; prefixes?: string[] } = {
     run(agentValue: FakeAgent, input: string) {
       if (command === undefined) throw new Error('command was not registered')
       return command.handler({ agent: agentValue, rawInput: input })
+    },
+    async call(method, url, body, headers = {}) {
+      if (route === undefined) throw new Error('audit route was not registered')
+      const request = {
+        method,
+        headers: { host: '127.0.0.1:1234', ...headers },
+        url,
+        async *[Symbol.asyncIterator]() {
+          if (body !== undefined) yield Buffer.from(JSON.stringify(body))
+        },
+      }
+      let status = 0
+      let payload: Record<string, unknown> = {}
+      const response = {
+        writeHead(value: number) { status = value },
+        end(text?: string) { payload = text === undefined ? {} : JSON.parse(text) as Record<string, unknown> },
+      }
+      await route.handler(request as never, response as never)
+      return { status, body: payload }
     },
   }
 }
@@ -246,5 +276,48 @@ describe('desc-inject plugin — mid-conversation tool additions', () => {
 
     plugin.changeTools([late])
     expect(session.shadows.map(value => value.name)).toEqual(['mcp__late__tool'])
+  })
+})
+
+describe('desc-inject plugin — audit route (first-screen switch)', () => {
+  it('reports the current choice and persists an unsealed change', async () => {
+    const plugin = harness()
+    plugin.changeTools([definition('mcp__probe__probe')])
+    const session = agent('session-route')
+    plugin.create(session)
+
+    const initial = await plugin.call('GET', '/trace-inspect/api/tool-audit?sessionId=session-route')
+    expect(initial).toEqual({ status: 200, body: { enabled: false, sealed: false } })
+
+    const enabled = await plugin.call('POST', '/trace-inspect/api/tool-audit?sessionId=session-route', { enabled: true })
+    expect(enabled).toEqual({ status: 200, body: { enabled: true, sealed: false } })
+    expect(readChoice('session-route', home)).toEqual({ enabled: true })
+    expect(session.shadows).toHaveLength(1)
+  })
+
+  it('refuses a write once the conversation started', async () => {
+    const plugin = harness()
+    plugin.changeTools([definition('mcp__probe__probe')])
+    const session = agent('session-route-sealed', { events: ['turn/start'] })
+    plugin.create(session)
+
+    const refused = await plugin.call('POST', '/trace-inspect/api/tool-audit?sessionId=session-route-sealed', { enabled: true })
+    expect(refused.status).toBe(409)
+    expect(refused.body).toEqual({ error: 'sealed', enabled: false, sealed: true })
+    expect(readChoice('session-route-sealed', home)).toBeUndefined()
+  })
+
+  it('rejects a non-loopback host', async () => {
+    const plugin = harness()
+    plugin.changeTools([])
+    plugin.create(agent('session-route-host'))
+
+    const rejected = await plugin.call(
+      'GET',
+      '/trace-inspect/api/tool-audit?sessionId=session-route-host',
+      undefined,
+      { host: 'evil.example:1234' },
+    )
+    expect(rejected).toEqual({ status: 403, body: { error: 'forbidden' } })
   })
 })

@@ -1,34 +1,37 @@
 /**
- * First-screen switch for the opt-in `description` parameter.
+ * First-screen switch for the opt-in tool audit (`description` parameter).
  *
  * The switch lives in `conversation.hero.options`, which the Conversation
  * renders only for a blank New Session — the same blankness the Host uses to
  * seal the choice at the first `turn/start`. It therefore reads as a
  * per-conversation, choose-before-you-start control with no global settings.
  *
- * The Host remains authoritative:
- *   - `/desc-inject status` reports `on` / `off` (+ `(sealed)`),
- *   - `/desc-inject on|off` persists the choice and refuses after sealing.
- * A sealed session renders nothing here.
+ * Transport: the read/write route `/trace-inspect/api/tool-audit` (same-origin,
+ * behind the Host's loopback fence). It deliberately does NOT run
+ * `/desc-inject`, because executing a command writes a `command/run` row into
+ * the transcript — mounting the switch would then litter every new chat.
+ *
+ * A sealed session renders nothing here; the Host also refuses writes (409).
  */
 import * as React from 'react'
 import { detectLang } from './locales'
 
 const { useEffect, useState } = React
 
-/** The slice of a `remote.commands.execute` response this component reads. */
-interface CommandResponse {
-  readonly ok: boolean
-  readonly value?: { readonly result: { readonly kind: string; readonly text: string } }
-  readonly error?: { readonly message: string }
+/** The route's status payload. */
+export interface AuditStatus {
+  readonly enabled: boolean
+  readonly sealed: boolean
 }
 
 /** Props injected into the switch by the hosting slot registration. */
 export interface DescriptionSwitchInjected {
   /** Session the switch belongs to (supplied by the slot runtime). */
   readonly sessionId: string
-  /** Run one Host command in this session. */
-  executeCommand(line: string): Promise<CommandResponse>
+  /** Read this session's current choice. */
+  read(): Promise<AuditStatus>
+  /** Persist a new choice (the Host refuses once sealed). */
+  write(enabled: boolean): Promise<AuditStatus>
 }
 
 /** What the switch has learned about this session's choice. */
@@ -39,7 +42,7 @@ type ChoiceState =
 
 /**
  * Render the opt-in switch.
- * @param props - injected session identity and command runner.
+ * @param props - injected session identity and route helpers.
  * @returns the switch, or null while unknown / sealed / unavailable.
  */
 export function DescriptionSwitch(props: DescriptionSwitchInjected): React.ReactElement | null {
@@ -48,14 +51,9 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
 
   useEffect(() => {
     let cancelled = false
-    void props.executeCommand('/desc-inject status').then((response) => {
+    void props.read().then((status) => {
       if (cancelled) return
-      const text = response.ok && response.value !== undefined ? response.value.result.text : 'off (sealed)'
-      if (/sealed/i.test(text)) {
-        setState({ kind: 'hidden' })
-        return
-      }
-      setState({ kind: 'ready', enabled: text.trim().toLowerCase().startsWith('on') })
+      setState(status.sealed ? { kind: 'hidden' } : { kind: 'ready', enabled: status.enabled })
     }, () => {
       if (!cancelled) setState({ kind: 'hidden' })
     })
@@ -73,8 +71,8 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
   const change = (enabled: boolean): void => {
     if (pending) return
     setPending(true)
-    void props.executeCommand(`/desc-inject ${enabled ? 'on' : 'off'}`).then((response) => {
-      if (response.ok) setState({ kind: 'ready', enabled })
+    void props.write(enabled).then((status) => {
+      setState(status.sealed ? { kind: 'hidden' } : { kind: 'ready', enabled: status.enabled })
     }, () => {}).finally(() => { setPending(false) })
   }
 
@@ -91,32 +89,48 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
   )
 }
 
+const AUDIT_ENDPOINT = '/trace-inspect/api/tool-audit'
+
+/**
+ * Read or write one session's audit choice through the same-origin route.
+ * @param sessionId - session whose choice is addressed.
+ * @param enabled - when given, POST this choice instead of GET.
+ * @returns the Host's status payload.
+ */
+async function requestAudit(sessionId: string, enabled?: boolean): Promise<AuditStatus> {
+  const init: RequestInit = enabled === undefined
+    ? { method: 'GET', headers: { accept: 'application/json' } }
+    : {
+        method: 'POST',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      }
+  const response = await fetch(`${AUDIT_ENDPOINT}?sessionId=${encodeURIComponent(sessionId)}`, init)
+  const payload = await response.json() as Partial<AuditStatus>
+  return { enabled: payload.enabled === true, sealed: payload.sealed === true }
+}
+
 /**
  * Register the switch into the Conversation hero's option row.
- * @param ctx - client context (slot, inject, and `remote.commands` services).
+ * @param ctx - client context (slot and optional-services readers).
  */
 export function registerDescriptionSwitch(ctx: unknown): void {
   const context = ctx as { get?: (name: string) => unknown }
-  // `ctx.slots` / `ctx.remote` would throw without an `inject` declaration on
-  // this client plugin; the unchecked accessor is the safe read used for
-  // optional services (the same way the tab reads `betterSidebar`).
+  // `ctx.slots` would throw without an `inject` declaration on this client
+  // plugin; the unchecked accessor is the safe read used for optional services.
   const slots = context.get?.('slots') as {
     inject(name: string, callback: () => unknown): void
     register(options: Record<string, unknown>, component: unknown): () => void
   } | undefined
-  const commands = context.get?.('remote.commands') as {
-    execute?(sessionId: string, line: string, attachments: unknown[]): Promise<CommandResponse>
-  } | undefined
   if (slots === undefined || typeof slots.inject !== 'function') return
-  if (commands === undefined || typeof commands.execute !== 'function') return
-  const execute = commands.execute.bind(commands)
 
   slots.inject('conversation.hero.options', () => slots.register({
     name: 'conversation.hero.options',
     id: 'trace-inspect-desc',
     inject: (sessionId: string): DescriptionSwitchInjected => ({
       sessionId,
-      executeCommand: (line: string) => execute(sessionId, line, []),
+      read: () => requestAudit(sessionId),
+      write: (enabled: boolean) => requestAudit(sessionId, enabled),
     }),
   }, DescriptionSwitch))
 }

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.3] - 2026-11-15
+
+### Fixed
+
+- **首屏「工具审计」开关不再往会话里写命令事件**：0.11.1 的开关每次挂载/切换都执行 `/desc-inject status|on`，会在对话开头留下 `desc-inject · off` 命令卡（且命令没有详情视图，点不开）。现在开关改走 Host 路由 `GET/POST /trace-inspect/api/tool-audit`（与轨迹接口同一套 loopback fence），不再产生任何 `command/run`/`command/done`；`/desc-inject` 命令保留供手动或 agent 使用。
+
+### Changed
+
+- 抽出 Host 共用的 `src/host-http.ts`（fence、JSON body 读取、JSON 响应），轨迹路由与审计路由共用，行为不变。
+
+### Verification
+
+- 全新会话实测：挂载 + 开启后会话事件只有 `session`/`permission/preset`/`sandbox/mode`/`approval/policy`，**没有任何 command 事件**；状态文件正常写入，开关状态正确。
+- 新增 4 条路由用例（GET 状态、POST 生效、封存 409、非 loopback 403）；全量 **625 例 / 25 文件** 通过；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+
 ## [0.11.2] - 2026-11-15
 
 ### Changed
