@@ -848,16 +848,19 @@ export const trailCss = `
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 5px;
+  /* v0.12.2: the same 7px / 3px rhythm as the turn head mix, so the summary
+     line and a turn head read as one dense ledger instead of a spaced-out legend. */
+  gap: 7px;
+  row-gap: 3px;
+  margin-top: 4px;
 }
 /* v0.10.38: the merged row mirrors the ORIGINAL legend exactly — dot, then
    one quiet text run of name + count (same sans font/colour for both) with a
    comfortable gap. The active filter is only brighter (no underline/pill). */
 .ttl-summaryFilters .ttl-chip {
-  height: 16px;
+  height: 13px;
   padding: 0;
-  gap: 6px;
+  gap: 5px;
   border: none;
   border-radius: 3px;
   background: transparent;
@@ -886,6 +889,29 @@ export const trailCss = `
 .ttl-summaryFilters .ttl-chipDot { width: 5px; height: 5px; }
 .ttl-summaryFilters .ttl-legendDot { flex: none; }
 .ttl-familyChip { height: 16px; }
+/* v0.12.2: a summary chip IS a turn-head mix item inside a button — 13px
+   glyph + its SVG counter in the same cluster ink, same 2px glyph→digit gap,
+   no text label and no padding, so the row keeps the turn-head density. The
+   ink sits on the inner run so the chip's hover / selected colour cannot wash
+   it; hover / selection draw an OUTSIDE 1px ring (the family dot is gone, and
+   an outside ring never widens the chip). */
+.ttl-summaryFilters .ttl-mixChip {
+  height: 13px;
+  padding: 0;
+  gap: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+}
+.ttl-summaryFilters .ttl-mixChip:hover {
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.ttl-summaryFilters .ttl-mixChip.ttl-chipSelected {
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+.ttl-summaryFilters .ttl-mixChip .ttl-mixItem { gap: 2px; }
 .ttl-chip {
   box-sizing: border-box;
   flex: none;
@@ -942,7 +968,7 @@ export const trailCss = `
 .ttl-summary {
   box-sizing: border-box;
   flex: none;
-  padding: 2px 14px 10px;
+  padding: 2px 14px 8px;
   border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.07));
 }
 .ttl-summaryTop {
@@ -959,7 +985,7 @@ export const trailCss = `
 .ttl-dist {
   display: flex;
   height: 4px;
-  margin: 8px 0 7px;
+  margin: 6px 0 6px;
   border-radius: 2px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
@@ -1097,7 +1123,7 @@ export const trailCss = `
   margin-left: auto;
   /* v0.10.20: the glyphs are 13px tall; a 13px line box centers the 9.5–10.5px
      counters on the icon ink instead of leaving them 1px high (top-aligned
-     look). Badges/pills keep their own 16px line-height. */
+     look). The ∥ pill keeps its own 16px line-height. */
   line-height: 13px;
 }
 .ttl-mix {
@@ -1137,11 +1163,28 @@ export const trailCss = `
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.ttl-badgeErr { background: rgba(242, 114, 111, 0.14); color: var(--dsw-alias-state-error-primary, #f2726f); }
+.ttl-badgeErr {
+  /* v0.12.2: the failure stat reads as one more mix item — 13px alert triangle
+     + its SVG counter, no red plate behind them (the summary alert chip has
+     none either). The red lives in the glyph ink only. */
+  height: 13px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary, #f2726f);
+  line-height: 13px;
+}
 /* v0.10.16: the failure stat uses the row's alert-triangle glyph, not "✗". */
 .ttl-badgeErr .ttl-rowIcon { display: inline-flex; }
-.ttl-badgeErr svg { width: 11px; height: 11px; }
-.ttl-badgeCount { font-variant-numeric: tabular-nums; }
+.ttl-badgeCount {
+  /* v0.12.2: the SVG counter must box-align with the 13px glyph. As a plain
+     inline span the 9.5px/13px line strut pushed it 1.5px above the triangle,
+     while the summary mix item (a direct flex child) sat flush — same glyph,
+     two different alignments. Making it a centred flex run removes the strut. */
+  display: inline-flex;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
 .ttl-badgeParallel { background: rgba(167, 139, 250, 0.16); color: #c4b2ff; }
 .ttl-stepsNum { flex: none; color: var(--dsw-alias-label-tertiary, #9ba1a7); font-size: 10.5px; white-space: nowrap; }
 .ttl-locateBtn {

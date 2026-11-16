@@ -11,7 +11,7 @@
  *   ├ header.ttl-header          brand icon · 轮次轨迹 · 「7 轮 · 208 步」 · 搜索框 · 跟随
  *   │                            （v0.10.24：搜索从独立一行收进头部；⋯ 已移除）
  *   ├ div.ttl-filters            chips: 全部 / 失败 / top tools / ⋯ dropdown
- *   ├ div.ttl-summary            steps · turns · failures · duration + family bar + legend
+ *   ├ div.ttl-summary            steps · turns · duration + cluster bar + icon/count mix
  *   ├ div.ttl-list               turn cards (three-line: head / 2-line preview / body)
  *   │   └ section.ttl-turn       head: #N · HH:mm · dur · mix · ⚠n · ∥n · steps · ↗ · ⌄
  *   │       └ div.ttl-turnBody   input row → steps (parallel groups inline) → output → foot
@@ -52,11 +52,11 @@ import {
   type TrailPageRequest,
 } from './useTrail'
 import { jumpToItem, type ConversationTargetsLike, type JumpTarget, type SessionFace } from './trail-jump'
-import { inkOf, splitMcpName, summarizeToolCall, toolIconKind, type ToolIconKind, type ToolInk } from './tool-summary'
+import { inkOf, splitMcpName, summarizeToolCall, toolIconKind, type ToolIconKind } from './tool-summary'
 import { ToolIcon } from './tool-icon'
 import { MarkdownResult, RawText, looksLikeMarkdown } from './markdown-result'
 import { markdownLabels } from './markdown-labels'
-import { formatClock, formatDuration, toolFamily, turnDuration, type ToolFamily } from './format'
+import { formatClock, formatDuration, turnDuration } from './format'
 import { StepDetail } from './StepDetail'
 import { copyToClipboard } from './ui-shared'
 
@@ -132,14 +132,14 @@ function groupThousands(n: number): string {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-/** `all` | `failed` | `family:<ToolFamily>` (the summary chips). */
+/** `all` | `failed` | `inject` | `cluster:<ToolIconKind>` (the summary mix chips). */
 type StepFilter = 'all' | 'failed' | string
 
-const FAMILY_FILTER_PREFIX = 'family:'
+const CLUSTER_FILTER_PREFIX = 'cluster:'
 
-function familyOfFilter(filter: StepFilter): ToolFamily | null {
-  if (!filter.startsWith(FAMILY_FILTER_PREFIX)) return null
-  return filter.slice(FAMILY_FILTER_PREFIX.length) as ToolFamily
+function clusterOfFilter(filter: StepFilter): ToolIconKind | null {
+  if (!filter.startsWith(CLUSTER_FILTER_PREFIX)) return null
+  return filter.slice(CLUSTER_FILTER_PREFIX.length) as ToolIconKind
 }
 
 /** Max step/items rows mounted per expanded turn (bounds the DOM). */
@@ -359,11 +359,12 @@ function stepFailed(step: TrailStep): boolean {
 function stepMatchesFilter(step: TrailStep, filter: StepFilter): boolean {
   if (filter === 'all') return true
   if (filter === 'failed') return stepFailed(step)
-  const family = familyOfFilter(filter)
-  if (family !== null) {
-    // Successful rows only: the chip count comes from the healthy distribution.
+  const kind = clusterOfFilter(filter)
+  if (kind !== null) {
+    // Successful rows only: the chip count comes from the healthy mix (failing
+    // rows all draw the alert triangle and are counted by the failed chip).
     if (stepFailed(step)) return false
-    return toolFamily(step.name, false) === family
+    return toolIconKind(step.name) === kind
   }
   return step.kind === 'tool' && step.name === filter
 }
@@ -383,26 +384,7 @@ function stepMatches(step: TrailStep, filter: StepFilter, query: string): boolea
   return stepMatchesFilter(step, filter) && stepMatchesQuery(step, query)
 }
 
-// ── Family helpers (colors come from the chip class in styles.ts) ────────
-
-/** Glyph family for one tool family (reuse ToolIcon, no new icon sets). */
-function familyIconKind(family: ToolFamily): ToolIconKind {
-  switch (family) {
-    case 'shell': return 'terminal'
-    case 'read': return 'file-read'
-    case 'edit': return 'file-edit'
-    case 'mcp': return 'mcp'
-    case 'skill': return 'skill'
-    case 'figma': return 'generic'
-    case 'todo': return 'todo'
-    default: return 'generic'
-  }
-}
-
-/** Statistics ink: the family's representative cluster carries the same ink as its rows. */
-function familyInk(family: ToolFamily): ToolInk {
-  return inkOf(familyIconKind(family))
-}
+// ── Cluster helpers (colours come from the row ink classes in styles.ts) ──
 
 /** Human name of a turn-head cluster chip (hover tooltip; zh / en). */
 const CLUSTER_LABEL: Record<ToolIconKind, { zh: string; en: string }> = {
@@ -440,18 +422,21 @@ function clusterLabel(kind: ToolIconKind, lang: Lang): string {
   return CLUSTER_LABEL[kind][lang]
 }
 
-/** Legend / mix label per family (the prototype uses the representative tool). */
-function familyLabel(family: ToolFamily, ui: UiStrings): string {
-  switch (family) {
-    case 'shell': return 'bash'
-    case 'read': return 'read'
-    case 'edit': return 'edit'
-    case 'mcp': return 'mcp'
-    case 'skill': return 'skill'
-    case 'figma': return 'figma'
-    case 'todo': return 'todo'
-    case 'error': return 'error'
-    default: return ui.others
+/**
+ * v0.12.2: one summary chip IS a turn-head mix item — same 13px glyph, same
+ * SVG counter, same ink — wrapped in a button so it still filters the rows.
+ * `context` is the inbox glyph (not a ToolIcon kind); `alert` is the failure
+ * triangle. Both keep the exact glyph their rows draw.
+ */
+function clusterSlug(kind: ToolIconKind | 'context' | 'alert'): string {
+  switch (kind) {
+    case 'terminal': return 'bash'
+    case 'file-read': return 'read'
+    case 'file-edit': return 'edit'
+    case 'file-write': return 'write'
+    case 'context': return 'inject'
+    case 'alert': return 'failed'
+    default: return kind
   }
 }
 
@@ -495,7 +480,6 @@ const StepRow = React.memo(function StepRow(props: StepRowProps): React.ReactEle
     [step.name, step.args, step.argsPreview, lang],
   )
   const errored = step.kind === 'error' || step.result?.isError === true
-  const family = toolFamily(step.name, errored)
   // v0.10.2: every failing row leads with the prototype's alert triangle, not
   // with the tool's own glyph tinted red (prototype 2-02 / 6-06「失败」).
   const iconKind: ToolIconKind = errored ? 'alert' : summary.icon
@@ -1071,9 +1055,11 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
                   data-testid="ttl-error-dot"
                   title={(t(lang, 'error') as string)}
                 >
-                  {/* v0.10.16: same alert-triangle glyph as the failed rows. */}
+                  {/* v0.10.16: same alert-triangle glyph as the failed rows.
+                      v0.12.2: same 13px glyph + SVG counter as every mix item —
+                      no red plate behind the triangle (summary alert chip too). */}
                   <ToolIcon kind="alert" />
-                  <span className="ttl-badgeCount" data-testid="ttl-error-count">{errorCount}</span>
+                  <span className="ttl-badgeCount" data-testid="ttl-error-count"><MixCount count={errorCount} /></span>
                 </span>
               )
               : null}
@@ -1252,31 +1238,9 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     return max
   }, [turns])
 
-  /** Overview bar data: family distribution + summed turn duration. */
-  const overview = React.useMemo(() => {
-    const counts = new Map<ToolFamily, number>()
-    for (const tool of stats.tools) {
-      const family = toolFamily(tool.name, false)
-      counts.set(family, (counts.get(family) ?? 0) + tool.count)
-    }
-    const order: ToolFamily[] = ['shell', 'read', 'edit', 'mcp', 'figma', 'skill', 'todo', 'generic']
-    const families = order
-      .filter((family) => (counts.get(family) ?? 0) > 0)
-      .map((family) => ({ family, count: counts.get(family) ?? 0 }))
-    const total = families.reduce((sum, entry) => sum + entry.count, 0)
-    let durationMs: number | undefined
-    for (const turn of turns) {
-      if (turn.startedAt === undefined || turn.endedAt === undefined) continue
-      const span = turn.endedAt - turn.startedAt
-      if (span < 0) continue
-      durationMs = (durationMs ?? 0) + span
-    }
-    return { families, total, durationMs }
-  }, [stats, turns])
-
   /**
    * v0.10.48: injected `user/message` rows are counted as their own category in
-   * the summary chips. The step total stays tool-call based (the turn cards'
+   * the summary mix. The step total stays tool-call based (the turn cards'
    * 「N 步」 and the footer keep that meaning), so the injection chip adds the
    * second dimension instead of inflating the tool counts.
    */
@@ -1287,6 +1251,40 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     }
     return count
   }, [turns])
+
+  /**
+   * v0.12.2: the summary row counts WORK CLUSTERS — the exact glyph every row
+   * draws — so it is the same `icon + N` ledger as a turn head, and every row
+   * is accounted for: healthy clusters (from `stats.tools`) + injections (the
+   * inbox glyph) + failures (the alert triangle). The old tool-family legend
+   * hid whole clusters (subagent / present / web …) inside 「其他」.
+   */
+  const overview = React.useMemo(() => {
+    type MixKind = ToolIconKind | 'context' | 'alert'
+    const counts = new Map<MixKind, number>()
+    for (const tool of stats.tools) {
+      const kind = toolIconKind(tool.name)
+      counts.set(kind, (counts.get(kind) ?? 0) + tool.count)
+    }
+    if (injectionCount > 0) counts.set('context', injectionCount)
+    const mix = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([kind, count]) => ({ kind, count }))
+    // The distribution bar paints the same ledger; failures close it in red,
+    // exactly like the alert badge closes a turn head's mix.
+    const segments: Array<{ kind: MixKind; count: number }> = stats.failed > 0
+      ? [...mix, { kind: 'alert', count: stats.failed }]
+      : mix
+    const total = segments.reduce((sum, entry) => sum + entry.count, 0)
+    let durationMs: number | undefined
+    for (const turn of turns) {
+      if (turn.startedAt === undefined || turn.endedAt === undefined) continue
+      const span = turn.endedAt - turn.startedAt
+      if (span < 0) continue
+      durationMs = (durationMs ?? 0) + span
+    }
+    return { mix, segments, total, durationMs }
+  }, [stats, turns, injectionCount])
 
   // ── Follow-latest auto-scroll (rAF-coalesced; no forced reflow per burst) ─
   /** Drop the temporary bottom padding (never called while it would clamp). */
@@ -1671,7 +1669,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     value: StepFilter,
     label: React.ReactNode,
     count: number,
-    dot?: string,
   ): React.ReactElement => (
     <button
       type="button"
@@ -1681,7 +1678,6 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       data-testid={`ttl-chip-${value}`}
       onClick={() => { setFilter((current) => (current === value ? 'all' : value)) }}
     >
-      {dot !== undefined ? <span className={`ttl-chipDot ttl-dot-${dot}`} aria-hidden="true" /> : null}
       <span className="ttl-chipLabel">{label}</span>
       {count > 0 ? <span className="ttl-chipCount">{String(count)}</span> : null}
     </button>
@@ -1745,37 +1741,40 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
     </header>
   )
 
-  /** Stable testid suffix per family (labels are localized). */
-  const familySlug = (family: ToolFamily): string => {
-    if (family === 'shell') return 'bash'
-    if (family === 'generic') return 'other'
-    return family
-  }
-
   /**
    * v0.10.37: the overview bar and the filter chips used to repeat the same
-   * counts on two rows. The summary now owns ONE clickable row: 全部 / 失败 /
-   * one chip per work family (dot + label + count). Clicking a family narrows
-   * rows to that family's healthy steps (the counts it shows).
+   * counts on two rows. The summary now owns ONE clickable row.
+   *
+   * v0.12.2: that row is the same `glyph + count` mix a turn head draws — same
+   * 13px glyph, same SVG counter, same cluster ink — so the header and the
+   * turns read with one vocabulary. It also closes the old gap: the coarse
+   * tool-family legend bucketed whole clusters (subagent / present / web …)
+   * into 「其他」, while a per-cluster row accounts for every step 1:1.
+   * `全部` stays a text chip because it is the total, not a cluster.
    */
-  const familyChip = (family: ToolFamily, count: number): React.ReactElement => {
-    const value = `${FAMILY_FILTER_PREFIX}${family}`
+  const mixChip = (kind: ToolIconKind | 'context' | 'alert', count: number): React.ReactElement => {
+    const value = kind === 'alert'
+      ? 'failed'
+      : kind === 'context' ? 'inject' : `${CLUSTER_FILTER_PREFIX}${kind}`
     const selected = filter === value
+    const label = kind === 'context' ? ui.injectLabel : clusterLabel(kind, lang)
     return (
       <button
-        key={family}
+        key={kind}
         type="button"
-        className={`ttl-chip ttl-familyChip${selected ? ' ttl-chipSelected' : ''}`}
+        className={`ttl-chip ttl-mixChip${selected ? ' ttl-chipSelected' : ''}`}
         aria-pressed={selected}
-        data-testid={`ttl-chip-${familySlug(family)}`}
+        aria-label={`${label} ${count}`}
+        title={`${label} ${count}`}
+        data-testid={`ttl-chip-${clusterSlug(kind)}`}
+        data-summary-kind={kind}
         onClick={() => { setFilter((current) => (current === value ? 'all' : value)) }}
       >
-        <i
-          className={`ttl-legendDot ttl-dist-${family} ttl-ink-${familyInk(family)}`}
-          aria-hidden="true"
-        />
-        <span className="ttl-chipLabel">{familyLabel(family, ui)}</span>
-        <span className="ttl-chipCount">{String(count)}</span>
+        {/* Ink lives on the inner run: a chip hover must not wash the glyphs. */}
+        <span className={`ttl-mixItem ttl-ink-${kind === 'context' ? 'teal' : inkOf(kind)}`} aria-hidden="true">
+          {kind === 'context' ? contextIcon() : <ToolIcon kind={kind} />}
+          <MixCount count={count} />
+        </span>
       </button>
     )
   }
@@ -1790,18 +1789,17 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
               : `${ui.stepCount(stats.total)} · ${(t(lang, 'turnsCount') as (n: number) => string)(turns.length)}`}
           </span>
           <span className="ttl-summarySpacer" />
-          {stats.failed > 0 ? <span className="ttl-summaryFail">{ui.failCount(stats.failed)}</span> : null}
           {overview.durationMs !== undefined
             ? <span className="ttl-summaryDur" title={ui.totalDuration}>{formatDuration(overview.durationMs)}</span>
             : null}
         </div>
-        {overview.families.length > 0
+        {overview.segments.length > 0
           ? (
             <div className="ttl-dist" role="img" aria-label={ui.toolDist}>
-              {overview.families.map((entry) => (
+              {overview.segments.map((entry) => (
                 <i
-                  key={entry.family}
-                  className={`ttl-distSeg ttl-dist-${entry.family} ttl-ink-${familyInk(entry.family)}`}
+                  key={entry.kind}
+                  className={`ttl-distSeg ttl-ink-${entry.kind === 'context' ? 'teal' : inkOf(entry.kind)}`}
                   style={{ width: `${(entry.count / overview.total) * 100}%` }}
                 />
               ))}
@@ -1810,9 +1808,8 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
           : null}
         <div className="ttl-summaryFilters" role="group" data-testid="ttl-chips">
           {chipButton('all', t(lang, 'filterAll') as string, stats.total)}
-          {stats.failed > 0 ? chipButton('failed', t(lang, 'filterFailed') as string, stats.failed, 'red') : null}
-          {injectionCount > 0 ? chipButton('inject', ui.injectLabel, injectionCount, 'teal') : null}
-          {overview.families.map((entry) => familyChip(entry.family, entry.count))}
+          {overview.mix.map((entry) => mixChip(entry.kind, entry.count))}
+          {stats.failed > 0 ? mixChip('alert', stats.failed) : null}
         </div>
       </div>
     )

@@ -280,22 +280,26 @@ describe('TrailTab', () => {
     expect(within(cards[1]).getByTestId('ttl-steps-count').textContent).toBe('2 steps')
   })
 
-  it('summarises the session in the overview bar (steps/turns/failures/tool mix)', async () => {
+  it('summarises the session as the same icon + count cluster mix as a turn head (v0.12.2)', async () => {
     renderTab(twoTurns())
     await readyTurns(2)
     const summary = document.querySelector('.ttl-summary') as HTMLElement | null
     expect(summary).toBeTruthy()
     expect(summary?.querySelector('.ttl-summaryStat')?.textContent).toBe('3 steps · 2 turns')
-    expect(summary?.querySelector('.ttl-summaryFail')?.textContent).toBe('1 failed')
-    // Tool-family distribution: two bash calls → one shell segment + legend.
-    // v0.10.20: the stats paint from the same cluster ink as the rows.
-    expect(summary?.querySelectorAll('.ttl-distSeg')).toHaveLength(1)
-    expect(summary?.querySelector('.ttl-distSeg')?.className).toContain('ttl-ink-violet')
-    expect(summary?.querySelector('.ttl-legendDot')?.className).toContain('ttl-ink-violet')
-    // v0.10.37: the legend IS the clickable chip row now (one row, no duplicate).
+    // Failures stopped being a text run: the alert glyph + count is the chip.
+    expect(summary?.querySelector('.ttl-summaryFail')).toBeNull()
+    // Two bash calls in one cluster → one violet segment; the failure closes
+    // the distribution bar in red, exactly like the turn-head badge.
+    expect(summary?.querySelectorAll('.ttl-distSeg')).toHaveLength(2)
+    const segs = Array.from(summary?.querySelectorAll('.ttl-distSeg') ?? [])
+    expect(segs[0].className).toContain('ttl-ink-violet')
+    expect(segs[1].className).toContain('ttl-ink-red')
+    // 全部 is still the reset chip (text + total); clusters are glyph + counter.
+    expect(screen.getByTestId('ttl-chip-all').textContent).toBe('All3')
     const bashChip = screen.getByTestId('ttl-chip-bash')
-    expect(bashChip.textContent).toContain('bash')
-    expect(bashChip.querySelector('.ttl-chipCount')?.textContent).toBe('2')
+    expect(bashChip.querySelector('.ttl-rowIcon')).toBeTruthy()
+    expect(bashChip.querySelector('.ttl-mixCount text')?.textContent).toBe('2')
+    expect(bashChip.getAttribute('aria-label')).toBe('shell 2')
     // No wire timestamps in this fixture → no total duration is invented.
     expect(summary?.querySelector('.ttl-summaryDur')).toBeNull()
   })
@@ -315,12 +319,79 @@ describe('TrailTab', () => {
     const turn = (await screen.findAllByTestId('ttl-turn'))[0]
     // Turn badge counts both failures…
     expect(turn.querySelector('[data-testid="ttl-error-count"]')?.textContent).toBe('2')
-    // …and the global chip / summary must agree (was 1: only the wire error).
-    expect((await screen.findByTestId('ttl-chip-failed')).textContent).toContain('2')
-    const summary = document.querySelector('.ttl-summary') as HTMLElement | null
-    expect(summary?.querySelector('.ttl-summaryFail')?.textContent).toBe('2 failed')
-    // Failed rows are not double-counted in the tool distribution.
-    expect(screen.getByTestId('ttl-chip-bash').querySelector('.ttl-chipCount')?.textContent).toBe('1')
+    // …and the global alert chip / summary must agree (was 1: only the wire error).
+    const failedChip = await screen.findByTestId('ttl-chip-failed')
+    expect(failedChip.getAttribute('aria-label')).toBe('failed 2')
+    expect(failedChip.querySelector('.ttl-mixCount text')?.textContent).toBe('2')
+    // The alert triangle is the same glyph the failing rows draw.
+    expect(failedChip.querySelector('.ttl-rowIcon svg path')?.getAttribute('d') ?? '').toContain('M10.29 3.86')
+    // Failed rows are not double-counted in the cluster mix.
+    expect(screen.getByTestId('ttl-chip-bash').querySelector('.ttl-mixCount text')?.textContent).toBe('1')
+  })
+
+  it('the summary mix gives every work cluster its own icon + count (v0.12.2)', async () => {
+    // The old tool-family legend folded write / grep / web / subagent / present
+    // / ask / mcp into one 「其他」 bucket, so the header never matched the rows.
+    renderTab([
+      user(1, 'work'),
+      turnStart(2, 1),
+      toolCall(3, 'bash', '{"command":"ls"}', 'c3'),
+      toolResult(4, 'c3', 'ok'),
+      toolCall(5, 'bash', '{"command":"pwd"}', 'c5'),
+      toolResult(6, 'c5', '/'),
+      toolCall(7, 'read', '{"path":"a.md"}', 'c7'),
+      toolResult(8, 'c7', 'x'),
+      toolCall(9, 'write', '{"path":"b.md","content":"x"}', 'c9'),
+      toolResult(10, 'c9', 'ok'),
+      toolCall(11, 'grep', '{"pattern":"x"}', 'c11'),
+      toolResult(12, 'c11', 'x'),
+      toolCall(13, 'web_search', '{"query":"x"}', 'c13'),
+      toolResult(14, 'c13', 'x'),
+      toolCall(15, 'subagent', '{"prompt":"x"}', 'c15'),
+      toolResult(16, 'c15', 'x'),
+      toolCall(17, 'todo_write', '{"todos":[]}', 'c17'),
+      toolResult(18, 'c17', 'ok'),
+      toolCall(19, 'skill', '{"name":"dsh-doc"}', 'c19'),
+      toolResult(20, 'c19', 'x'),
+      toolCall(21, 'present', '{"files":[]}', 'c21'),
+      toolResult(22, 'c21', 'ok'),
+      toolCall(23, 'ask_user_question', '{"question":"?","options":[]}', 'c23'),
+      toolResult(24, 'c23', 'x'),
+      toolCall(25, 'mcp__probe__probe', '{"text":"hi"}', 'c25'),
+      toolResult(26, 'c25', 'hi'),
+      toolCall(27, 'bash', '{"command":"bad"}', 'c27'),
+      ev('tool/result', 28, { callId: 'c27', message: { isError: true, content: [{ type: 'text', text: 'boom' }] } }),
+      ev('user/message', 29, {
+        content: [{ type: 'text', text: 'injected' }],
+        source: { kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text: 'injected' }] },
+      }),
+      assistant(30, 'done'),
+      turnEnd(31, 1),
+    ])
+    const chipRow = await screen.findByTestId('ttl-chips')
+    const chips = Array.from(chipRow.querySelectorAll('.ttl-mixChip'))
+    const mix = chips.filter((el) => el.getAttribute('data-summary-kind') !== 'alert')
+    const countOf = (el: Element): number => Number(el.querySelector('.ttl-mixCount text')?.textContent ?? -1)
+    const chip = (slug: string): Element => within(chipRow).getByTestId(`ttl-chip-${slug}`)
+    // 11 healthy clusters + the injection chip + the alert chip.
+    expect(chips).toHaveLength(13)
+    expect(mix).toHaveLength(12)
+    expect(countOf(chip('bash'))).toBe(2)
+    for (const slug of ['read', 'write', 'search', 'web', 'subagent', 'todo', 'skill', 'present', 'ask', 'mcp']) {
+      expect(countOf(chip(slug))).toBe(1)
+    }
+    expect(countOf(chip('inject'))).toBe(1)
+    // No omissions: healthy clusters + the alert chip account for all 13 steps.
+    const healthy = mix
+      .filter((el) => el.getAttribute('data-summary-kind') !== 'context')
+      .reduce((sum, el) => sum + countOf(el), 0)
+    expect(healthy + countOf(chip('failed'))).toBe(13)
+    // 全部 still counts tool steps only (injections are the second dimension).
+    expect(chip('all').textContent).toBe('All13')
+    // Each chip draws the cluster glyph its rows draw (not a colour dot).
+    expect(chip('bash').querySelector('.ttl-rowIcon')).toBeTruthy()
+    expect(chip('subagent').querySelector('.ttl-rowIcon')).toBeTruthy()
+    expect(chip('inject').querySelector('.ttl-rowIcon')).toBeNull()
   })
 
   it('chips show counts; failed chip filters steps', async () => {
@@ -328,10 +399,12 @@ describe('TrailTab', () => {
     await readyTurns(2)
     const chips = screen.getByTestId('ttl-chips')
     expect(within(chips).getByText('All')).toBeTruthy()
-    expect(within(chips).getByText('Failed')).toBeTruthy()
     expect(screen.getByTestId('ttl-chip-all').textContent).toBe('All3')
-    expect(screen.getByTestId('ttl-chip-failed').textContent).toBe('Failed1')
+    // v0.12.2: a cluster / status chip is glyph + counter, no text label — the
+    // label survives as the accessible name (and the hover tooltip).
     const failedChip = within(chips).getByTestId('ttl-chip-failed')
+    expect(failedChip.getAttribute('aria-label')).toBe('failed 1')
+    expect(failedChip.textContent).toBe('1')
     fireEvent.click(failedChip)
     expect(failedChip.getAttribute('aria-pressed')).toBe('true')
     // After filtering to failed, only the error step remains visible.
@@ -358,6 +431,9 @@ describe('TrailTab', () => {
     // v0.10.16: the stat is the alert triangle + count, not a "✗" text glyph.
     expect(badges[0].textContent).toBe('1')
     expect(badges[0].querySelector('.ttl-rowIcon svg path')?.getAttribute('d') ?? '').toContain('M10.29 3.86')
+    // v0.12.2: the count is the SAME 13px SVG counter the summary mix uses, so
+    // both error marks share one glyph/counter box alignment (not plain text).
+    expect(badges[0].querySelector('.ttl-badgeCount .ttl-mixCount text')?.textContent).toBe('1')
   })
 
   it('shows the input as the expanded body\'s first row on the step grid and locates on click', async () => {
@@ -1636,10 +1712,12 @@ describe('TrailTab', () => {
       }),
       turnEnd(7, 1),
     ])
-    // The summary row owns the injection count beside the tool families.
+    // The summary row owns the injection count beside the tool clusters, drawn
+    // with the same inbox glyph + counter as the turn head (v0.12.2).
     const chip = await screen.findByTestId('ttl-chip-inject')
-    expect(chip.textContent).toContain('Injections')
-    expect(chip.textContent).toContain('2')
+    expect(chip.getAttribute('aria-label')).toBe('Injections 2')
+    expect(chip.querySelector('.ttl-mixCount text')?.textContent).toBe('2')
+    expect(chip.querySelector('svg polyline')).toBeTruthy()
     // 全部 / tools keep counting tool steps; injections are the second dimension.
     expect(screen.getByTestId('ttl-chip-all').textContent).toContain('1')
     // The turn head accounts for the injection rows too, same inbox glyph.
