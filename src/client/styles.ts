@@ -2404,57 +2404,65 @@ export const trailCss = `
 .ttl-tone-figma { color: #c4b2ff; }
 .ttl-distSeg.ttl-tone-figma, .ttl-legendDot.ttl-tone-figma { background: #c4b2ff; }
 
-/* ══ v0.11.0: opt-in tool-description switch (conversation hero) ═════════ */
-.ttl-descSwitch {
+/* ══ v0.12.3: the opt-in tool audit as an icon toggle ════════════════════
+   The control used to be a 28×16 pill plus the words 「工具审计」, which made it
+   the only text control in a composer row of 28px ghost icon buttons. It is now
+   one of them: the audit log itself (Lucide scroll-text) on a 28px square.
+   Off = the host's tertiary grey on nothing; on = the host's own business tint
+   and business ink, so "enabled" reads as selected without inventing a colour.
+   The enabled face is borrowed 1:1 from the host's own mode chip
+   (dsh-client-ui-plan PlanModeControl: 28px, radius-sm, business-tertiary
+   fill, business-primary ink, +6% primary on hover, the host focus ring), so
+   the toggle is indistinguishable from a built-in composer control.
+   Every colour here is a DSH alias token and deliberately has NO hex fallback:
+   the button sits inside the host composer, so it must follow whichever skin
+   the host wears — the host's own design-platform.css resolves these tokens
+   per theme (business ink is deepseek-400 on dark and deepseek-500 on light,
+   the tint is deepseek-800 / deepseek-100), so no literal colour is ours. */
+.ttl-descAudit {
+  box-sizing: border-box;
+  flex: none;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-secondary, #9ba1a7);
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.ttl-descSwitch input {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 28px;
-  height: 16px;
-  margin: 0;
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-2, #2a2a2b);
-  border: 1px solid var(--dsw-alias-line-secondary, rgba(255, 255, 255, 0.12));
-  position: relative;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  flex: none;
+@media (hover: hover) {
+  .ttl-descAudit:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
-.ttl-descSwitch input::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--dsw-alias-label-tertiary, #adb2b8);
-  transition: transform 0.15s ease, background 0.15s ease;
+.ttl-descAudit[aria-pressed="true"] {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
 }
 
-.ttl-descSwitch input:checked {
-  background: var(--dsw-alias-state-business-primary, #4176e6);
-  border-color: transparent;
+@media (hover: hover) {
+  .ttl-descAudit[aria-pressed="true"]:hover {
+    background: color-mix(
+      in srgb,
+      var(--dsw-alias-state-business-tertiary),
+      var(--dsw-alias-state-business-primary) 6%
+    );
+  }
 }
 
-.ttl-descSwitch input:checked::after {
-  transform: translateX(12px);
-  background: #f0f1f2;
+.ttl-descAudit:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
 }
 
-.ttl-descSwitch input:disabled {
+.ttl-descAudit:disabled {
   opacity: 0.5;
   cursor: default;
 }

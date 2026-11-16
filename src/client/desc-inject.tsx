@@ -1,10 +1,17 @@
 /**
- * First-screen switch for the opt-in tool audit (`description` parameter).
+ * First-screen toggle for the opt-in tool audit (`description` parameter).
  *
- * The switch lives in `conversation.hero.options`, which the Conversation
+ * The control lives in `conversation.hero.options`, which the Conversation
  * renders only for a blank New Session — the same blankness the Host uses to
  * seal the choice at the first `turn/start`. It therefore reads as a
  * per-conversation, choose-before-you-start control with no global settings.
+ *
+ * v0.12.3: it is an icon toggle, not a labelled switch. The composer row it
+ * sits in is all 28px ghost icon buttons (sandbox / mode / branch), and a
+ * switch plus the words 「工具审计」 was the only text control in it. The glyph
+ * is the audit log itself (Lucide scroll-text); the styling comes entirely
+ * from DSH alias tokens, so the off state is the host's tertiary grey and the
+ * on state is the host's own business tint + ink.
  *
  * Transport: the read/write route `/trace-inspect/api/tool-audit` (same-origin,
  * behind the Host's loopback fence). It deliberately does NOT run
@@ -34,16 +41,28 @@ export interface DescriptionSwitchInjected {
   write(enabled: boolean): Promise<AuditStatus>
 }
 
-/** What the switch has learned about this session's choice. */
+/** What the toggle has learned about this session's choice. */
 type ChoiceState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'hidden' }
   | { readonly kind: 'ready'; readonly enabled: boolean }
 
 /**
- * Render the opt-in switch.
+ * The audit log, as the toggle's only ink (Lucide scroll-text, 24 grid).
+ * A scroll of appended lines is what the switch turns on, so the glyph says
+ * what the control does instead of naming it in words.
+ */
+const AUDIT_GLYPH: readonly string[] = [
+  'M15 12h-5',
+  'M15 8h-5',
+  'M19 17V5a2 2 0 0 0-2-2H4',
+  'M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3',
+]
+
+/**
+ * Render the opt-in toggle.
  * @param props - injected session identity and route helpers.
- * @returns the switch, or null while unknown / sealed / unavailable.
+ * @returns the icon button, or null while unknown / sealed / unavailable.
  */
 export function DescriptionSwitch(props: DescriptionSwitchInjected): React.ReactElement | null {
   const [state, setState] = useState<ChoiceState>({ kind: 'loading' })
@@ -77,15 +96,31 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
   }
 
   return React.createElement(
-    'label',
-    { className: 'ttl-descSwitch', title },
-    React.createElement('input', {
-      type: 'checkbox',
-      checked: state.enabled,
+    'button',
+    {
+      type: 'button',
+      className: 'ttl-descAudit',
+      title,
+      // The words left the row but not the accessibility tree: the button is
+      // still named 「工具审计」, and `aria-pressed` carries on/off.
+      'aria-label': label,
+      'aria-pressed': state.enabled,
       disabled: pending,
-      onChange: (event: React.ChangeEvent<HTMLInputElement>) => change(event.currentTarget.checked),
-    }),
-    React.createElement('span', null, label),
+      onClick: () => change(!state.enabled),
+    },
+    React.createElement(
+      'svg',
+      { viewBox: '0 0 24 24', width: 15, height: 15, 'aria-hidden': 'true', focusable: 'false' },
+      AUDIT_GLYPH.map((d, index) => React.createElement('path', {
+        key: index,
+        d,
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 1.8,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      })),
+    ),
   )
 }
 

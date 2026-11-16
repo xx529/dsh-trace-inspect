@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.3] - 2026-11-16
+
+### Changed
+
+- **工具审计开关改成底栏图标按钮**：原来是「28×16 开关 + 文字『工具审计』」，是输入框底栏里唯一不是图标的控件；现在是一个 28×28 的图标按钮，字形取 Lucide scroll-text（审计卷轴＝只追加的记录），高度、圆角（`--dsw-radius-sm`）与旁边的「工作区内修改 / main」pill 一致。
+- **两个状态**：关闭＝`--dsw-alias-label-tertiary` 灰色字形、无底板，hover 用 `--dsw-alias-interactive-bg-hover`；开启＝`--dsw-alias-state-business-tertiary` 底板 + `--dsw-alias-state-business-primary` 字形。开启态整组参数照搬宿主自己的模式 chip（`PlanModeControl`：28px / radius-sm / hover 混入 6% primary / 宿主 focus ring / disabled 透明度 0.6），所以它和内置控件像同一套。
+- **颜色不再写死**：这段 CSS 只用 DSH alias token，没有一个十六进制 fallback——按钮长在宿主输入框里，必须跟着宿主换肤（暗色解析为 deepseek-400 墨 + deepseek-800 底，浅色为 deepseek-500 墨 + deepseek-100 底）。
+- 文字从底栏消失但没有从无障碍树消失：按钮保留 `aria-label="工具审计"`、`title` 仍是原来那段说明、开合用 `aria-pressed` 表达；封存后仍整体不渲染，写入中仍 disabled。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **641 例 / 25 文件**全通过（开关用例由 3 例改写为 4 例：off→on、on→off、SVG 存在 + 写入中 disabled、封存后不渲染，并断言容器里不再有 `input` / `label`）。
+- 真实 `design-platform.css`（从安装包中取出）在 Chrome 里挂载，深/浅两套皮肤分别截图核对：暗色为 deepseek-400 墨 + deepseek-800 底，浅色为 deepseek-500 墨 + deepseek-100 底，关闭态两套都是 tertiary 灰；`pnpm build` + `pnpm check:lib` 通过。
+
 ## [0.12.2] - 2026-11-16
 
 ### Fixed
