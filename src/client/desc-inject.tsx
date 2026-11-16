@@ -45,6 +45,12 @@ export interface DescriptionSwitchInjected {
   read(): Promise<AuditStatus>
   /** Persist a new choice (the Host refuses once sealed). */
   write(enabled: boolean): Promise<AuditStatus>
+  /**
+   * Optional: tell the toggle when the session itself changed (a turn started
+   * or finished), so a control mounted on a blank session locks as soon as the
+   * conversation seals instead of waiting for a click to be refused.
+   */
+  watch?(onChange: () => void): () => void
 }
 
 /** What the toggle has learned about this session's choice. */
@@ -76,15 +82,18 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
 
   useEffect(() => {
     let cancelled = false
-    void props.read().then((status) => {
-      if (cancelled) return
+    const apply = (next: AuditStatus): void => {
       // Sealed is not "hide": the row keeps showing the choice it sealed with,
       // locked. Only an unreachable route hides the control.
-      setState({ kind: 'ready', enabled: status.enabled, sealed: status.sealed })
-    }, () => {
+      if (!cancelled) setState({ kind: 'ready', enabled: next.enabled, sealed: next.sealed })
+    }
+    void props.read().then(apply, () => {
       if (!cancelled) setState({ kind: 'hidden' })
     })
-    return () => { cancelled = true }
+    // A refresh never hides on failure: the last known state stays on screen.
+    const refresh = (): void => { void props.read().then(apply, () => {}) }
+    const stop = props.watch?.(() => { refresh() })
+    return () => { cancelled = true; stop?.() }
   }, [props.sessionId])
 
   if (state.kind !== 'ready') return null
@@ -99,6 +108,13 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
     : (lang === 'zh'
         ? '开启后，MCP 等注入类工具会多一个 description 参数，记录这次调用做什么（仅用于轮次轨迹审计，本对话内不可再修改）'
         : 'Adds a description argument to injected tools so each call records what it does (trace audit only; sealed once the first turn starts)')
+
+  /** Re-read the Host's truth without ever hiding the control on failure. */
+  const reread = (): void => {
+    void props.read().then((next) => {
+      setState({ kind: 'ready', enabled: next.enabled, sealed: next.sealed })
+    }, () => {})
+  }
 
   const change = (enabled: boolean): void => {
     if (pending || locked) return
@@ -124,6 +140,11 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
       // (and the state) stay reachable, while the click is a no-op.
       'aria-disabled': locked || undefined,
       disabled: pending,
+      // A hover is the moment before a click: re-read then, so a control whose
+      // state went stale (session sealed while it was mounted) is already
+      // locked by the time the pointer lands — no refused click needed.
+      onMouseEnter: reread,
+      onFocus: reread,
       onClick: () => change(!state.enabled),
     },
     React.createElement(
@@ -151,6 +172,17 @@ const AUDIT_ENDPOINT = '/trace-inspect/api/tool-audit'
  * auto-continue and branch chips.
  */
 const AUDIT_SLOT = 'conversation.input.left'
+
+/** The slice of the client session controller the toggle watches. */
+interface SessionWatchFace {
+  subscribe(listener: () => void): () => void
+  getSnapshot(): { running?: boolean } | null
+}
+
+/** Session-controller service shape (optional — the toggle works without it). */
+interface SessionsWatchFace {
+  binding(sessionId: string): { session?: SessionWatchFace } | undefined
+}
 
 
 /**
@@ -186,6 +218,24 @@ export function registerDescriptionSwitch(ctx: unknown): void {
   } | undefined
   if (slots === undefined || typeof slots.inject !== 'function') return
 
+  // The Host seals the choice at the first `turn/start`; the client session
+  // controller flips `running` when that turn starts, which is the moment the
+  // control must lock. The service is resolved when a session subscribes (the
+  // registration itself can run before the controller is reachable); without
+  // it the component still re-reads on hover/focus.
+  const watch = (sessionId: string, onChange: () => void): (() => void) => {
+    const sessions = context.get?.('sessions') as SessionsWatchFace | undefined
+    const session = sessions?.binding(sessionId)?.session
+    if (session === undefined) return () => {}
+    let running = session.getSnapshot()?.running === true
+    return session.subscribe(() => {
+      const next = session.getSnapshot()?.running === true
+      if (next === running) return
+      running = next
+      if (next) onChange()
+    })
+  }
+
   slots.inject(AUDIT_SLOT, () => slots.register({
     name: AUDIT_SLOT,
     id: 'trace-inspect-desc',
@@ -197,6 +247,7 @@ export function registerDescriptionSwitch(ctx: unknown): void {
       sessionId,
       read: () => requestAudit(sessionId),
       write: (enabled: boolean) => requestAudit(sessionId, enabled),
+      watch: (onChange: () => void) => watch(sessionId, onChange),
     }),
   }, DescriptionSwitch))
 }

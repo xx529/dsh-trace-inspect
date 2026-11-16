@@ -11,7 +11,7 @@
  * carrying the sealed state; clicking it must not call the route.
  */
 import * as React from 'react'
-import { fireEvent, render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { DescriptionSwitch, registerDescriptionSwitch } from '../src/client/desc-inject'
 
@@ -118,6 +118,49 @@ describe('DescriptionSwitch', () => {
     fireEvent.click(button)
     await waitFor(() => expect(findButton(container).getAttribute('aria-disabled')).toBe('true'))
     expect(findButton(container).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('locks itself the moment the session reports a started turn', async () => {
+    const status: Status = { enabled: false, sealed: false }
+    let notify: () => void = () => {}
+    const api = {
+      read: vi.fn(async () => ({ ...status })),
+      write: vi.fn(async (enabled: boolean) => ({ enabled, sealed: false })),
+      watch: (onChange: () => void) => { notify = onChange; return () => {} },
+    }
+    const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} watch={api.watch} />)
+    const button = await waitFor(() => {
+      expect(container.querySelector('button')).not.toBeNull()
+      return findButton(container)
+    })
+    // Mounted on a blank session: the control is live.
+    expect(button.getAttribute('aria-disabled')).toBeNull()
+    expect(button.getAttribute('title')).not.toMatch(/locked|无法再修改/)
+
+    // The first turn starts: the session controller notifies, the Host seals.
+    status.sealed = true
+    await act(async () => { notify() })
+    await waitFor(() => expect(findButton(container).getAttribute('aria-disabled')).toBe('true'))
+    expect(findButton(container).getAttribute('title')).toMatch(/locked|无法再修改/)
+  })
+
+  it('re-reads on hover, so a stale control is locked before any click', async () => {
+    let sealed = false
+    const api = {
+      read: vi.fn(async () => ({ enabled: false, sealed })),
+      write: vi.fn(async (enabled: boolean) => ({ enabled, sealed: false })),
+    }
+    const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} />)
+    const button = await waitFor(() => {
+      expect(container.querySelector('button')).not.toBeNull()
+      return findButton(container)
+    })
+    expect(button.getAttribute('aria-disabled')).toBeNull()
+
+    sealed = true
+    fireEvent.mouseEnter(button)
+    await waitFor(() => expect(findButton(container).getAttribute('aria-disabled')).toBe('true'))
+    expect(api.write).not.toHaveBeenCalled()
   })
 
   it('renders nothing when the status route itself is unavailable', async () => {
