@@ -1,22 +1,25 @@
 /**
- * First-screen toggle for the opt-in tool audit (`description` parameter).
+ * Composer-row toggle for the opt-in tool audit (`description` parameter).
  *
- * The control lives in `conversation.hero.options`, which the Conversation
- * renders only for a blank New Session — the same blankness the Host uses to
- * seal the choice at the first `turn/start`. It therefore reads as a
+ * v0.12.4: the control lives in `conversation.input.left` — the composer tool
+ * row, next to the sandbox pill, the auto-continue chip and the branch chip
+ * (the slot's `list` cells are ordered by `order`, then registration order;
+ * sandbox/plan are `single` slots and cannot host a second occupant). It
+ * renders only while this session has not yet sealed its choice — the same
+ * blankness the Host uses at the first `turn/start` — so it reads as a
  * per-conversation, choose-before-you-start control with no global settings.
  *
- * v0.12.3: it is an icon toggle, not a labelled switch. The composer row it
- * sits in is all 28px ghost icon buttons (sandbox / mode / branch), and a
- * switch plus the words 「工具审计」 was the only text control in it. The glyph
- * is the audit log itself (Lucide scroll-text); the styling comes entirely
- * from DSH alias tokens, so the off state is the host's tertiary grey and the
- * on state is the host's own business tint + ink.
+ * v0.12.3: it is an icon toggle, not a labelled switch. The row it sits in is
+ * all 28px ghost icon buttons, and a switch plus the words 「工具审计」 was the
+ * only text control in it. The glyph is the audit log itself (Lucide
+ * scroll-text); the styling comes entirely from DSH alias tokens, so the off
+ * state is the host's tertiary grey and the on state is the host's own
+ * business tint + ink.
  *
  * Transport: the read/write route `/trace-inspect/api/tool-audit` (same-origin,
  * behind the Host's loopback fence). It deliberately does NOT run
  * `/desc-inject`, because executing a command writes a `command/run` row into
- * the transcript — mounting the switch would then litter every new chat.
+ * the transcript — mounting the toggle would then litter every new chat.
  *
  * A sealed session renders nothing here; the Host also refuses writes (409).
  */
@@ -127,6 +130,15 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
 const AUDIT_ENDPOINT = '/trace-inspect/api/tool-audit'
 
 /**
+ * The composer's left tool group. Sandbox (`conversation.input.permission`) and
+ * plan (`conversation.input.plan`) are `single` slots and cannot take a second
+ * occupant, so the audit toggle joins the `list` slot that already carries the
+ * auto-continue and branch chips.
+ */
+const AUDIT_SLOT = 'conversation.input.left'
+
+
+/**
  * Read or write one session's audit choice through the same-origin route.
  * @param sessionId - session whose choice is addressed.
  * @param enabled - when given, POST this choice instead of GET.
@@ -146,7 +158,7 @@ async function requestAudit(sessionId: string, enabled?: boolean): Promise<Audit
 }
 
 /**
- * Register the switch into the Conversation hero's option row.
+ * Register the toggle into the composer's left tool group.
  * @param ctx - client context (slot and optional-services readers).
  */
 export function registerDescriptionSwitch(ctx: unknown): void {
@@ -159,9 +171,13 @@ export function registerDescriptionSwitch(ctx: unknown): void {
   } | undefined
   if (slots === undefined || typeof slots.inject !== 'function') return
 
-  slots.inject('conversation.hero.options', () => slots.register({
-    name: 'conversation.hero.options',
+  slots.inject(AUDIT_SLOT, () => slots.register({
+    name: AUDIT_SLOT,
     id: 'trace-inspect-desc',
+    // `list` cells sort by `order`, then registration order. 50 lands the
+    // glyph between the default-order chips (auto-continue) and the branch
+    // chip (order 100), i.e. inside the sandbox/branch control group.
+    order: 50,
     inject: (sessionId: string): DescriptionSwitchInjected => ({
       sessionId,
       read: () => requestAudit(sessionId),

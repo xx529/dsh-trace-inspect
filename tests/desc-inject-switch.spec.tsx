@@ -10,7 +10,7 @@
 import * as React from 'react'
 import { fireEvent, render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { DescriptionSwitch } from '../src/client/desc-inject'
+import { DescriptionSwitch, registerDescriptionSwitch } from '../src/client/desc-inject'
 
 interface Status { enabled: boolean; sealed: boolean }
 
@@ -86,5 +86,43 @@ describe('DescriptionSwitch', () => {
     const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} />)
     await waitFor(() => expect(api.read).toHaveBeenCalled())
     expect(container.querySelector('button')).toBeNull()
+  })
+})
+
+describe('registerDescriptionSwitch', () => {
+  it('joins the composer tool row (conversation.input.left), not the hero row', () => {
+    const injected: string[] = []
+    const registered: Array<Record<string, unknown>> = []
+    const ctx = {
+      get: (name: string) => (name === 'slots'
+        ? {
+            inject: (slot: string, callback: () => unknown) => {
+              injected.push(slot)
+              callback()
+            },
+            register: (options: Record<string, unknown>) => {
+              registered.push(options)
+              return () => {}
+            },
+          }
+        : undefined),
+    }
+
+    registerDescriptionSwitch(ctx)
+
+    // The sandbox / plan seats are `single` slots; the audit toggle belongs to
+    // the `list` slot that already carries the auto-continue and branch chips.
+    expect(injected).toEqual(['conversation.input.left'])
+    expect(registered).toHaveLength(1)
+    expect(registered[0]).toMatchObject({
+      name: 'conversation.input.left',
+      id: 'trace-inspect-desc',
+      order: 50,
+    })
+    expect(typeof registered[0].inject).toBe('function')
+  })
+
+  it('does nothing without a slots service', () => {
+    expect(() => registerDescriptionSwitch({ get: () => undefined })).not.toThrow()
   })
 })

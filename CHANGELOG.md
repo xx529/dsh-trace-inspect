@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.4] - 2026-11-16
+
+### Changed
+
+- **工具审计图标挪进输入框底栏的工具组**：0.12.3 把它挂在 `conversation.hero.options`（会话首屏标题行）上，和底栏那排「工作区内修改 / ∞ / main」不在一处。现在注册到 `conversation.input.left`——InputBar 底栏 `.tools` 里紧跟权限/计划 pill 之后的 list 槽位，`order: 50`，落在默认 order 的 chip（自动续跑 ∞）之后、分支 chip（`order: 100`）之前，也就是那排控件内部。
+- 为什么不直接贴在「工作区内修改」旁边：`conversation.input.permission` 和 `conversation.input.plan` 都是 `single` 槽位，只能有一个占用者；`conversation.input.left` 是 `list`，本来就是给第三方 chip 用的（git-branch 用 `order: 100`，auto-continue 用默认 0）。
+- 外观与状态机不变：灰=关闭 / 蓝=开启，仍只在**尚未开始**的会话里出现（首个 `turn/start` 封存后组件整体不渲染）；已经开始的老会话里这一格仍然是空的。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **643 例 / 25 文件**全通过（新增 2 例：注册目标必须是 `conversation.input.left` 且 `order: 50`；没有 slots 服务时静默返回不抛错）。
+- `pnpm build` + `pnpm check:lib` 通过。
+
 ## [0.12.3] - 2026-11-16
 
 ### Changed
