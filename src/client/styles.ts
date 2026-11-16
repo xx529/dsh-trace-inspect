@@ -2408,17 +2408,17 @@ export const trailCss = `
    The control used to be a 28×16 pill plus the words 「工具审计」, which made it
    the only text control in a composer row of 28px ghost icon buttons. It is now
    one of them: the audit log itself (Lucide scroll-text) on a 28px square.
-   Off = the host's tertiary grey on nothing; on = the host's own business tint
-   and business ink, so "enabled" reads as selected without inventing a colour.
-   The enabled face is borrowed 1:1 from the host's own mode chip
-   (dsh-client-ui-plan PlanModeControl: 28px, radius-sm, business-tertiary
-   fill, business-primary ink, +6% primary on hover, the host focus ring), so
-   the toggle is indistinguishable from a built-in composer control.
+   Off = the host's tertiary grey on nothing; on = the skin's brand accent on a
+   14% brand tint, so "enabled" reads as selected without inventing a colour.
+   The enabled face copies the toggle RIGHT NEXT TO IT in this row
+   (dsh-client-auto-continue's dshAcIconBtn[data-state="on"]): brand-primary
+   ink over a 14% brand tint (22% on hover). Both chips are on/off toggles in
+   the same row, so they must read as one control family — and a skin only
+   remaps the brand/label tokens, not DSH's state-business-* pair, which is
+   why the business blue looked foreign beside the skin's brand accent.
    Every colour here is a DSH alias token and deliberately has NO hex fallback:
    the button sits inside the host composer, so it must follow whichever skin
-   the host wears — the host's own design-platform.css resolves these tokens
-   per theme (business ink is deepseek-400 on dark and deepseek-500 on light,
-   the tint is deepseek-800 / deepseek-100), so no literal colour is ours. */
+   the host wears. */
 .ttl-descAudit {
   box-sizing: border-box;
   flex: none;
@@ -2443,22 +2443,18 @@ export const trailCss = `
 }
 
 .ttl-descAudit[aria-pressed="true"] {
-  background: var(--dsw-alias-state-business-tertiary);
-  color: var(--dsw-alias-state-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent);
+  color: var(--dsw-alias-brand-primary);
 }
 
 @media (hover: hover) {
   .ttl-descAudit[aria-pressed="true"]:hover {
-    background: color-mix(
-      in srgb,
-      var(--dsw-alias-state-business-tertiary),
-      var(--dsw-alias-state-business-primary) 6%
-    );
+    background: color-mix(in srgb, var(--dsw-alias-brand-primary) 22%, transparent);
   }
 }
 
 .ttl-descAudit:focus-visible {
-  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary));
   outline-offset: 2px;
 }
 

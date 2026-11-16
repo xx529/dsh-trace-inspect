@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.5] - 2026-11-17
+
+### Fixed
+
+- **开启态与相邻的 ∞ 开关不同色**：截图里底栏并排的两个「已开启」chip 一蓝一青——∞ 是自动续跑插件，用 `--dsw-alias-brand-primary` 墨色 + 14% 品牌色底（hover 22%）；我们用 `--dsw-alias-state-business-*`（底 deepseek-800 `#34415b`、墨 deepseek-400 `#7aaaff`）。皮肤只重映射 brand/label 这批 token，`state-business-*` 仍停在 DSH 默认蓝，所以并排时一眼看出不是一套。
+- 开启态改成**与 ∞ 完全相同的配方**：`color: var(--dsw-alias-brand-primary)` + `background: color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent)`，hover 22%；focus ring 的 fallback 也换成 brand。关闭态不变（`label-tertiary` 灰、无底板）。实测该皮肤下两枚 chip 的底色/墨色现在都解析到同一组值（底 ≈ 品牌色 14% 混卡片底、墨 = `#88c0d0`）。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **643 例 / 25 文件**全通过；`pnpm build` + `pnpm check:lib` 通过。
+- 用真实皮肤 token（brand `#88c0d0`、卡片底 `#2c2c2d`、页面底 `#2e3440`）在 Chrome 里渲染同一排控件，关闭/开启两态与 ∞ 并排核对：开启态两枚 chip 同色同底。
+
 ## [0.12.4] - 2026-11-16
 
 ### Changed
