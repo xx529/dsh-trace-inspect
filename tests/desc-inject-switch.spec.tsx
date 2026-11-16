@@ -1,11 +1,14 @@
 /**
- * desc-inject-switch.spec.tsx — the New Session hero toggle's user-visible
- * behaviour against a fake audit route: it appears only while the conversation
- * is open, names itself for screen readers, reflects the stored choice as
- * `aria-pressed`, and writes the opposite choice back.
+ * desc-inject-switch.spec.tsx — the composer-row audit toggle's user-visible
+ * behaviour against a fake audit route: it names itself for screen readers,
+ * reflects the stored choice as `aria-pressed`, writes the opposite choice
+ * back while the session is open, and — once the first turn seals it — stays
+ * on screen locked instead of disappearing.
  *
  * v0.12.3: the control is an icon button (`button[aria-pressed]`), not a
  * labelled checkbox — the words now live in `aria-label` + `title` only.
+ * v0.12.6: a sealed session renders the same button, `aria-disabled="true"`,
+ * carrying the sealed state; clicking it must not call the route.
  */
 import * as React from 'react'
 import { fireEvent, render, waitFor } from '@testing-library/react'
@@ -81,8 +84,47 @@ describe('DescriptionSwitch', () => {
     expect(findButton(container).getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('renders nothing once the conversation sealed its choice', async () => {
+  it('keeps the sealed choice on screen, locked, instead of vanishing', async () => {
     const api = runner({ enabled: true, sealed: true })
+    const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} />)
+    const button = await waitFor(() => {
+      expect(container.querySelector('button')).not.toBeNull()
+      return findButton(container)
+    })
+    // The state the conversation sealed with is still visible…
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    // …and the tooltip explains why it no longer reacts (jsdom runs the en
+    // dictionary, so match either language).
+    expect(button.getAttribute('title')).toMatch(/locked|无法再修改/)
+
+    fireEvent.click(button)
+    await waitFor(() => expect(api.write).not.toHaveBeenCalled())
+    expect(container.querySelector('button')).not.toBeNull()
+  })
+
+  it('flips to locked when a write races the first turn, without disappearing', async () => {
+    const api = {
+      read: vi.fn(async () => ({ enabled: false, sealed: false })),
+      // The Host refuses: the answer carries the sealed truth.
+      write: vi.fn(async () => ({ enabled: false, sealed: true })),
+    }
+    const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} />)
+    const button = await waitFor(() => {
+      expect(container.querySelector('button')).not.toBeNull()
+      return findButton(container)
+    })
+
+    fireEvent.click(button)
+    await waitFor(() => expect(findButton(container).getAttribute('aria-disabled')).toBe('true'))
+    expect(findButton(container).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('renders nothing when the status route itself is unavailable', async () => {
+    const api = {
+      read: vi.fn(async () => { throw new Error('offline') }),
+      write: vi.fn(async (enabled: boolean) => ({ enabled, sealed: false })),
+    }
     const { container } = render(<DescriptionSwitch sessionId="s" read={api.read} write={api.write} />)
     await waitFor(() => expect(api.read).toHaveBeenCalled())
     expect(container.querySelector('button')).toBeNull()

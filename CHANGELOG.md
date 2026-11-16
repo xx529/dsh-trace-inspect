@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.6] - 2026-11-17
+
+### Fixed
+
+- **对话里点一下就消失**：`read` / `write` 只要看到 `sealed: true` 就把组件设为 hidden，所以已经开始的会话里点一下（或读回封存状态）整枚图标就不见了。现在封存只影响**可交互性**，不影响**可见性**：按钮常驻，`aria-pressed` 保持封存时的开关状态（开启仍高亮、关闭仍是灰色），`aria-disabled="true"` + `cursor: default`，hover 不再变色，`title` 换成「对话已经开始了，工具审计无法再修改（当前状态保持到本对话结束）」，点它是 no-op。
+- **写入与首个 turn 撞车**：`write` 返回 `sealed: true` 时同样走锁定分支（保留返回值里的 enabled），不会再让控件消失。
+- 只有状态路由本身不可达（`read` 抛错）时才不渲染——那是"能力不存在"，不是"已封存"。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **645 例 / 25 文件**全通过（本文件 8 例：封存后常驻 + 点击不写、写入竞态转锁定、路由不可达才隐藏）。
+- `pnpm build` + `pnpm check:lib` 通过。
+
 ## [0.12.5] - 2026-11-17
 
 ### Fixed

@@ -21,7 +21,10 @@
  * `/desc-inject`, because executing a command writes a `command/run` row into
  * the transcript — mounting the toggle would then litter every new chat.
  *
- * A sealed session renders nothing here; the Host also refuses writes (409).
+ * The control is permanent: once the first turn seals the choice it stays in
+ * the row showing the state it sealed with (aria-disabled + a tooltip saying
+ * the choice cannot change any more). It only disappears when the status route
+ * itself is unavailable — never because a click was refused.
  */
 import * as React from 'react'
 import { detectLang } from './locales'
@@ -48,7 +51,7 @@ export interface DescriptionSwitchInjected {
 type ChoiceState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'hidden' }
-  | { readonly kind: 'ready'; readonly enabled: boolean }
+  | { readonly kind: 'ready'; readonly enabled: boolean; readonly sealed: boolean }
 
 /**
  * The audit log, as the toggle's only ink (Lucide scroll-text, 24 grid).
@@ -65,7 +68,7 @@ const AUDIT_GLYPH: readonly string[] = [
 /**
  * Render the opt-in toggle.
  * @param props - injected session identity and route helpers.
- * @returns the icon button, or null while unknown / sealed / unavailable.
+ * @returns the icon button; null only while loading or if the route is gone.
  */
 export function DescriptionSwitch(props: DescriptionSwitchInjected): React.ReactElement | null {
   const [state, setState] = useState<ChoiceState>({ kind: 'loading' })
@@ -75,7 +78,9 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
     let cancelled = false
     void props.read().then((status) => {
       if (cancelled) return
-      setState(status.sealed ? { kind: 'hidden' } : { kind: 'ready', enabled: status.enabled })
+      // Sealed is not "hide": the row keeps showing the choice it sealed with,
+      // locked. Only an unreachable route hides the control.
+      setState({ kind: 'ready', enabled: status.enabled, sealed: status.sealed })
     }, () => {
       if (!cancelled) setState({ kind: 'hidden' })
     })
@@ -86,15 +91,22 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
 
   const lang = detectLang()
   const label = lang === 'zh' ? '工具审计' : 'Tool audit'
-  const title = lang === 'zh'
-    ? '开启后，MCP 等注入类工具会多一个 description 参数，记录这次调用做什么（仅用于轮次轨迹审计，本对话内不可再修改）'
-    : 'Adds a description argument to injected tools so each call records what it does (trace audit only; sealed once the first turn starts)'
+  const locked = state.sealed
+  const title = locked
+    ? (lang === 'zh'
+        ? '对话已经开始了，工具审计无法再修改（当前状态保持到本对话结束）'
+        : 'This conversation has started — the tool audit choice is locked')
+    : (lang === 'zh'
+        ? '开启后，MCP 等注入类工具会多一个 description 参数，记录这次调用做什么（仅用于轮次轨迹审计，本对话内不可再修改）'
+        : 'Adds a description argument to injected tools so each call records what it does (trace audit only; sealed once the first turn starts)')
 
   const change = (enabled: boolean): void => {
-    if (pending) return
+    if (pending || locked) return
     setPending(true)
     void props.write(enabled).then((status) => {
-      setState(status.sealed ? { kind: 'hidden' } : { kind: 'ready', enabled: status.enabled })
+      // The Host answers with the sealed truth: a write that raced the first
+      // turn flips the control to locked instead of making it vanish.
+      setState({ kind: 'ready', enabled: status.enabled, sealed: status.sealed })
     }, () => {}).finally(() => { setPending(false) })
   }
 
@@ -108,6 +120,9 @@ export function DescriptionSwitch(props: DescriptionSwitchInjected): React.React
       // still named 「工具审计」, and `aria-pressed` carries on/off.
       'aria-label': label,
       'aria-pressed': state.enabled,
+      // Locked, not hidden: `aria-disabled` keeps it focusable so the tooltip
+      // (and the state) stay reachable, while the click is a no-op.
+      'aria-disabled': locked || undefined,
       disabled: pending,
       onClick: () => change(!state.enabled),
     },

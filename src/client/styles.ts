@@ -2458,6 +2458,23 @@ export const trailCss = `
   outline-offset: 2px;
 }
 
+/* Locked once the first turn sealed the choice: the state stays on screen
+   (the tooltip explains why a click does nothing), but hover no longer hints
+   that it can be pressed. */
+.ttl-descAudit[aria-disabled="true"] {
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .ttl-descAudit[aria-disabled="true"]:hover {
+    background: transparent;
+  }
+
+  .ttl-descAudit[aria-disabled="true"][aria-pressed="true"]:hover {
+    background: color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent);
+  }
+}
+
 .ttl-descAudit:disabled {
   opacity: 0.5;
   cursor: default;
