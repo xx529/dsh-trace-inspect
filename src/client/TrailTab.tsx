@@ -165,6 +165,9 @@ interface UiStrings {
   /** Short placeholder for the inline header search (v0.10.24). */
   searchPlaceholderShort: string
   clearSearch: string
+  /** Summary-row master toggle: open every turn / fold every turn (v0.12.8). */
+  expandAll: string
+  collapseAll: string
   more: string
   reading: string
   emptyTitle: string
@@ -217,6 +220,8 @@ const ZH_UI: UiStrings = {
   searchPlaceholder: '搜索步骤、文件或命令',
   searchPlaceholderShort: '搜索步骤…',
   clearSearch: '清除搜索',
+  expandAll: '全部展开',
+  collapseAll: '全部收起',
   more: '更多',
   reading: '正在读取事件流…',
   emptyTitle: '还没有可折叠的步骤',
@@ -256,6 +261,8 @@ const EN_UI: UiStrings = {
   searchPlaceholder: 'Search steps, files or commands',
   searchPlaceholderShort: 'Search steps…',
   clearSearch: 'Clear search',
+  expandAll: 'Expand all',
+  collapseAll: 'Collapse all',
   more: 'More',
   reading: 'Reading the event stream…',
   emptyTitle: 'No foldable steps yet',
@@ -742,6 +749,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
         title={clipTitle(text)}
         onClick={() => { onJump({ seq: item.seq, kind: 'input' }, turn) }}
       >
+        <span className="ttl-stepRail" aria-hidden="true" />
         <span className="ttl-stepIcon ttl-inputIcon" aria-hidden="true">{inputIcon()}</span>
         <span className="ttl-msgRole">{t(lang, 'input') as string}</span>
         <span className="ttl-msgPreview" data-testid="ttl-input-preview">{rest > 0 ? `${flat}…` : flat}</span>
@@ -821,6 +829,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
           title={clipTitle(title)}
           onClick={() => { if (expandable) toggleContext(key) }}
         >
+          <span className="ttl-stepRail" aria-hidden="true" />
           <span className="ttl-stepIcon ttl-ctxIcon" aria-hidden="true">{contextIcon()}</span>
           {/* v0.10.46: the row's name slot is the injection's own title
               (`time-context`, `runtime-context`, a skill name, an instruction
@@ -940,6 +949,7 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
             title={clipTitle(text)}
             onClick={() => { if (expandable) toggleOutput(key) }}
           >
+            <span className="ttl-stepRail" aria-hidden="true" />
             <span className="ttl-stepIcon ttl-msgIcon" aria-hidden="true">{messageIcon()}</span>
             <span className="ttl-msgRole">{t(lang, 'output') as string}</span>
             <span className="ttl-msgPreview" data-testid="ttl-output-preview">{rest > 0 ? `${preview}…` : preview}</span>
@@ -1144,6 +1154,14 @@ const TurnRow = React.memo(function TurnRow(props: TurnRowProps): React.ReactEle
 
 // ── The panel ───────────────────────────────────────────────────────────
 
+/**
+ * Turn-expansion state (v0.12.8 master toggle):
+ *  - `null`  → the default: only the latest turn is open;
+ *  - `'all'` → every turn is open, including turns that arrive later;
+ *  - a set   → an explicit per-turn choice (any single click materializes it).
+ */
+type TurnExpansion = ReadonlySet<string> | 'all' | null
+
 export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   const lang: Lang = detectLang()
   const ui = uiStrings(lang)
@@ -1166,7 +1184,7 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
 
   const [filter, setFilter] = React.useState<StepFilter>('all')
   const [query, setQuery] = React.useState('')
-  const [expandedTurns, setExpandedTurns] = React.useState<Set<string> | null>(null)
+  const [expandedTurns, setExpandedTurns] = React.useState<TurnExpansion>(null)
   const [jumping, setJumping] = React.useState<number | null>(null)
   const [jumpPages, setJumpPages] = React.useState(0)
   const [jumpMessage, setJumpMessage] = React.useState<string | null>(null)
@@ -1410,8 +1428,13 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
 
   // ── Expansion helpers ──────────────────────────────────────────────────
   const latestIdRef = React.useRef('')
+  /** Every known turn id — materializes `'all'` when one card folds (v0.12.8). */
+  const turnIdsRef = React.useRef<string[]>([])
   React.useEffect(() => {
-    latestIdRef.current = turns.length > 0 ? turnByIdentity(turns[turns.length - 1]) : ''
+    turnIdsRef.current = turns.map(turnByIdentity)
+    latestIdRef.current = turnIdsRef.current.length > 0
+      ? turnIdsRef.current[turnIdsRef.current.length - 1]
+      : ''
   }, [turns])
 
   // A search narrows the list: expand every matching turn once so the hits are
@@ -1419,6 +1442,8 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   React.useEffect(() => {
     if (!searchActive) return
     setExpandedTurns((current) => {
+      // 「全部展开」 already covers every match; never downgrade it to a set.
+      if (current === 'all') return current
       const next = current === null
         ? new Set<string>(latestIdRef.current.length > 0 ? [latestIdRef.current] : [])
         : new Set(current)
@@ -1442,11 +1467,16 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   // transient search does not leave every matched turn open afterwards.
   const prevSearchRef = React.useRef(false)
   React.useEffect(() => {
-    if (prevSearchRef.current && !searchActive) setExpandedTurns(null)
+    if (prevSearchRef.current && !searchActive) {
+      // Keep an explicit 「全部展开」 across the search round-trip; a transient
+      // search only materialized its own set, which returns to the default.
+      setExpandedTurns((current) => (current === 'all' ? current : null))
+    }
     prevSearchRef.current = searchActive
   }, [searchActive])
 
   const isTurnExpanded = React.useCallback((id: string, index: number): boolean => {
+    if (expandedTurns === 'all') return true
     if (expandedTurns === null) return index === turns.length - 1
     return expandedTurns.has(id)
   }, [expandedTurns, turns.length])
@@ -1454,6 +1484,12 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
   const toggleTurn = React.useCallback((id: string): void => {
     captureScrollAnchor()
     setExpandedTurns((current) => {
+      if (current === 'all') {
+        // Leave the master mode with every OTHER turn still open (v0.12.8).
+        const next = new Set<string>(turnIdsRef.current)
+        next.delete(id)
+        return next
+      }
       if (current === null) {
         // Default state = only the latest turn expanded. Materialize THAT
         // single set, then toggle just the clicked turn — never "expand
@@ -1471,6 +1507,26 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
       return next
     })
   }, [])
+
+  /**
+   * v0.12.8 — the summary row's master toggle. 「全部展开」 uses the `'all'`
+   * sentinel so turns that arrive later stay open too (the old default only
+   * opened the latest one); 「全部收起」 folds everything with an empty set.
+   */
+  const setAllTurnsExpanded = React.useCallback((expand: boolean): void => {
+    captureScrollAnchor()
+    setExpandedTurns(expand ? 'all' : new Set<string>())
+  }, [])
+
+  /**
+   * The toggle reads the RENDERED cards: under a filter or a search the visible
+   * subset decides whether 「全部收起」 is the offered action.
+   */
+  const allExpanded = React.useMemo(() => {
+    if (expandedTurns === 'all') return true
+    if (visibleTurns.length === 0) return false
+    return visibleTurns.every((turn, index) => isTurnExpanded(turnByIdentity(turn), index))
+  }, [expandedTurns, visibleTurns, isTurnExpanded])
 
   const toggleShowFull = React.useCallback((id: string): void => {
     captureScrollAnchor()
@@ -1788,6 +1844,22 @@ export function TrailTab(props: TrailTabProps): React.ReactElement | null {
               ? ui.partialCount(turns.length, stats.total)
               : `${ui.stepCount(stats.total)} · ${(t(lang, 'turnsCount') as (n: number) => string)(turns.length)}`}
           </span>
+          {/* v0.12.8: one-click 「全部展开 / 全部收起」 for the whole trail. */}
+          <button
+            type="button"
+            className="ttl-summaryToggle"
+            data-testid="ttl-expand-toggle"
+            data-mode={allExpanded ? 'collapse' : 'expand'}
+            aria-pressed={allExpanded}
+            aria-label={allExpanded ? ui.collapseAll : ui.expandAll}
+            title={allExpanded ? ui.collapseAll : ui.expandAll}
+            onClick={() => { setAllTurnsExpanded(!allExpanded) }}
+          >
+            <span className="ttl-summaryToggleIcon" aria-hidden="true">
+              {allExpanded ? collapseAllIcon() : expandAllIcon()}
+            </span>
+            <span className="ttl-summaryToggleLabel">{allExpanded ? ui.collapseAll : ui.expandAll}</span>
+          </button>
           <span className="ttl-summarySpacer" />
           {overview.durationMs !== undefined
             ? <span className="ttl-summaryDur" title={ui.totalDuration}>{formatDuration(overview.durationMs)}</span>
@@ -2029,6 +2101,24 @@ function chevronIcon(): React.ReactElement {
   return (
     <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
       <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Double chevron ↓ = 「全部展开」 (v0.12.8). */
+function expandAllIcon(): React.ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+      <path d="M4.5 3.5L8 7l3.5-3.5M4.5 8.5L8 12l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Double chevron ↑ = 「全部收起」 (v0.12.8). */
+function collapseAllIcon(): React.ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+      <path d="M4.5 12.5L8 9l3.5 3.5M4.5 7.5L8 4l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

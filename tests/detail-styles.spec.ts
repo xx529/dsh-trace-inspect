@@ -148,6 +148,12 @@ describe('v0.10.2: 统一 ICON 底色 + 图标间竖线（原型 2-02）', () =>
     expect(err).toContain('--dsw-alias-state-error-primary')
   })
 
+  it('消息 / 输入 / 输出行也给竖线提供锚点（position: relative）', () => {
+    // v0.12.8: rows of every kind carry a rail segment; the segment is
+    // absolutely positioned by the row itself, so the row must be the anchor.
+    expect(rule('.ttl-msgRow {')).toContain('position: relative;')
+  })
+
   it('竖线恢复，且只显示在图标之间（图标不透明、竖线居中对齐图标中心）', () => {
     expect(trailCss).not.toMatch(/^\.ttl-stepRail\s*\{\s*display:\s*none/m)
     const rail = rule('.ttl-turn .ttl-stepRail {')

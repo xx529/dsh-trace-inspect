@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.8] - 2026-11-17
+
+### Fixed
+
+- **轨迹竖线在部分行断开**：竖向连接线 `.ttl-stepRail` 原来只在工具步骤行（`.ttl-step`）里渲染，注入（context）、用户输入、输出这三类行虽然共用同一套 32px 图标栅格，却没有自己的线段，于是这几行之间的连线看起来像被"盖掉"了。现在四类行各渲染一段 rail，连线从回合头一路贯穿到最后一个图标。
+- `.ttl-msgRow` 补 `position: relative`：线段是 `top:0 / bottom:0` 的绝对定位元素，必须由行本身当锚点（否则会挂到外层 `.ttl-msg` 上、把展开体的高度也算进去）。
+- 图标 chip 仍然不透明且 `z-index: 1`，所以线段只在图标之间露出——与原有设计一致。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **652 例 / 25 文件**全通过（新增 2 例：一轮夹具含 输入 / context / bash / 输出 共 4 行，逐行断言都带 `.ttl-stepRail`；样式断言 `.ttl-msgRow` 是定位锚点）。
+- 真实 `TrailTab` + 真实样式表在 Chrome 里挂载（420px 宽、5 行：输入 / context ×2 / bash / 输出）截图核对：连线在图标之间连续，chip 之间各留 7px 线段。
+- `pnpm build` + `pnpm check:lib` 通过。
+
 ## [0.12.7] - 2026-11-17
 
 ### Fixed

@@ -982,6 +982,42 @@ export const trailCss = `
 .ttl-summaryFail { color: var(--dsw-alias-state-error-primary, #f2726f); font-size: 10.5px; }
 .ttl-summarySpacer { flex: 1; }
 .ttl-summaryDur { color: var(--dsw-alias-label-quaternary, #7b8086); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+/* v0.12.8: the summary-row master toggle (「全部展开 / 全部收起」) — a quiet
+   inline chip that reads as part of the count line, not as another filter. */
+.ttl-summaryToggle {
+  box-sizing: border-box;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 17px;
+  margin-left: 2px;
+  padding: 0 5px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #9ba1a7);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 17px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.ttl-summaryToggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.06));
+  color: var(--dsw-alias-label-secondary, #cfd3d6);
+}
+.ttl-summaryToggle:active { color: var(--dsw-alias-label-primary, #f3f4f6); }
+.ttl-summaryToggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary, #4176e6);
+  outline-offset: 1px;
+}
+/* All-expanded reads brighter, so the affordance says 「everything is open」. */
+.ttl-summaryToggle[data-mode="collapse"] { color: var(--dsw-alias-label-secondary, #cfd3d6); }
+.ttl-summaryToggleIcon { flex: none; display: inline-flex; width: 11px; height: 11px; }
+.ttl-summaryToggleIcon svg { display: block; }
+.ttl-summaryToggleLabel { white-space: nowrap; }
 .ttl-dist {
   display: flex;
   height: 4px;
@@ -2185,6 +2221,9 @@ export const trailCss = `
 .ttl-msg { position: relative; }
 .ttl-msgRow {
   box-sizing: border-box;
+  /* v0.12.8: the row owns its rail segment (message / input / output rows sit
+     on the same 32px grid), so the connector must be positioned by the row. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;

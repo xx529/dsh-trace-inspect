@@ -1099,6 +1099,57 @@ describe('TrailTab', () => {
     expect(after[1].getAttribute('data-collapsed')).toBe('false')
   })
 
+  it('the summary master toggle expands every turn and folds them all back (v0.12.8)', async () => {
+    renderTab(twoTurns())
+    await readyTurns(2)
+    const toggle = screen.getByTestId('ttl-expand-toggle')
+    expect(toggle.textContent).toBe('Expand all')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(screen.getAllByTestId('ttl-turn').map((card) => card.getAttribute('data-collapsed')))
+        .toEqual(['false', 'false'])
+    })
+    expect(screen.getByTestId('ttl-expand-toggle').textContent).toBe('Collapse all')
+    fireEvent.click(screen.getByTestId('ttl-expand-toggle'))
+    await waitFor(() => {
+      expect(screen.getAllByTestId('ttl-turn').map((card) => card.getAttribute('data-collapsed')))
+        .toEqual(['true', 'true'])
+    })
+    expect(screen.getByTestId('ttl-expand-toggle').textContent).toBe('Expand all')
+    // …and back again: collapse-all must not wedge the master mode.
+    fireEvent.click(screen.getByTestId('ttl-expand-toggle'))
+    await waitFor(() => {
+      expect(screen.getAllByTestId('ttl-turn').map((card) => card.getAttribute('data-collapsed')))
+        .toEqual(['false', 'false'])
+    })
+  })
+
+  it('a single turn folded while 「全部展开」 is on leaves the others open (v0.12.8)', async () => {
+    renderTab(twoTurns())
+    await readyTurns(2)
+    fireEvent.click(screen.getByTestId('ttl-expand-toggle'))
+    fireEvent.click(within(screen.getAllByTestId('ttl-turn')[0]).getByTestId('ttl-turn-tag'))
+    const cards = screen.getAllByTestId('ttl-turn')
+    expect(cards[0].getAttribute('data-collapsed')).toBe('true')
+    expect(cards[1].getAttribute('data-collapsed')).toBe('false')
+    // The master mode is gone, so the toggle offers 「全部展开」 again.
+    expect(screen.getByTestId('ttl-expand-toggle').textContent).toBe('Expand all')
+  })
+
+  it('「全部展开」 survives a search round-trip (v0.12.8)', async () => {
+    renderTab(twoTurns())
+    await readyTurns(2)
+    fireEvent.click(screen.getByTestId('ttl-expand-toggle'))
+    const search = screen.getByTestId('ttl-search') as HTMLInputElement
+    fireEvent.change(search, { target: { value: 'undo' } })
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(1) })
+    fireEvent.change(search, { target: { value: '' } })
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(2) })
+    expect(screen.getAllByTestId('ttl-turn').map((card) => card.getAttribute('data-collapsed')))
+      .toEqual(['false', 'false'])
+  })
+
   it('clicking the collapsed input preview opens the turn (v0.10.21)', async () => {
     renderTab(twoTurns())
     const cards = await readyTurns(2)
@@ -2110,6 +2161,42 @@ describe('tab visibility (React #300 regression)', () => {
     expect(screen.queryByTestId('ttl-root')).toBeNull()
     rerender(<TrailTab {...props} visible />)
     expect(screen.getByTestId('ttl-root')).toBeTruthy()
+  })
+})
+
+// ── v0.12.8 — the step rail runs through every body row ──────────────────
+
+describe('TrailTab — step rail continuity (v0.12.8)', () => {
+  it('every body row (input / context / tool / output) owns a rail segment', async () => {
+    const events: Ev[] = [
+      user(1, 'hello'),
+      turnStart(2, 1),
+      ev('user/message', 3, { content: 'now', message: { source: { kind: 'time-context' } } }),
+      toolCall(4, 'bash', '{"command":"echo hi"}', 'c4'),
+      toolResult(5, 'c4', 'hi'),
+      assistant(6, 'answer'),
+      turnEnd(7, 1),
+    ]
+    const props = {
+      ctx: { get: () => undefined },
+      scope: { sessionId: 's1' },
+      tab: { id: 'trace-inspect' },
+      fetchEventsOverride: async (): Promise<{ events: SessionEventLike[] }> => ({ events: events as SessionEventLike[] }),
+    }
+    render(<TrailTab {...props} visible />)
+    const turns = await screen.findAllByTestId('ttl-turn')
+    // The newest turn opens by itself; no click (a click would fold it).
+    await waitFor(() => { expect(turns[0].querySelectorAll('.ttl-step').length).toBeGreaterThan(0) })
+
+    // v0.12.8: rows of every kind sit on the same 32px grid and each one carries
+    // its own rail segment — a context/output/message row missing the span is
+    // exactly what made the connector look "covered" between those icons.
+    const rows = [
+      ...turns[0].querySelectorAll('.ttl-step'),
+      ...turns[0].querySelectorAll('.ttl-msgRow'),
+    ]
+    expect(rows).toHaveLength(4)
+    for (const row of rows) expect(row.querySelector('.ttl-stepRail')).not.toBeNull()
   })
 })
 
