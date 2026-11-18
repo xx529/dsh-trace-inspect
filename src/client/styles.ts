@@ -1254,10 +1254,13 @@ export const trailCss = `
   color: var(--dsw-alias-label-secondary, #cfd3d6);
   font-size: 12.5px;
   line-height: 18px;
+  /* v0.12.9: one line per turn, ellipsized by the row's own width. Two lines
+     made a long prompt push the whole list down and broke the scan rhythm. */
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
   word-break: break-word;
 }
 .ttl-turn[data-active="true"] .ttl-turnPreview { color: #e6e8ea; }

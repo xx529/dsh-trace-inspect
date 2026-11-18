@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.9] - 2026-11-18
+
+### Changed
+
+- **轮次预览固定一行、超出省略**：`.ttl-turnPreview` 原来 `-webkit-line-clamp: 2`，长 prompt（截图里那种多点多句的需求）会把轮次卡撑成两行，整列列表的节奏被打乱、还会把后面的轮次往下推。现在 clamp 到 1 行并加 `text-overflow: ellipsis`，按当前面板宽度截断；完整文本仍在 `title` 里，展开回合后是完整的「输入」行。
+
+### Verification
+
+- `pnpm typecheck` 0；`pnpm test` **652 例 / 25 文件**全通过。
+- 真实 `TrailTab` + 真实样式表在 Chrome 里挂载（430px 宽、3 轮，其中一轮是长 prompt）：该轮预览单行显示、行尾省略号，其余轮次不受影响。
+- `pnpm build` + `pnpm check:lib` 通过。
+
 ## [0.12.8] - 2026-11-17
 
 ### Fixed
