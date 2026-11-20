@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.11] - 2026-11-20
+
+### Fixed
+
+- **按 agent 作用域注册的工具（如挂在 agent 预设里的 MCP 服务器）现在也会被审计装饰**：此前 `reconcile` 只遍历部署级 `tools.definitions()`，`mcp__order-center__*` 这类每 agent 注册的工具既没有拿到 `description` 参数，也没有在调用前剥离；模型若自行补上 `description`，会被服务端以「工具不存在或参数不符合要求」拒绝。现在同时读取该 agent 的可见定义：部署级定义继续用 scoped 影子，agent 作用域定义就地装饰（因为同名已占位、无法再注册影子），关闭时逐字段还原，MCP 重连后按对象身份重新装饰。
+
+### Verification
+
+- 新增 3 条 agent 作用域用例：就地追加参数并剥离、关闭后还原 schema/execute、只装饰启用该 agent。
+- 全量 **656 例 / 25 文件** 通过；`pnpm typecheck` 0、`pnpm build` + `check:lib` 通过。
+
 ## [0.12.10] - 2026-11-20
 
 ### Fixed

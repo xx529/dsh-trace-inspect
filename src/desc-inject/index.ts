@@ -48,12 +48,12 @@ export const AUDIT_PATH = '/trace-inspect/api/tool-audit'
 
 /** One visible tool definition (plain object registered on the tool service). */
 interface ToolDefinitionLike {
-  readonly name: string
-  readonly description: string
-  readonly parameters: Record<string, unknown>
-  readonly execute: (args: unknown, exec: unknown) => Promise<unknown>
-  readonly isConcurrencySafe?: (args: unknown) => boolean
-  readonly [key: string]: unknown
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+  execute: (args: unknown, exec: unknown) => Promise<unknown>
+  isConcurrencySafe?: (args: unknown) => boolean
+  [key: string]: unknown
 }
 
 interface SessionLike {
@@ -122,6 +122,31 @@ export function decorateDefinition(definition: ToolDefinitionLike): ToolDefiniti
 }
 
 /**
+ * Decorate one SCOPED definition in place. A definition registered below the
+ * deployment (for example a per-agent MCP server) already occupies its name in
+ * that layer, so a shadow cannot be registered; mutating the definition is the
+ * only per-agent hook. The returned restore puts the original fields back.
+ */
+function decorateInPlace(definition: ToolDefinitionLike): { definition: ToolDefinitionLike; restore: () => void } {
+  const originalParameters = definition.parameters
+  const originalExecute = definition.execute
+  const originalSafe = definition.isConcurrencySafe
+  definition.parameters = withDescriptionParameter(originalParameters)
+  definition.execute = (args: unknown, exec: unknown) => originalExecute.call(definition, stripInjected(args), exec)
+  if (typeof originalSafe === 'function') {
+    definition.isConcurrencySafe = (args: unknown) => originalSafe.call(definition, stripInjected(args))
+  }
+  return {
+    definition,
+    restore: () => {
+      definition.parameters = originalParameters
+      definition.execute = originalExecute
+      if (typeof originalSafe === 'function') definition.isConcurrencySafe = originalSafe
+    },
+  }
+}
+
+/**
  * Register the per-agent shadows, the `/desc-inject` command, and the
  * first-screen switch's read/write route.
  * @param ctx - Host context carrying `tools` and `agents`.
@@ -138,6 +163,8 @@ export function apply(ctx: HostContextLike, config: DescInjectConfig = {}): void
   const liveAgents = new Map<string, AgentLike>()
   /** Per-agent scoped shadows: agent id → tool name → disposer. */
   const shadows = new Map<string, Map<string, () => void>>()
+  /** Per-agent in-place decorations (definitions that cannot be shadowed). */
+  const patched = new Map<string, Map<string, { definition: ToolDefinitionLike; restore: () => void }>>()
   /** Per-session resolved choice (the file is the source of truth). */
   const modes = new Map<string, boolean>()
   /** Sessions already known to have started a turn. */
@@ -188,31 +215,57 @@ export function apply(ctx: HostContextLike, config: DescInjectConfig = {}): void
   const reconcile = (agent: AgentLike): void => {
     const registered = shadows.get(agent.id) ?? new Map<string, () => void>()
     shadows.set(agent.id, registered)
+    const decorated = patched.get(agent.id) ?? new Map<string, { definition: ToolDefinitionLike; restore: () => void }>()
+    patched.set(agent.id, decorated)
 
     if (!modeOf(agent)) {
       for (const dispose of registered.values()) dispose()
       registered.clear()
+      for (const entry of decorated.values()) entry.restore()
+      decorated.clear()
       return
     }
 
-    const targets = new Map<string, ToolDefinitionLike>()
-    for (const definition of ctx.tools.definitions()) {
-      if (injectable(definition.name, definition.parameters, prefixes)) targets.set(definition.name, definition)
+    // Deployment-level definitions can be shadowed; definitions registered in
+    // an agent scope (per-agent MCP servers) cannot — the name already exists
+    // in that layer — so those are decorated in place instead.
+    const globals = new Map<string, ToolDefinitionLike>()
+    for (const definition of ctx.tools.definitions()) globals.set(definition.name, definition)
+
+    const shadowable = new Map<string, ToolDefinitionLike>()
+    const scoped = new Map<string, ToolDefinitionLike>()
+    for (const definition of ctx.tools.definitions(agent)) {
+      if (!injectable(definition.name, definition.parameters, prefixes)) continue
+      if (globals.get(definition.name) === definition) shadowable.set(definition.name, definition)
+      else scoped.set(definition.name, definition)
     }
 
     for (const [name, dispose] of [...registered]) {
-      if (targets.has(name)) continue
+      if (shadowable.has(name)) continue
       dispose()
       registered.delete(name)
     }
 
-    for (const [name, definition] of targets) {
+    for (const [name, definition] of shadowable) {
       if (registered.has(name)) continue
       try {
         registered.set(name, agent.ctx.tools.register(decorateDefinition(definition)))
       } catch (error) {
         ctx.logger?.warn?.(`desc-inject: cannot shadow "${name}" for "${agent.id}": ${String(error)}`)
       }
+    }
+
+    for (const [name, definition] of scoped) {
+      const current = decorated.get(name)
+      if (current?.definition === definition) continue
+      current?.restore()
+      decorated.set(name, decorateInPlace(definition))
+    }
+
+    for (const [name, entry] of [...decorated]) {
+      if (scoped.get(name) === entry.definition) continue
+      entry.restore()
+      decorated.delete(name)
     }
   }
 
@@ -230,7 +283,13 @@ export function apply(ctx: HostContextLike, config: DescInjectConfig = {}): void
     if (reconciling) return
     reconciling = true
     try {
-      for (const agent of liveAgents.values()) reconcile(agent)
+      for (const agent of liveAgents.values()) {
+        try {
+          reconcile(agent)
+        } catch (error) {
+          ctx.logger?.warn?.(`desc-inject: reconcile failed for "${agent.id}": ${String(error)}`)
+        }
+      }
     } finally {
       reconciling = false
     }

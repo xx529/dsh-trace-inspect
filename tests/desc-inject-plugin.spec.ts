@@ -73,6 +73,8 @@ interface Harness {
   changeTools(definitions: FakeDefinition[]): void
   run(agentValue: FakeAgent, input: string): { kind: string; text: string }
   call(method: string, url: string, body?: unknown, headers?: Record<string, string>): Promise<{ status: number; body: Record<string, unknown> }>
+  /** Register one tool in an agent scope (a per-agent MCP server). */
+  addScoped(agentId: string, value: FakeDefinition): void
   definitions: FakeDefinition[]
 }
 
@@ -80,11 +82,17 @@ function harness(config: { enabledByDefault?: boolean; prefixes?: string[] } = {
   const listeners = new Map<string, Array<(payload: { agent: FakeAgent }) => void>>()
   const agents = new Map<string, FakeAgent>()
   const definitions: FakeDefinition[] = []
+  const scopedTools = new Map<string, FakeDefinition[]>()
   let command: { handler: (input: { agent: FakeAgent; rawInput: string }) => { kind: string; text: string } } | undefined
   let route: { path: string; handler: (req: never, res: never) => Promise<void> } | undefined
 
   const ctx = {
-    tools: { definitions: () => definitions },
+    tools: {
+      definitions: (scope?: FakeAgent) => {
+        if (scope === undefined) return definitions
+        return [...definitions, ...(scopedTools.get(scope.id) ?? [])]
+      },
+    },
     agents: { get: (id: string) => agents.get(id) },
     logger: { warn: () => {} },
     on: (event: string, listener: (payload: { agent: FakeAgent }) => void) => {
@@ -117,6 +125,11 @@ function harness(config: { enabledByDefault?: boolean; prefixes?: string[] } = {
 
   return {
     definitions,
+    addScoped(agentId: string, value: FakeDefinition) {
+      const list = scopedTools.get(agentId) ?? []
+      list.push(value)
+      scopedTools.set(agentId, list)
+    },
     create(agentValue: FakeAgent) {
       agents.set(agentValue.id, agentValue)
       for (const listener of listeners.get('agent/created') ?? []) listener({ agent: agentValue })
@@ -319,5 +332,52 @@ describe('desc-inject plugin — audit route (first-screen switch)', () => {
       { host: 'evil.example:1234' },
     )
     expect(rejected).toEqual({ status: 403, body: { error: 'forbidden' } })
+  })
+})
+
+describe('desc-inject plugin — agent-scoped tools (per-agent MCP servers)', () => {
+  it('decorates a scoped definition in place and strips before the body', async () => {
+    const plugin = harness()
+    const scoped = definition('mcp__order-center__purchase_requisition_start')
+    plugin.addScoped('session-scoped', scoped)
+    const session = agent('session-scoped')
+    plugin.create(session)
+
+    expect(plugin.run(session, 'on')).toMatchObject({ kind: 'success' })
+    expect(scoped.parameters.properties).toHaveProperty(PARAM_NAME)
+
+    await scoped.execute({ text: 'hello', [PARAM_NAME]: 'why' })
+    expect(scoped.received).toEqual({ text: 'hello' })
+    // No scoped shadow was registered (the name already exists in that layer).
+    expect(session.shadows).toHaveLength(0)
+  })
+
+  it('restores the original schema and body when disabled before sealing', () => {
+    const plugin = harness()
+    const scoped = definition('mcp__order-center__purchase_requisition_start')
+    const originalExecute = scoped.execute
+    plugin.addScoped('session-scoped-off', scoped)
+    const session = agent('session-scoped-off')
+    plugin.create(session)
+
+    plugin.run(session, 'on')
+    expect(scoped.parameters.properties).toHaveProperty(PARAM_NAME)
+    plugin.run(session, 'off')
+    expect(scoped.parameters.properties).not.toHaveProperty(PARAM_NAME)
+    expect(scoped.execute).toBe(originalExecute)
+  })
+
+  it('decorates only the scoped tool of the enabled agent', () => {
+    const plugin = harness()
+    const scoped = definition('mcp__order-center__purchase_requisition_start')
+    plugin.addScoped('session-scoped-a', scoped)
+    const a = agent('session-scoped-a')
+    const b = agent('session-scoped-b')
+    plugin.create(a)
+    plugin.create(b)
+
+    plugin.run(a, 'on')
+    expect(scoped.parameters.properties).toHaveProperty(PARAM_NAME)
+    expect(a.shadows).toHaveLength(0)
   })
 })
