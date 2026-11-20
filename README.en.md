@@ -154,7 +154,7 @@ client (browser) inject: ['sessions','uiConversation','betterSidebar'] (the latt
 | Platform (fallback-compatible) | DSH 0.1.2-rc.1 / 0.1.1-rc.x (stable line) |
 | Dependencies | dsh-better-sidebar (optional peer, `>=0.17.0`; inert when absent), react (injected by the DSH client seed) |
 | Build | TypeScript + esbuild, no runtime npm dependencies |
-| Tests | vitest, 639 cases / 25 files (fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + two independent adversarial suites) |
+| Tests | vitest, 653 cases / 25 files (fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + two independent adversarial suites) |
 
 ## Development
 

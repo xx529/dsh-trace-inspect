@@ -2347,7 +2347,8 @@ describe('TrailTab — session window source (v0.12.1)', () => {
   }
 
   it('folds the session window instead of calling the events route', async () => {
-    const window = makeWindow([...turnAt(1, 1), ...turnAt(2, 5)], true)
+    // Not the first turn of the session, so older turns DO exist.
+    const window = makeWindow([...turnAt(3, 9), ...turnAt(4, 13)], true)
     const fetchEvents = vi.fn(async (): Promise<{ events: SessionEventLike[] }> => ({ events: [] }))
     render(
       <TrailTab
@@ -2359,12 +2360,30 @@ describe('TrailTab — session window source (v0.12.1)', () => {
       />,
     )
     await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(2) })
-    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#1', '#2'])
+    expect(screen.getAllByTestId('ttl-turn-tag').map((el) => el.textContent)).toEqual(['#3', '#4'])
     // The session window itself is partial: counts say so, and the control is there.
     expect(screen.getByTestId('ttl-count').textContent).toBe('Latest 2 turns · 0 steps')
     expect(screen.getByTestId('ttl-load-older')).toBeTruthy()
     // No route traffic at all — the entries are the ones already in memory.
     expect(fetchEvents).not.toHaveBeenCalled()
+  })
+
+  it('hides the control once the window reaches turn #1 (older content is seed only)', async () => {
+    // The session still reports hasMore (10 leading seed/command events), but
+    // no earlier TURN exists — the outline must stop offering "load earlier".
+    const window = makeWindow([...turnAt(1, 1), ...turnAt(2, 5)], true)
+    render(
+      <TrailTab
+        ctx={{ get: (name: string) => (name === 'sessions' ? window.sessions : undefined) }}
+        scope={{ sessionId: 's1' }}
+        visible
+        tab={{ id: 'trace-inspect' }}
+        fetchEventsOverride={vi.fn(async () => ({ events: [] }))}
+      />,
+    )
+    await waitFor(() => { expect(screen.getAllByTestId('ttl-turn')).toHaveLength(2) })
+    expect(screen.queryByTestId('ttl-load-older')).toBeNull()
+    expect(screen.getByTestId('ttl-list-foot').textContent).toBe('Showing all 2 turns · 0 steps')
   })
 
   it('pages earlier through the session loader and follows its prepend', async () => {

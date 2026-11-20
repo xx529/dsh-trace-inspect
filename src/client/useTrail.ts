@@ -291,6 +291,10 @@ export function useTrail(
   const seqRef = React.useRef(0)
   const hasOlderRef = React.useRef(false)
   const loadingOlderRef = React.useRef(false)
+  /** Window path: the session's own `hasMore` (older EVENTS remain). */
+  const sessionHasMoreRef = React.useRef(false)
+  /** Window path: turn number of the window's first `turn/start`, when known. */
+  const windowFirstTurnRef = React.useRef<number | null>(null)
   const initializingRef = React.useRef(false)
   const pendingRefreshRef = React.useRef(false)
   const sessionIdRef = React.useRef(sessionId)
@@ -338,6 +342,23 @@ export function useTrail(
     }, 80)
   }, [publish])
 
+  /**
+   * Turn number of the window's first `turn/start`, or null. A window that
+   * starts at turn #1 is the beginning of the session's turn history — the
+   * only thing still behind it is seed/command events, which the trail must
+   * NOT advertise as "older history".
+   */
+  const noteFirstTurn = React.useCallback((events: readonly SessionEventLike[]): void => {
+    for (const event of events) {
+      if (event.type !== 'turn/start') continue
+      const data = event.data
+      const turn = data !== null && typeof data === 'object' ? (data as { turn?: unknown }).turn : undefined
+      windowFirstTurnRef.current = typeof turn === 'number' ? turn : null
+      return
+    }
+    windowFirstTurnRef.current = null
+  }, [])
+
   /** Replace the whole window (rebuild) and publish immediately. */
   const rebuildWindow = React.useCallback((events: SessionEventLike[]): void => {
     if (publishTimer.current !== null) {
@@ -348,8 +369,9 @@ export function useTrail(
     windowEventsRef.current = events
     folderRef.current = folder
     seqRef.current = Math.max(0, folder.latestSeq)
+    noteFirstTurn(events)
     publish(folder)
-  }, [publish])
+  }, [noteFirstTurn, publish])
 
   /** Push one durable window append into the open fold (window path). */
   const appendWindow = React.useCallback((entries: readonly SessionWindowEntryLike[] | undefined): void => {
@@ -373,34 +395,49 @@ export function useTrail(
     }
     if (pushed) {
       seqRef.current = Math.max(0, folder.latestSeq)
+      // Only a head insert can change the window's first turn; an append can
+      // fill it only when the window was empty.
+      if (windowFirstTurnRef.current === null) noteFirstTurn(events)
       publishSoon()
     }
-  }, [publishSoon, rebuildWindow])
+  }, [noteFirstTurn, publishSoon, rebuildWindow])
+
+  /**
+   * Recompute the panel's `hasOlder` from the two facts that matter:
+   *   - the session still holds older EVENTS (`hasMore`), and
+   *   - the loaded window does not already start at turn #1.
+   * The second check is what hides the control once the first turn is on
+   * screen: the session's remaining prefix is seed / command events only, so
+   * paging further would add nothing the outline can render.
+   */
+  const syncHasOlder = React.useCallback((): void => {
+    const value = sessionHasMoreRef.current && windowFirstTurnRef.current !== 1
+    hasOlderRef.current = value
+    setHasOlder(value)
+  }, [])
 
   /** Read one window snapshot and apply its change kind (window path). */
   const applyWindowSnapshot = React.useCallback((snapshot: SessionWindowSnapshotLike | undefined): void => {
     if (snapshot === undefined) return
-    const hasMoreValue = snapshot.hasMore === true
-    hasOlderRef.current = hasMoreValue
-    setHasOlder(hasMoreValue)
+    sessionHasMoreRef.current = snapshot.hasMore === true
     const change = snapshot.change
     if (change !== undefined && change.kind === 'append' && Array.isArray(change.entries)) {
       appendWindow(change.entries)
     } else {
       rebuildWindow(windowEventsOf(snapshot.entries))
     }
+    syncHasOlder()
     if (windowEventsRef.current.length > 0) {
       setError(null)
       setStatus('ready')
     }
-  }, [appendWindow, rebuildWindow])
+  }, [appendWindow, rebuildWindow, syncHasOlder])
 
   /** Apply the session's own snapshot (hasMore / busy / open state). */
   const applySessionSnapshot = React.useCallback((snapshot: SessionSnapshotLike | null): void => {
     if (snapshot === null) return
-    const hasMoreValue = snapshot.hasMore === true
-    hasOlderRef.current = hasMoreValue
-    setHasOlder(hasMoreValue)
+    sessionHasMoreRef.current = snapshot.hasMore === true
+    syncHasOlder()
     if (snapshot.loadingOlder === true) {
       setLoadingOlder(true)
     } else if (!loadingOlderRef.current) {
@@ -414,7 +451,7 @@ export function useTrail(
     if (snapshot.openState === 'open') {
       setStatus((current) => (current === 'error' ? current : 'ready'))
     }
-  }, [])
+  }, [syncHasOlder])
 
   // ── Route path (fallback): forward drain + backwards turn segments ──────
 
@@ -701,6 +738,8 @@ export function useTrail(
     seqRef.current = 0
     hasOlderRef.current = false
     loadingOlderRef.current = false
+    sessionHasMoreRef.current = false
+    windowFirstTurnRef.current = null
     initializingRef.current = false
     pendingRefreshRef.current = false
     setTurns(EMPTY)

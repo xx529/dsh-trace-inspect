@@ -291,7 +291,7 @@ client（浏览器）  inject: ['sessions','uiConversation','betterSidebar']（�
 | 平台（回退兼容） | DSH 0.1.2-rc.1 / 0.1.1-rc.x（stable 线） |
 | 依赖 | dsh-better-sidebar（可选 peer，`>=0.17.0`；未装则 inert）、react（DSH client 种子注入） |
 | 构建 | TypeScript + esbuild，无运行时 npm 依赖 |
-| 测试 | vitest 639 用例 / 25 文件（fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + 两组独立对抗验收） |
+| 测试 | vitest 653 用例 / 25 文件（fold / folder / detail / wire / json-tree / markdown / zoom / attachment / detail-styles / jump / tab / host + 两组独立对抗验收） |
 
 ## 开发
 
